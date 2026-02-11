@@ -1,0 +1,36 @@
+# Dependency directories (พวกนี้ตัวกิน Token เลย!)
+node_modules/
+bower_components/
+vendor/
+
+# Build outputs (ไฟล์ที่คอมไพล์แล้ว Claude ไม่จำเป็นต้องเห็น)
+dist/
+build/
+out/
+bin/
+obj/
+
+# Logs and databases
+*.log
+*.sqlite
+*.db
+
+# Environment variables and secrets (เพื่อความปลอดภัยด้วย)
+.env
+.env.*
+*.pem
+*.key
+
+# IDE folders and system files
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# Documentation and heavy assets (ถ้าคุณไม่ได้จะแก้ Doc หรือรูป)
+*.pdf
+*.png
+*.jpg
+*.jpeg
+*.svg
+docs/

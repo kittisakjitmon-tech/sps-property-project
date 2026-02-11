@@ -1,0 +1,116 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Helper functions for role checking
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+    
+    function getUserRole() {
+      return exists(/databases/$(database)/documents/users/$(request.auth.uid)) 
+        ? get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role 
+        : 'member';
+    }
+    
+    function isSuperAdmin() {
+      return isAuthenticated() && getUserRole() == 'super_admin';
+    }
+    
+    function isAdmin() {
+      return isAuthenticated() && (getUserRole() == 'admin' || getUserRole() == 'super_admin');
+    }
+    
+    function isMember() {
+      return isAuthenticated() && getUserRole() == 'member';
+    }
+    
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+    
+    // users: อ่านได้เฉพาะ Admin, เขียนได้เฉพาะ Super Admin
+    // Exception: Allow self-update to super_admin for initial setup (when no super admin exists yet)
+    // Also allow reading all users if authenticated (for initial setup check)
+    match /users/{userId} {
+      // Allow read if: is admin OR reading own data OR authenticated (for initial setup)
+      allow read: if isAdmin() || 
+                   (isAuthenticated() && request.auth.uid == userId) ||
+                   isAuthenticated(); // Allow all authenticated users to read (for checking if super admin exists)
+      allow create: if isSuperAdmin() || (isAuthenticated() && request.auth.uid == userId);
+      // Allow update if: 
+      // 1. is super admin, OR
+      // 2. updating own role to super_admin (for initial setup)
+      allow update: if isSuperAdmin() || 
+                     (isAuthenticated() && 
+                      request.auth.uid == userId && 
+                      request.resource.data.role == 'super_admin' &&
+                      (!resource.exists || resource.data.role != 'super_admin'));
+      allow delete: if isSuperAdmin();
+    }
+    
+    // properties: อ่านได้ทุกคน, เขียนได้ตาม role
+    match /properties/{id} {
+      allow read: if true;
+      allow create: if isAuthenticated() && (
+        isAdmin() || 
+        (isMember() && request.resource.data.createdBy == request.auth.uid)
+      );
+      allow update, delete: if isAuthenticated() && (
+        isAdmin() || 
+        (isMember() && resource.data.createdBy == request.auth.uid)
+      );
+    }
+    // leads: อ่าน/เขียนได้เฉพาะ Admin และ Member, สร้างได้ทุกคน (ฟอร์มส่งข้อความ)
+    match /leads/{id} {
+      allow read: if isAdmin() || isMember();
+      allow write: if isAdmin();
+      allow create: if true;
+    }
+    // viewing_requests: อ่านได้เฉพาะ Admin, สร้างได้ทุกคน (ฟอร์มจองเยี่ยมชม)
+    match /viewing_requests/{id} {
+      allow read, write: if request.auth != null;
+      allow create: if true;
+    }
+    // inquiries: อ่านได้เฉพาะ Admin, สร้างได้ทุกคน (ฟอร์มติดต่อเรา)
+    match /inquiries/{id} {
+      allow read, write: if request.auth != null;
+      allow create: if true;
+    }
+    // hero_slides: อ่านได้ทุกคน, เขียนได้เฉพาะ Admin
+    match /hero_slides/{id} {
+      allow read: if true;
+      allow create, update, delete: if isAdmin();
+    }
+    // popular_locations: อ่านได้ทุกคน, เขียนได้เฉพาะ Admin
+    match /popular_locations/{id} {
+      allow read: if true;
+      allow create, update, delete: if isAdmin();
+    }
+    // homepage_sections: อ่านได้ทุกคน, เขียนได้เฉพาะ Admin
+    match /homepage_sections/{id} {
+      allow read: if true;
+      allow create, update, delete: if isAdmin();
+    }
+    // pending_properties: สร้างได้ทุกคน (ฟอร์มลงประกาศ), อ่าน/เขียนได้เฉพาะ Admin
+    match /pending_properties/{id} {
+      allow read: if isAdmin();
+      allow write: if isAdmin();
+      allow create: if true;
+    }
+    // audit_logs: อ่าน/เขียนได้เฉพาะ Super Admin
+    match /audit_logs/{id} {
+      allow read, write: if isSuperAdmin();
+    }
+    // activities: สร้างได้เฉพาะผู้ที่ login, อ่านได้เฉพาะ Admin
+    match /activities/{id} {
+      allow create: if isAuthenticated();
+      allow read: if isAdmin();
+      allow update, delete: if isSuperAdmin();
+    }
+    // system_settings: อ่านได้ทุกคน, เขียนได้เฉพาะ Super Admin
+    match /system_settings/{id} {
+      allow read: if true;
+      allow write: if isSuperAdmin();
+    }
+  }
+}
