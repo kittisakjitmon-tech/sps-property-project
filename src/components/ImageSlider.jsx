@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import { ChevronLeft, ChevronRight } from 'lucide-react'
+import ProtectedImageContainer from './ProtectedImageContainer'
 
 /**
  * ImageSlider - Component สำหรับแสดงภาพหลายภาพแบบสไลด์
@@ -19,6 +20,8 @@ export default function ImageSlider({
   autoPlayInterval = 5000,
   showDots = false,
   showArrows = false,
+  propertyId = null,
+  protectImages = true,
 }) {
   const [currentIndex, setCurrentIndex] = useState(0)
   const imgs = images && images.length > 0 ? images : [defaultImage]
@@ -47,9 +50,18 @@ export default function ImageSlider({
   }
 
   if (imgs.length === 0) {
+    const imgBlock = (
+      <img src={defaultImage} alt="" className="w-full h-full object-cover protected-image" draggable={false} />
+    )
     return (
       <div className={`relative aspect-[4/3] overflow-hidden bg-slate-200 ${className}`}>
-        <img src={defaultImage} alt="" className="w-full h-full object-cover" />
+        {protectImages ? (
+          <ProtectedImageContainer className="absolute inset-0" propertyId={propertyId}>
+            {imgBlock}
+          </ProtectedImageContainer>
+        ) : (
+          imgBlock
+        )}
       </div>
     )
   }
@@ -57,18 +69,36 @@ export default function ImageSlider({
   return (
     <div className={`relative aspect-[4/3] overflow-hidden group ${className}`}>
       {/* Images */}
-      <div className="relative w-full h-full overflow-hidden">
-        {imgs.map((img, index) => (
-          <img
-            key={index}
-            src={img}
-            alt={`Slide ${index + 1}`}
-            className={`absolute inset-0 w-full h-full object-cover transition-all duration-500 group-hover:scale-105 ${
-              index === currentIndex ? 'opacity-100' : 'opacity-0'
-            }`}
-          />
-        ))}
-      </div>
+      {protectImages ? (
+        <ProtectedImageContainer className="absolute inset-0 w-full h-full" propertyId={propertyId}>
+          <div className="relative w-full h-full overflow-hidden">
+            {imgs.map((img, index) => (
+              <img
+                key={index}
+                src={img}
+                alt={`Slide ${index + 1}`}
+                draggable={false}
+                className={`absolute inset-0 w-full h-full object-cover protected-image transition-all duration-500 group-hover:scale-105 ${
+                  index === currentIndex ? 'opacity-100' : 'opacity-0'
+                }`}
+              />
+            ))}
+          </div>
+        </ProtectedImageContainer>
+      ) : (
+        <div className="relative w-full h-full overflow-hidden">
+          {imgs.map((img, index) => (
+            <img
+              key={index}
+              src={img}
+              alt={`Slide ${index + 1}`}
+              className={`absolute inset-0 w-full h-full object-cover transition-all duration-500 group-hover:scale-105 ${
+                index === currentIndex ? 'opacity-100' : 'opacity-0'
+              }`}
+            />
+          ))}
+        </div>
+      )}
 
       {/* Navigation Arrows */}
       {showArrows && imgs.length > 1 && (

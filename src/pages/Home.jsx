@@ -1,26 +1,37 @@
 import { useState, useEffect, useMemo } from 'react'
 import { Link } from 'react-router-dom'
-import { MapPinned, Headphones, BadgeCheck } from 'lucide-react'
+import { CheckCircle2, Building2, Lightbulb, Handshake, TrendingUp, MapPin, MapPinned } from 'lucide-react'
 import PageLayout from '../components/PageLayout'
 import HomeSearch from '../components/HomeSearch'
 import DynamicPropertySection from '../components/DynamicPropertySection'
+import ProtectedImageContainer from '../components/ProtectedImageContainer'
 import { getPropertiesSnapshot, getPopularLocationsSnapshot, getHomepageSectionsSnapshot, filterPropertiesByCriteria } from '../lib/firestore'
 
-const whyChooseUs = [
+const serviceHighlights = [
   {
-    icon: MapPinned,
-    title: 'เชี่ยวชาญพื้นที่',
-    description: 'รู้ลึก รู้จริง อมตะซิตี้ ชลบุรี',
+    icon: CheckCircle2,
+    title: 'รับปิดหนี้ รวมหนี้ ผ่อนทางเดียว',
+    iconClassName: 'text-emerald-300',
   },
   {
-    icon: Headphones,
-    title: 'ปรึกษาฟรี 24 ชม.',
-    description: 'ทีมงานพร้อมให้คำแนะนำตลอดเวลา',
+    icon: Building2,
+    title: 'บริการสินเชื่อครบวงจร',
+    iconClassName: 'text-blue-200',
   },
   {
-    icon: BadgeCheck,
-    title: 'คัดสรรบ้านคุณภาพ',
-    description: 'เฉพาะบ้านและคอนโดที่ผ่านการตรวจสอบ',
+    icon: Lightbulb,
+    title: 'รับปรึกษาภาระหนี้สินเกินรายได้',
+    iconClassName: 'text-amber-300',
+  },
+  {
+    icon: Handshake,
+    title: 'บริการครบวงจรทุกขั้นตอน',
+    iconClassName: 'text-purple-200',
+  },
+  {
+    icon: TrendingUp,
+    title: 'รับนักลงทุนพร้อมบริหารงานเช่า',
+    iconClassName: 'text-cyan-200',
   },
 ]
 
@@ -88,35 +99,36 @@ export default function Home() {
   return (
     <PageLayout
       heroTitle={
-        <>
-          ค้นหาบ้านคอนโดใน{' '}
-          <span className="text-yellow-400 drop-shadow-sm">อมตะซิตี้ ชลบุรี</span>
-        </>
+        <span className="inline-block text-4xl sm:text-5xl lg:text-6xl font-extrabold leading-tight">
+          รวมภาระหนี้{' '}
+          <span className="text-yellow-400 drop-shadow-md">ผ่อนบ้านทางเดียว</span>
+        </span>
       }
-      heroSubtitle="บ้านคอนโดสวย คัดสรรโดยผู้เชี่ยวชาญพื้นที่"
+      heroSubtitle=""
       searchComponent={<HomeSearch />}
       useHeroSlider={true}
       heroExtra={
-        <div className="max-w-5xl mx-auto w-full">
-          <p className="text-white text-center text-base sm:text-lg font-semibold mb-4 drop-shadow-md">
-            ทำไมต้องเลือกเรา
-          </p>
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 sm:gap-6">
-            {whyChooseUs.map(({ icon: Icon, title, description }) => (
+        <div className="max-w-5xl mx-auto w-full space-y-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3 sm:gap-4">
+            {serviceHighlights.map(({ icon: Icon, title, iconClassName }) => (
               <div
                 key={title}
-                className="flex flex-col items-center text-center p-5 sm:p-6 rounded-2xl bg-white/10 backdrop-blur-md border border-white/20 shadow-lg hover:bg-white/15 hover:shadow-xl hover:-translate-y-0.5 transition-all duration-300"
+                className="flex items-start gap-3 p-3 sm:p-4 rounded-xl bg-white/10 backdrop-blur-md border border-white/20 shadow-md"
               >
-                <div className="w-16 h-16 rounded-full bg-yellow-400/30 flex items-center justify-center mb-4 border-2 border-yellow-400/50">
-                  <Icon className="h-8 w-8 text-yellow-400" />
+                <div className="w-8 h-8 rounded-full bg-white/15 flex items-center justify-center shrink-0">
+                  <Icon className={`h-4.5 w-4.5 ${iconClassName}`} />
                 </div>
-                <h3 className="font-bold text-white mb-2 text-lg sm:text-xl">{title}</h3>
-                <p className="text-white/90 text-sm sm:text-base leading-relaxed">{description}</p>
+                <p className="text-white text-base sm:text-lg leading-relaxed font-medium">{title}</p>
               </div>
             ))}
           </div>
+          <div className="flex items-center justify-center gap-2 text-gray-300 text-sm">
+            <MapPin className="h-4 w-4" />
+            <p>พื้นที่ให้บริการ: ชลบุรี ฉะเชิงเทรา ระยอง ปทุมธานี กทม.</p>
+          </div>
         </div>
       }
+      searchAfterHeroExtra={true}
       fullHeight={true}
     >
 
@@ -154,12 +166,15 @@ export default function Home() {
                     className="group relative aspect-video rounded-2xl overflow-hidden shadow-sm hover:-translate-y-1 hover:shadow-md transition-all duration-300 block"
                   >
                     {loc.imageUrl ? (
-                      <img
-                        src={loc.imageUrl}
-                        alt={displayName}
-                        className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-                        loading="lazy"
-                      />
+                      <ProtectedImageContainer className="absolute inset-0">
+                        <img
+                          src={loc.imageUrl}
+                          alt={displayName}
+                          className="w-full h-full object-cover protected-image group-hover:scale-105 transition-transform duration-300"
+                          loading="lazy"
+                          draggable={false}
+                        />
+                      </ProtectedImageContainer>
                     ) : (
                       <div className="w-full h-full bg-gradient-to-br from-blue-900 to-blue-700 flex items-center justify-center">
                         <MapPinned className="h-16 w-16 text-white/50" />

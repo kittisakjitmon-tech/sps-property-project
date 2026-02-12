@@ -1,20 +1,54 @@
 import { useSearchParams, Link, useNavigate } from 'react-router-dom'
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useState, useCallback, useRef } from 'react'
 import { useSearch } from '../context/SearchContext'
 import { getPropertiesSnapshot } from '../lib/firestore'
 import PageLayout from '../components/PageLayout'
-import AdvanceSearch from '../components/AdvanceSearch'
 import PropertyCard from '../components/PropertyCard'
 import PropertiesMap from '../components/PropertiesMap'
 import FilterSidebar from '../components/FilterSidebar'
-import { SlidersHorizontal } from 'lucide-react'
+import ActiveSearchCriteriaBar from '../components/ActiveSearchCriteriaBar'
+import { SlidersHorizontal, Search } from 'lucide-react'
+import { searchProperties } from '../lib/smartSearch'
+import { useTypingPlaceholder } from '../components/TypingPlaceholder'
 
 export default function Properties() {
   const [searchParams, setSearchParams] = useSearchParams()
   const navigate = useNavigate()
-  const { filters, updateFilters, clearFilters } = useSearch()
+  
+  // Safety check for useSearch context
+  let filters, updateFilters, clearFilters
+  try {
+    const searchContext = useSearch()
+    filters = searchContext?.filters || {}
+    updateFilters = searchContext?.updateFilters || (() => {})
+    clearFilters = searchContext?.clearFilters || (() => {})
+  } catch (error) {
+    console.error('SearchContext error:', error)
+    filters = {}
+    updateFilters = () => {}
+    clearFilters = () => {}
+  }
+  
   const [properties, setProperties] = useState([])
   const [filterSidebarOpen, setFilterSidebarOpen] = useState(false)
+  
+  // State Separation: แยกตัวแปรออกเป็น 2 ตัว
+  const [searchQuery, setSearchQuery] = useState(searchParams.get('q') || '') // ค่าจริงที่ผู้ใช้พิมพ์ (State Update Only)
+  const [debouncedKeyword, setDebouncedKeyword] = useState(searchParams.get('q') || '') // ค่าที่ใช้สำหรับ Filter (อัปเดตเมื่อกดปุ่มค้นหาเท่านั้น)
+  const [isSearchFocused, setIsSearchFocused] = useState(false)
+  
+  // Typing animation สำหรับ placeholder (Decoupled จาก searchQuery)
+  const TYPING_PHRASES = [
+    //'ค้นหา: ชื่อประกาศ, รหัสทรัพย์, Tags...',
+    //'ค้นหา: คอนโด, บ้านเดี่ยว, ทาวน์โฮม...',
+    //'ค้นหา: ราคา เช่น "2.5 ล้าน" หรือ "2500000"...',
+  ]
+  const { displayText: typingPlaceholder, stop: stopTyping, start: startTyping } = useTypingPlaceholder(
+    TYPING_PHRASES,
+    100,
+    50,
+    2000
+  )
   
   // Auto-open filter sidebar on desktop
   useEffect(() => {
@@ -29,136 +63,307 @@ export default function Properties() {
   }, [])
 
   useEffect(() => {
-    const unsub = getPropertiesSnapshot(setProperties)
-    return () => unsub()
+    try {
+      const unsub = getPropertiesSnapshot((props) => {
+        if (Array.isArray(props)) {
+          setProperties(props)
+        } else {
+          console.warn('getPropertiesSnapshot returned non-array:', props)
+          setProperties([])
+        }
+      })
+      return () => {
+        try {
+          if (unsub && typeof unsub === 'function') {
+            unsub()
+          }
+        } catch (error) {
+          console.error('Error unsubscribing from properties:', error)
+        }
+      }
+    } catch (error) {
+      console.error('Error loading properties:', error)
+      setProperties([])
+    }
   }, [])
 
   // Determine buy/rent from URL
   const typeParam = searchParams.get('type')
   const isRentalFilter = typeParam === 'rent' ? true : typeParam === 'buy' ? false : null
 
+  // Sync searchQuery and debouncedKeyword with URL (เมื่อ URL เปลี่ยนจากภายนอกเท่านั้น)
+  // ไม่ sync เมื่อผู้ใช้กำลังพิมพ์ (เพื่อป้องกันการ reset ค่า)
+  const prevSearchParamsRef = useRef(searchParams.toString())
   useEffect(() => {
-    const location = searchParams.get('location') ?? ''
-    const propertyType = searchParams.get('propertyType') ?? ''
-    const priceMin = searchParams.get('priceMin') ?? ''
-    const priceMax = searchParams.get('priceMax') ?? ''
-    const bedrooms = searchParams.get('bedrooms') ?? ''
-    const bathrooms = searchParams.get('bathrooms') ?? ''
-    const areaMin = searchParams.get('areaMin') ?? ''
-    const areaMax = searchParams.get('areaMax') ?? ''
+    const currentParams = searchParams.toString()
+    const urlKeyword = searchParams.get('q') || ''
     
-    updateFilters({ 
-      location, 
-      propertyType, 
-      priceMin, 
-      priceMax,
-      bedrooms,
-      bathrooms,
-      areaMin,
-      areaMax,
-      isRental: isRentalFilter,
-    })
+    // ตรวจสอบว่า URL เปลี่ยนจากภายนอกจริงๆ (ไม่ใช่จากการกดปุ่มค้นหา)
+    const isExternalChange = prevSearchParamsRef.current !== currentParams
+    
+    if (isExternalChange) {
+      // Sync เฉพาะเมื่อ URL เปลี่ยนจากภายนอก (เช่น จาก navigation หรือ share link)
+      setDebouncedKeyword(urlKeyword)
+      setSearchQuery(urlKeyword) // Sync searchQuery ด้วย
+    }
+    
+    prevSearchParamsRef.current = currentParams
+  }, [searchParams])
+
+  // Strict Focus Logic: หยุด animation เมื่อ focus, เริ่มใหม่เมื่อ blur และไม่มีค่า
+  // ใช้ useRef เพื่อป้องกัน re-render บ่อย
+  const prevSearchQueryRef = useRef(searchQuery)
+  useEffect(() => {
+    if (isSearchFocused) {
+      stopTyping()
+    } else if (!searchQuery.trim() && prevSearchQueryRef.current !== searchQuery) {
+      // เริ่ม animation เฉพาะเมื่อ searchQuery เปลี่ยนจากมีค่าเป็นไม่มีค่า
+      startTyping()
+    }
+    prevSearchQueryRef.current = searchQuery
+  }, [isSearchFocused, searchQuery, stopTyping, startTyping])
+
+  // Normalize propertySubStatus: แปลง 'มือ1' หรือ 'มือ2' จาก URL เป็น 'มือ 1' หรือ 'มือ 2'
+  const normalizeSubStatusFromURL = (status) => {
+    if (!status) return ''
+    const normalized = String(status).trim().replace(/\s+/g, '').toLowerCase()
+    if (normalized === 'มือ1' || normalized === 'มือ 1') return 'มือ 1'
+    if (normalized === 'มือ2' || normalized === 'มือ 2') return 'มือ 2'
+    return status // คืนค่าเดิมถ้าไม่ใช่มือ1/มือ2
+  }
+
+  // URL Parameter Parsing: ดึงค่าจาก URL และตั้งค่า Filter State
+  useEffect(() => {
+    try {
+      const location = searchParams.get('location') ?? ''
+      const propertyType = searchParams.get('propertyType') ?? ''
+      const priceMin = searchParams.get('priceMin') ?? ''
+      const priceMax = searchParams.get('priceMax') ?? ''
+      const bedrooms = searchParams.get('bedrooms') ?? ''
+      const bathrooms = searchParams.get('bathrooms') ?? ''
+      const areaMin = searchParams.get('areaMin') ?? ''
+      const areaMax = searchParams.get('areaMax') ?? ''
+      const statusParam = searchParams.get('status') ?? ''
+      const propertySubStatus = normalizeSubStatusFromURL(statusParam)
+      const feature = searchParams.get('feature') ?? ''
+      
+      if (updateFilters) {
+        updateFilters({ 
+          location, 
+          propertyType, 
+          priceMin, 
+          priceMax,
+          bedrooms,
+          bathrooms,
+          areaMin,
+          areaMax,
+          propertySubStatus,
+          feature,
+          isRental: isRentalFilter,
+        })
+      }
+    } catch (error) {
+      console.error('URL Parameter Parsing error:', error)
+    }
   }, [searchParams, updateFilters, isRentalFilter])
 
-  const handleSearch = () => {
-    const params = new URLSearchParams()
+
+  // AI Recommendation: URL State Synchronization
+  const updateURL = useCallback((updates) => {
+    const params = new URLSearchParams(searchParams)
     
     // Preserve type (buy/rent) if exists
     if (typeParam) params.set('type', typeParam)
     
-    if (filters.location) params.set('location', filters.location)
-    if (filters.propertyType) params.set('propertyType', filters.propertyType)
-    if (filters.priceMin) params.set('priceMin', filters.priceMin)
-    if (filters.priceMax) params.set('priceMax', filters.priceMax)
-    if (filters.bedrooms) params.set('bedrooms', filters.bedrooms)
-    if (filters.bathrooms) params.set('bathrooms', filters.bathrooms)
-    if (filters.areaMin) params.set('areaMin', filters.areaMin)
-    if (filters.areaMax) params.set('areaMax', filters.areaMax)
+    // Update params from updates object
+    Object.entries(updates).forEach(([key, value]) => {
+      if (value && value !== '') {
+        params.set(key, value)
+      } else {
+        params.delete(key)
+      }
+    })
     
-    navigate(`/properties?${params.toString()}`)
+    navigate(`/properties?${params.toString()}`, { replace: true })
+  }, [searchParams, navigate, typeParam])
+
+  const handleSearch = () => {
+    updateURL({
+      location: filters.location,
+      propertyType: filters.propertyType,
+      priceMin: filters.priceMin,
+      priceMax: filters.priceMax,
+      bedrooms: filters.bedrooms,
+      bathrooms: filters.bathrooms,
+      areaMin: filters.areaMin,
+      areaMax: filters.areaMax,
+      q: debouncedKeyword,
+      status: filters.propertySubStatus,
+    })
   }
+
+  // State Update Only: onChange ทำหน้าที่เพียงแค่อัปเดตค่า State
+  const handleKeywordChange = (value) => {
+    setSearchQuery(value) // อัปเดต searchQuery เท่านั้น (ไม่ trigger การค้นหา)
+  }
+
+  // Button Action: ฟังก์ชันการกดปุ่มค้นหาหรือกด Enter
+  const handleSearchButton = useCallback(() => {
+    const trimmedQuery = searchQuery.trim()
+    setDebouncedKeyword(trimmedQuery) // อัปเดต debouncedKeyword เพื่อ trigger การค้นหา
+    
+    // Update URL Parameters
+    const params = new URLSearchParams(searchParams)
+    if (trimmedQuery) {
+      params.set('q', trimmedQuery)
+    } else {
+      //params.delete('q')
+    }
+    if (typeParam) params.set('type', typeParam)
+    
+    // อัปเดต prevSearchParamsRef ก่อน navigate เพื่อป้องกัน useEffect sync กลับ
+    prevSearchParamsRef.current = params.toString()
+    
+    navigate(`/properties?${params.toString()}`, { replace: false })
+  }, [searchQuery, searchParams, navigate, typeParam])
+
+  // Handle Enter Key
+  const handleKeyDown = useCallback((e) => {
+    if (e.key === 'Enter') {
+      e.preventDefault()
+      handleSearchButton()
+    }
+  }, [handleSearchButton])
 
   const handleClearFilters = () => {
     clearFilters()
+    setSearchQuery('')
+    setDebouncedKeyword('') // Clear debouncedKeyword เพื่อล้างผลการค้นหา
     const params = new URLSearchParams()
     if (typeParam) params.set('type', typeParam)
     navigate(`/properties?${params.toString()}`)
   }
 
+  // Handle Remove Individual Filter
+  const handleRemoveFilter = useCallback((filter) => {
+    const params = new URLSearchParams(searchParams)
+    
+    switch (filter.type) {
+      case 'keyword':
+        setSearchQuery('')
+        setDebouncedKeyword('') // Clear debouncedKeyword เพื่อล้างผลการค้นหา
+        params.delete('q')
+        break
+      case 'isRental':
+        updateFilters({ isRental: null })
+        params.delete('type')
+        break
+      case 'propertySubStatus':
+        updateFilters({ propertySubStatus: '' })
+        params.delete('status')
+        break
+      case 'feature':
+        params.delete('feature')
+        updateFilters({ feature: '' })
+        break
+      case 'propertyType':
+        updateFilters({ propertyType: '' })
+        params.delete('propertyType')
+        break
+      case 'location':
+        updateFilters({ location: '' })
+        params.delete('location')
+        break
+      case 'price':
+        updateFilters({ priceMin: '', priceMax: '' })
+        params.delete('priceMin')
+        params.delete('priceMax')
+        break
+      case 'bedrooms':
+        updateFilters({ bedrooms: '' })
+        params.delete('bedrooms')
+        break
+      case 'bathrooms':
+        updateFilters({ bathrooms: '' })
+        params.delete('bathrooms')
+        break
+      case 'area':
+        updateFilters({ areaMin: '', areaMax: '' })
+        params.delete('areaMin')
+        params.delete('areaMax')
+        break
+      default:
+        break
+    }
+    
+    // Preserve type if exists
+    if (typeParam) params.set('type', typeParam)
+    
+    navigate(`/properties?${params.toString()}`, { replace: true })
+  }, [searchParams, navigate, typeParam, updateFilters])
+
+  // Hybrid Search with Combined Filtering (AND Logic)
+  // Filtering Dependency: ใช้ debouncedKeyword (มาจาก searchQuery) เป็น dependency เพียงอย่างเดียว
+  // ห้ามใส่ typingPlaceholder หรือตัวแปรที่เกี่ยวกับ Placeholder เข้าไปใน Array
   const filtered = useMemo(() => {
-    let list = properties.filter((p) => p.status === 'available')
+    try {
+      if (!Array.isArray(properties)) {
+        console.warn('Properties is not an array:', properties)
+        return []
+      }
+      
+      // ใช้ filters state เป็นหลัก (ถูก normalize แล้วจาก URL)
+      // fallback ไปที่ searchParams เผื่อกรณีที่ filters ยังไม่ sync
+      const searchFilters = {
+        location: filters?.location || searchParams.get('location') || '',
+        propertyType: filters?.propertyType || searchParams.get('propertyType') || '',
+        priceMin: filters?.priceMin || searchParams.get('priceMin') || '',
+        priceMax: filters?.priceMax || searchParams.get('priceMax') || '',
+        bedrooms: filters?.bedrooms || searchParams.get('bedrooms') || '',
+        bathrooms: filters?.bathrooms || searchParams.get('bathrooms') || '',
+        areaMin: filters?.areaMin || searchParams.get('areaMin') || '',
+        areaMax: filters?.areaMax || searchParams.get('areaMax') || '',
+        // ใช้ filters.propertySubStatus ที่ถูก normalize แล้ว (รองรับทั้ง 'มือ 1' และ 'มือ1')
+        propertySubStatus: filters?.propertySubStatus || normalizeSubStatusFromURL(searchParams.get('status') || '') || '',
+        isRental: isRentalFilter !== null ? isRentalFilter : (filters?.isRental !== null ? filters.isRental : null),
+      }
 
-    const toSearchStr = (val) => (val != null && typeof val === 'string' ? val : String(val ?? '')).trim()
-
-    // Filter by buy/rent
-    if (isRentalFilter !== null) {
-      list = list.filter((p) => Boolean(p.isRental) === isRentalFilter)
+      // Use Hybrid Smart Search - ใช้ debouncedKeyword (มาจาก searchQuery) เท่านั้น
+      const keyword = debouncedKeyword || ''
+      const result = searchProperties(properties, keyword, searchFilters)
+      
+      // Ensure result is an array
+      if (!Array.isArray(result)) {
+        console.warn('searchProperties returned non-array:', result)
+        return []
+      }
+      
+      return result
+    } catch (error) {
+      console.error('Search error:', error)
+      // Return empty array instead of crashing
+      return []
     }
-
-    const locationRaw = searchParams?.get?.('location') ?? filters?.location ?? ''
-    const location = toSearchStr(locationRaw).toLowerCase()
-
-    const typeRaw = searchParams?.get?.('propertyType') ?? filters?.propertyType ?? ''
-    const type = toSearchStr(typeRaw)
-
-    const priceMinRaw = searchParams?.get?.('priceMin') ?? filters?.priceMin ?? ''
-    const priceMaxRaw = searchParams?.get?.('priceMax') ?? filters?.priceMax ?? ''
-    const priceMin = Math.max(0, Number(priceMinRaw) || 0)
-    const priceMax = Number(priceMaxRaw) > 0 ? Number(priceMaxRaw) : Infinity
-
-    const bedroomsRaw = searchParams?.get?.('bedrooms') ?? filters?.bedrooms ?? ''
-    const bedrooms = bedroomsRaw ? Number(bedroomsRaw) : null
-
-    const bathroomsRaw = searchParams?.get?.('bathrooms') ?? filters?.bathrooms ?? ''
-    const bathrooms = bathroomsRaw ? Number(bathroomsRaw) : null
-
-    const areaMinRaw = searchParams?.get?.('areaMin') ?? filters?.areaMin ?? ''
-    const areaMaxRaw = searchParams?.get?.('areaMax') ?? filters?.areaMax ?? ''
-    const areaMin = Number(areaMinRaw) || 0
-    const areaMax = Number(areaMaxRaw) > 0 ? Number(areaMaxRaw) : Infinity
-
-    if (location.length > 0) {
-      list = list.filter((p) => {
-        const province = toSearchStr(p?.location?.province).toLowerCase()
-        const district = toSearchStr(p?.location?.district).toLowerCase()
-        return province.includes(location) || district.includes(location)
-      })
-    }
-    if (type.length > 0) {
-      list = list.filter((p) => p?.type === type)
-    }
-    if (priceMin > 0 || priceMax < Infinity) {
-      list = list.filter((p) => {
-        const price = Number(p?.price) || 0
-        return price >= priceMin && price <= priceMax
-      })
-    }
-    if (bedrooms !== null) {
-      list = list.filter((p) => {
-        const pBedrooms = Number(p?.bedrooms) || 0
-        if (bedrooms === 5) return pBedrooms >= 5
-        return pBedrooms === bedrooms
-      })
-    }
-    if (bathrooms !== null) {
-      list = list.filter((p) => {
-        const pBathrooms = Number(p?.bathrooms) || 0
-        if (bathrooms === 4) return pBathrooms >= 4
-        return pBathrooms === bathrooms
-      })
-    }
-    if (areaMin > 0 || areaMax < Infinity) {
-      list = list.filter((p) => {
-        const area = Number(p?.area) || 0
-        return area >= areaMin && area <= areaMax
-      })
-    }
-    return list
-  }, [searchParams, filters, properties, isRentalFilter])
+  }, [properties, debouncedKeyword, filters, isRentalFilter, searchParams])
 
   const pageTitle = isRentalFilter === true ? 'ทรัพย์สินให้เช่า' : isRentalFilter === false ? 'ทรัพย์สินขาย' : 'รายการประกาศ'
   const heroTitle = isRentalFilter === true ? 'ทรัพย์สินให้เช่า' : isRentalFilter === false ? 'ทรัพย์สินขาย' : 'SPS Property Solution'
   const heroSubtitle = isRentalFilter === true ? 'ค้นหาบ้านที่ใช่สำหรับคุณ' : isRentalFilter === false ? 'ค้นหาบ้านที่ใช่สำหรับคุณ' : 'บ้านคอนโดสวย อมตะซิตี้ ชลบุรี'
+
+  // Safety check: Ensure filtered is always an array
+  const safeFiltered = Array.isArray(filtered) ? filtered : []
+
+  // Debug logging (remove in production)
+  useEffect(() => {
+    console.log('Properties component state:', {
+      propertiesCount: properties.length,
+      filteredCount: safeFiltered.length,
+      searchQuery,
+      debouncedKeyword,
+      filters,
+      isRentalFilter,
+    })
+  }, [properties.length, safeFiltered.length, searchQuery, debouncedKeyword, filters, isRentalFilter])
 
   return (
     <PageLayout 
@@ -171,9 +376,9 @@ export default function Properties() {
           <div className="flex items-center justify-between mb-6">
             <h1 className="text-2xl sm:text-3xl font-bold text-blue-900">{pageTitle}</h1>
             <div className="flex items-center gap-4">
-              {filtered.length > 0 && (
+              {safeFiltered.length > 0 && (
                 <p className="text-slate-600 text-sm">
-                  พบ <span className="font-semibold text-blue-900">{filtered.length}</span> รายการ
+                  พบ <span className="font-semibold text-blue-900">{safeFiltered.length}</span> รายการ
                 </p>
               )}
               <button
@@ -184,6 +389,48 @@ export default function Properties() {
                 <span className="text-sm font-medium text-slate-700">กรอง</span>
               </button>
             </div>
+          </div>
+
+          {/* Global Keyword Search with Button Trigger */}
+          <div className="mb-6">
+            <div className="relative flex items-center gap-2">
+              <div className="relative flex-1">
+                <Search className="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-slate-400 pointer-events-none" />
+                <input
+                  type="text"
+                  value={searchQuery}
+                  onChange={(e) => handleKeywordChange(e.target.value)}
+                  onKeyDown={handleKeyDown}
+                  onFocus={() => {
+                    setIsSearchFocused(true)
+                    stopTyping() // หยุด animation ทันทีเมื่อ focus
+                  }}
+                  onBlur={() => {
+                    setIsSearchFocused(false)
+                    if (!searchQuery.trim()) {
+                      startTyping() // เริ่ม animation ใหม่เมื่อ blur และไม่มีค่า
+                    }
+                  }}
+                  placeholder={isSearchFocused ? "ค้นหาทำเล, รหัสทรัพย์..." : (!searchQuery.trim() ? typingPlaceholder : "ค้นหา: ชื่อประกาศ, รหัสทรัพย์, Tags, ประเภท, รายละเอียด หรือราคา (เช่น '2.5 ล้าน', '2500000')")}
+                  className="w-full pl-12 pr-4 py-3 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-900/20 focus:border-blue-900 transition"
+                />
+              </div>
+              {/* Search Button */}
+              <button
+                type="button"
+                onClick={handleSearchButton}
+                className="flex-shrink-0 inline-flex items-center gap-2 px-4 sm:px-6 py-3 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-semibold shadow-md hover:shadow-lg transition-all duration-300 whitespace-nowrap"
+                aria-label="ค้นหา"
+              >
+                <Search className="h-5 w-5" />
+                <span className="hidden sm:inline">ค้นหา</span>
+              </button>
+            </div>
+            {debouncedKeyword && (
+              <p className="text-xs text-slate-500 mt-2">
+                ผลการค้นหา: <span className="font-medium">{debouncedKeyword}</span>
+              </p>
+            )}
           </div>
         
           <div className="flex gap-6">
@@ -198,29 +445,75 @@ export default function Properties() {
             />
 
             <div className="flex-1">
-              {/* Advance Search */}
-              <AdvanceSearch
-                filters={filters}
-                onUpdateFilters={updateFilters}
-                onSearch={handleSearch}
-                onClear={handleClearFilters}
+              {/* Active Search Criteria Bar */}
+              <ActiveSearchCriteriaBar
+                keyword={debouncedKeyword}
+                filters={{
+                  ...filters,
+                  isRental: isRentalFilter !== null ? isRentalFilter : filters.isRental,
+                  feature: searchParams.get('feature') || filters.feature || '',
+                }}
+                resultCount={safeFiltered.length}
+                onRemoveFilter={handleRemoveFilter}
+                onClearAll={handleClearFilters}
               />
 
         {/* Properties Map */}
-        {filtered.length > 0 && (
+        {safeFiltered.length > 0 && (
           <div className="mb-8">
-            <PropertiesMap properties={filtered} />
+            <PropertiesMap properties={safeFiltered} />
           </div>
         )}
 
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-          {filtered.map((p) => (
-            <PropertyCard key={p.id} property={p} />
-          ))}
+          {safeFiltered.map((p) => {
+            if (!p || !p.id) {
+              console.warn('Invalid property in filtered results:', p)
+              return null
+            }
+            try {
+              return <PropertyCard key={p.id} property={p} />
+            } catch (error) {
+              console.error('Error rendering PropertyCard:', error, p)
+              return null
+            }
+          })}
         </div>
-              {filtered.length === 0 && (
-                <p className="text-center text-slate-500 py-12">ไม่พบรายการที่ตรงกับเงื่อนไข</p>
-              )}
+        {safeFiltered.length === 0 && (
+          <div className="text-center py-12">
+            <p className="text-slate-500 mb-6">ไม่พบรายการที่ตรงกับเงื่อนไข</p>
+            {/* AI Recommendation: Empty State with Services */}
+            <div className="bg-gradient-to-br from-blue-50 to-slate-50 rounded-2xl p-8 max-w-2xl mx-auto">
+              <h3 className="text-xl font-bold text-blue-900 mb-4">บริการแนะนำ</h3>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <Link
+                  to="/loan-services"
+                  className="bg-white rounded-xl p-6 shadow-sm hover:shadow-md transition border border-blue-100"
+                >
+                  <div className="flex items-center gap-3 mb-2">
+                    <div className="w-12 h-12 rounded-lg bg-blue-100 flex items-center justify-center">
+                      <span className="text-2xl">💰</span>
+                    </div>
+                    <h4 className="font-semibold text-blue-900">ปิดหนี้ / รวมหนี้</h4>
+                  </div>
+                  <p className="text-sm text-slate-600">บริการปิดหนี้ รวมหนี้ ผ่อนทางเดียว</p>
+                </Link>
+                <Link
+                  to="/loan-services"
+                  className="bg-white rounded-xl p-6 shadow-sm hover:shadow-md transition border border-blue-100"
+                >
+                  <div className="flex items-center gap-3 mb-2">
+                    <div className="w-12 h-12 rounded-lg bg-green-100 flex items-center justify-center">
+                      <span className="text-2xl">🏦</span>
+                    </div>
+                    <h4 className="font-semibold text-blue-900">สินเชื่อครบวงจร</h4>
+                  </div>
+                  <p className="text-sm text-slate-600">บริการสินเชื่อครบวงจรทุกขั้นตอน</p>
+                </Link>
+              </div>
+            </div>
+          </div>
+        )}
             </div>
           </div>
         </div>

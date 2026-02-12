@@ -6,6 +6,8 @@ import NeighborhoodData from '../components/NeighborhoodData'
 import { getPropertyByIdOnce, createViewingRequest } from '../lib/firestore'
 import PageLayout from '../components/PageLayout'
 import Toast from '../components/Toast'
+import ProtectedImageContainer from '../components/ProtectedImageContainer'
+import { formatPrice } from '../lib/priceFormat'
 
 function MortgageCalculator({ price, directInstallment }) {
   const [loanType, setLoanType] = useState(directInstallment ? 'direct' : 'bank')
@@ -418,15 +420,16 @@ export default function PropertyDetail() {
             <div className="lg:col-span-2 space-y-6">
               {/* Gallery */}
               <div className="bg-white rounded-xl overflow-hidden shadow-md">
-                <div className="aspect-video relative bg-slate-200">
+                <ProtectedImageContainer propertyId={property.propertyId} className="aspect-video relative bg-slate-200">
                   <img
                     src={imgs[galleryIndex]}
                     alt={property.title}
-                    className="w-full h-full object-cover"
+                    className="w-full h-full object-cover protected-image"
+                    draggable={false}
                   />
-                </div>
+                </ProtectedImageContainer>
                 {imgs.length > 1 && (
-                  <div className="flex gap-2 p-2 overflow-x-auto">
+                  <div className="flex gap-2 p-2 overflow-x-auto" onContextMenu={(e) => e.preventDefault()}>
                     {imgs.map((img, i) => (
                       <button
                         key={i}
@@ -434,7 +437,7 @@ export default function PropertyDetail() {
                         onClick={() => setGalleryIndex(i)}
                         className={`shrink-0 w-20 h-14 rounded-lg overflow-hidden border-2 ${i === galleryIndex ? 'border-blue-900' : 'border-transparent'}`}
                       >
-                        <img src={img} alt="" className="w-full h-full object-cover" />
+                        <img src={img} alt="" className="w-full h-full object-cover protected-image" draggable={false} />
                       </button>
                     ))}
                   </div>
@@ -453,9 +456,7 @@ export default function PropertyDetail() {
                     )}
                   </div>
                     <p className="text-2xl font-bold text-yellow-900 mb-4">
-                      {property.isRental
-                        ? `${Number(property.price).toLocaleString('th-TH')} บาท/เดือน`
-                        : `${Number(property.price).toLocaleString('th-TH')} บาท`}
+                      {formatPrice(property.price, property.isRental, property.showPrice)}
                     </p>
                   </div>
                   <button
@@ -473,7 +474,12 @@ export default function PropertyDetail() {
                   <span className="flex items-center gap-1"><Bath className="h-4 w-4" /> {property.bathrooms} ห้องน้ำ</span>
                   <span className="flex items-center gap-1"><Maximize2 className="h-4 w-4" /> {property.area != null && property.area > 0 ? (Number(property.area) / 4).toFixed(1) : '-'} ตร.ว.</span>
                 </div>
-                <p className="text-slate-700 leading-relaxed">{property.description || '-'}</p>
+                <p
+                  className="text-slate-700 leading-relaxed whitespace-pre-wrap"
+                  style={{ fontFamily: 'Prompt, Apple Color Emoji, Segoe UI Emoji, Noto Color Emoji, sans-serif' }}
+                >
+                  {property.description || '-'}
+                </p>
 
                 {/* เงื่อนไขการผ่อนตรง (เช่าซื้อ) */}
                 {property.directInstallment && (
@@ -549,8 +555,8 @@ export default function PropertyDetail() {
                 )}
               </div>
 
-              {/* Loan Calculator - ย้ายมาจาก sidebar */}
-              {!property.isRental && property.price > 0 && (
+              {/* Loan Calculator - แสดงเมื่อ showPrice เท่านั้น (เพื่อไม่เปิดเผยราคาผ่านค่างวด) */}
+              {!property.isRental && property.price > 0 && property.showPrice !== false && (
                 <div className="mt-6">
                   <MortgageCalculator price={property.price} directInstallment={property.directInstallment} />
                 </div>

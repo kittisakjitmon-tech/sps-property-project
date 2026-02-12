@@ -15,3 +15,87 @@
     min-height: 100vh;
   }
 }
+
+/* Global protected image behavior */
+.protected-image-container img,
+img.protected-image {
+  user-select: none;
+  -webkit-user-select: none;
+  -moz-user-select: none;
+  -ms-user-select: none;
+  -webkit-touch-callout: none;
+  -webkit-user-drag: none;
+  -khtml-user-drag: none;
+  -moz-user-drag: none;
+  -o-user-drag: none;
+  user-drag: none;
+}
+
+/* Share page protection + watermark */
+.share-page.protected-content {
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
+}
+
+.share-protected-image {
+  -webkit-user-drag: none;
+  user-drag: none;
+}
+
+.share-page-watermark {
+  background-image: repeating-linear-gradient(
+    -20deg,
+    rgba(30, 58, 138, 0.04),
+    rgba(30, 58, 138, 0.04) 24px,
+    rgba(245, 158, 11, 0.05) 24px,
+    rgba(245, 158, 11, 0.05) 25px
+  );
+}
+
+.share-image-watermark::before {
+  content: "SPS Property Solution";
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  color: rgba(255, 255, 255, 0.35);
+  font-size: clamp(20px, 4vw, 42px);
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.35);
+}
+
+/* Scrollbar Hide Utility */
+.scrollbar-hide {
+  -ms-overflow-style: none; /* IE and Edge */
+  scrollbar-width: none; /* Firefox */
+}
+
+.scrollbar-hide::-webkit-scrollbar {
+  display: none; /* Chrome, Safari, Opera */
+}
+
+@media print {
+  .share-page {
+    position: relative;
+  }
+
+  .share-page::before {
+    content: "SPS Property Solution - Confidential";
+    position: fixed;
+    inset: 0;
+    display: grid;
+    place-items: center;
+    font-size: 42px;
+    font-weight: 800;
+    color: rgba(30, 58, 138, 0.2);
+    transform: rotate(-28deg);
+    pointer-events: none;
+    z-index: 9999;
+  }
+
+  .share-page a {
+    display: none !important;
+  }
+}

@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { MarkerClusterer } from '@googlemaps/markerclusterer'
 import { Link } from 'react-router-dom'
 import { MapPin } from 'lucide-react'
+import { formatPrice } from '../lib/priceFormat'
 
 export default function PropertiesMap({ properties, className = '' }) {
   const mapRef = useRef(null)
@@ -69,9 +70,7 @@ export default function PropertiesMap({ properties, className = '' }) {
       })
 
       // Create info window content
-      const priceText = property.isRental
-        ? `${(property.price / 1000).toFixed(0)}K บาท/เดือน`
-        : `${(property.price / 1_000_000).toFixed(1)} ล้าน`
+      const priceText = formatPrice(property.price, property.isRental, property.showPrice)
 
       const locationText = property.location
         ? `${property.location.district || ''}, ${property.location.province || ''}`.trim()

@@ -30,13 +30,13 @@ export default function FilterSidebar({ filters, onUpdateFilters, onApply, onCle
       {/* Overlay - Mobile only */}
       {isOpen && (
         <div
-          className="fixed inset-0 bg-black/50 z-40 lg:hidden"
+          className="fixed inset-0 bg-black/50 z-30 lg:hidden"
           onClick={onClose}
         />
       )}
       
       {/* Sidebar */}
-      <div className={`fixed top-0 right-0 h-full w-80 bg-white shadow-xl z-50 transition-transform lg:relative lg:shadow-sm lg:rounded-2xl lg:w-64 lg:h-auto lg:translate-x-0 overflow-y-auto ${
+      <div className={`fixed top-16 right-0 h-[calc(100vh-4rem)] w-80 bg-white shadow-xl z-40 transition-transform lg:relative lg:top-0 lg:h-auto lg:shadow-sm lg:rounded-2xl lg:w-64 lg:translate-x-0 overflow-y-auto ${
         isOpen ? 'translate-x-0' : 'translate-x-full lg:translate-x-0'
       }`}>
         <div className="p-6">

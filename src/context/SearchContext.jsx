@@ -12,6 +12,7 @@ export function SearchProvider({ children }) {
     bathrooms: '',
     areaMin: '',
     areaMax: '',
+    propertySubStatus: '', // มือ 1, มือ 2
     isRental: null, // null = ทั้งหมด, false = ซื้อ, true = เช่า
   })
 
@@ -29,6 +30,7 @@ export function SearchProvider({ children }) {
       bathrooms: '',
       areaMin: '',
       areaMax: '',
+      propertySubStatus: '',
       isRental: null,
     })
   }, [])

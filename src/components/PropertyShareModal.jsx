@@ -1,4 +1,6 @@
 import { X, Copy, MessageCircle, Facebook, MapPin, Bed, Bath, Maximize2 } from 'lucide-react'
+import ProtectedImageContainer from './ProtectedImageContainer'
+import { formatPrice } from '../lib/priceFormat'
 
 export default function PropertyShareModal({ isOpen, onClose, property, onCopySuccess }) {
   if (!isOpen || !property) return null
@@ -6,9 +8,7 @@ export default function PropertyShareModal({ isOpen, onClose, property, onCopySu
   const loc = property.location || {}
   const imgs = property.images && property.images.length > 0 ? property.images : []
   const mainImage = imgs[0] || 'https://images.unsplash.com/photo-1564013799919-ab600027ffc6?w=800'
-  const priceText = property.isRental
-    ? `${(property.price / 1000).toFixed(0)}K บาท/เดือน`
-    : `${(property.price / 1_000_000).toFixed(1)} ล้านบาท`
+  const priceText = formatPrice(property.price, property.isRental, property.showPrice)
 
   const currentUrl = window.location.href
 
@@ -70,13 +70,17 @@ export default function PropertyShareModal({ isOpen, onClose, property, onCopySu
           {/* Content */}
           <div className="p-6 space-y-6">
             {/* Property Image */}
-            <div className="rounded-lg overflow-hidden bg-slate-100">
+            <ProtectedImageContainer
+              propertyId={property.propertyId}
+              className="rounded-lg overflow-hidden bg-slate-100 h-48"
+            >
               <img
                 src={mainImage}
                 alt={property.title}
-                className="w-full h-48 object-cover"
+                className="w-full h-48 object-cover protected-image"
+                draggable={false}
               />
-            </div>
+            </ProtectedImageContainer>
 
             {/* Property Info */}
             <div className="space-y-3">

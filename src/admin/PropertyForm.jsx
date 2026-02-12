@@ -7,14 +7,16 @@ import ModernProgressLoader from '../components/ModernProgressLoader'
 import { useProgressLoader } from '../hooks/useProgressLoader'
 import {
   getPropertyByIdOnce,
+  getPropertiesOnce,
   createProperty,
   updatePropertyById,
   uploadPropertyImageWithProgress,
 } from '../lib/firestore'
+import { generatePropertyID, checkPropertyIdDuplicate } from '../lib/propertyId'
 import { logActivity } from '../services/activityLogger'
 import { fetchAndCacheNearbyPlaces } from '../services/nearbyPlacesService'
 import { compressImages } from '../lib/imageCompressor'
-import { ImagePlus, X, ArrowLeft, RefreshCw } from 'lucide-react'
+import { ImagePlus, X, ArrowLeft, RefreshCw, Plus, Star } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import GoogleMapsInputWithPreview from '../components/GoogleMapsInputWithPreview'
 
@@ -23,6 +25,7 @@ const CATEGORIES = [
   { value: 'คอนโดมิเนียม', label: 'คอนโดมิเนียม' },
   { value: 'ทาวน์โฮม', label: 'ทาวน์โฮม' },
   { value: 'วิลล่า', label: 'วิลล่า' },
+  { value: 'ที่ดิน', label: 'ที่ดิน' },
   { value: 'บ้านเช่า', label: 'บ้านเช่า' },
 ]
 
@@ -33,9 +36,20 @@ const STATUS_OPTIONS = [
   { value: 'pending', label: 'รออนุมัติ', color: 'bg-orange-100 text-orange-900' },
 ]
 
+const BUY_SUB_STATUS_OPTIONS = [
+  { value: 'มือ 1', label: 'มือ 1', color: 'bg-blue-100 text-blue-900' },
+  { value: 'มือ 2', label: 'มือ 2', color: 'bg-slate-100 text-slate-900' },
+]
+
+const RENT_AVAILABILITY_OPTIONS = [
+  { value: 'available', label: 'ว่าง', color: 'bg-green-100 text-green-900' },
+  { value: 'unavailable', label: 'ไม่ว่าง', color: 'bg-red-100 text-red-900' },
+]
+
 const defaultForm = {
   title: '',
   price: '',
+  propertyId: '',
   type: 'คอนโดมิเนียม',
   locationDisplay: '',
   location: { province: '', district: '', subDistrict: '' },
@@ -44,12 +58,17 @@ const defaultForm = {
   area: '',
   description: '',
   images: [],
+  coverImageUrl: '', // URL ของภาพหน้าปก
   agentContact: { name: '', lineId: '', phone: '' },
   featured: false,
   isRental: false,
   directInstallment: false,
   hotDeal: false,
   status: 'available',
+  propertySubStatus: '',
+  availability: 'available',
+  showPrice: true,
+  customTags: [],
   mapUrl: '',
   lat: null,
   lng: null,
@@ -68,7 +87,20 @@ export default function PropertyForm() {
   const [uploadingFiles, setUploadingFiles] = useState([])
   const [newFiles, setNewFiles] = useState([])
   const [compressing, setCompressing] = useState(false)
+  const [allProperties, setAllProperties] = useState([])
+  const [propertyIdManuallyEdited, setPropertyIdManuallyEdited] = useState(false)
   const progressLoader = useProgressLoader()
+
+  useEffect(() => {
+    getPropertiesOnce().then(setAllProperties)
+  }, [])
+
+  useEffect(() => {
+    if (!isEdit && form.type && !form.propertyId && !propertyIdManuallyEdited) {
+      const nextId = generatePropertyID(form.type, allProperties)
+      setForm((prev) => ({ ...prev, propertyId: nextId }))
+    }
+  }, [isEdit, form.type, form.propertyId, propertyIdManuallyEdited, allProperties])
 
   useEffect(() => {
     if (!isEdit) return
@@ -79,6 +111,7 @@ export default function PropertyForm() {
       setForm({
         title: p.title ?? '',
         price: p.price ?? '',
+        propertyId: p.propertyId ?? '',
         type: p.type ?? 'คอนโดมิเนียม',
         locationDisplay: p.locationDisplay ?? `${loc.district || ''} ${loc.province || ''}`.trim(),
         location: {
@@ -91,6 +124,7 @@ export default function PropertyForm() {
         area: p.area ?? '',
         description: p.description ?? '',
         images: Array.isArray(p.images) ? p.images : [],
+        coverImageUrl: p.coverImageUrl || '',
         agentContact: {
           name: p.agentContact?.name ?? '',
           lineId: p.agentContact?.lineId ?? '',
@@ -101,6 +135,10 @@ export default function PropertyForm() {
         directInstallment: Boolean(p.directInstallment),
         hotDeal: Boolean(p.hotDeal),
         status: p.status ?? 'available',
+        propertySubStatus: p.propertySubStatus ?? '',
+        availability: p.availability ?? 'available',
+        showPrice: p.showPrice !== false,
+        customTags: Array.isArray(p.customTags) ? p.customTags : [],
         mapUrl: p.mapUrl ?? '',
         lat: p.lat ?? null,
         lng: p.lng ?? null,
@@ -110,6 +148,23 @@ export default function PropertyForm() {
   }, [id, isEdit])
 
   const update = (partial) => setForm((prev) => ({ ...prev, ...partial }))
+
+  const handleTypeChange = (newType) => {
+    const isRental = newType === 'บ้านเช่า'
+    const next = { type: newType, isRental }
+    if (!isEdit && !propertyIdManuallyEdited) {
+      const nextId = generatePropertyID(newType, allProperties)
+      next.propertyId = nextId
+    }
+    if (isRental) {
+      next.propertySubStatus = ''
+      next.availability = 'available'
+    } else {
+      next.availability = ''
+      next.propertySubStatus = ''
+    }
+    update(next)
+  }
 
   const handleLocationSelect = (loc) => {
     if (!loc) return
@@ -137,6 +192,11 @@ export default function PropertyForm() {
         maxSizeMB: 2,
       })
       setNewFiles((prev) => [...prev, ...compressedFiles])
+      // ถ้ายังไม่มี coverImageUrl และยังไม่มีรูปภาพ ให้ตั้งรูปแรกเป็น coverImageUrl โดยอัตโนมัติ
+      if (!form.coverImageUrl && form.images.length === 0) {
+        const firstFileUrl = URL.createObjectURL(compressedFiles[0])
+        setForm((prev) => ({ ...prev, coverImageUrl: firstFileUrl }))
+      }
     } catch (err) {
       console.error('Error compressing images:', err)
       alert('เกิดข้อผิดพลาดในการบีบอัดรูปภาพ: ' + err.message)
@@ -155,8 +215,14 @@ export default function PropertyForm() {
   }
 
   const removeExistingImage = (index) => {
+    const removedUrl = form.images[index]
+    const remainingImages = form.images.filter((_, i) => i !== index)
     update({
-      images: form.images.filter((_, i) => i !== index),
+      images: remainingImages,
+      // ถ้าลบรูปที่เป็น coverImageUrl ให้ reset เป็นรูปแรก (หรือ null ถ้าไม่มีรูปเหลือ)
+      coverImageUrl: form.coverImageUrl === removedUrl
+        ? (remainingImages.length > 0 ? remainingImages[0] : '')
+        : form.coverImageUrl,
     })
   }
 
@@ -196,12 +262,21 @@ export default function PropertyForm() {
 
   const handleSubmit = async (e) => {
     e.preventDefault()
+    let propertyIdTrimmed = String(form.propertyId || '').trim()
+    if (!propertyIdTrimmed && !isEdit) {
+      propertyIdTrimmed = generatePropertyID(form.type, allProperties)
+    }
+    if (propertyIdTrimmed && checkPropertyIdDuplicate(propertyIdTrimmed, id, allProperties)) {
+      alert('รหัสทรัพย์นี้มีอยู่ในระบบแล้ว กรุณาใช้รหัสอื่นหรือปล่อยว่างเพื่อสร้างรหัสอัตโนมัติ')
+      return
+    }
     setSaving(true)
     const price = Number(form.price) || 0
     const area = Number(form.area) || 0
     const payload = {
       title: form.title.trim(),
       price,
+      propertyId: propertyIdTrimmed || null,
       type: form.type,
       location: form.location,
       locationDisplay: form.locationDisplay.trim(),
@@ -215,6 +290,11 @@ export default function PropertyForm() {
       directInstallment: form.directInstallment,
       hotDeal: form.hotDeal,
       status: form.status || 'available',
+      propertySubStatus: form.propertySubStatus || null,
+      availability: form.isRental ? (form.availability || 'available') : null,
+      showPrice: form.showPrice !== false,
+      customTags: Array.isArray(form.customTags) ? form.customTags.filter((tag) => tag && tag.trim()) : [],
+      coverImageUrl: form.coverImageUrl || null, // บันทึก coverImageUrl
       mapUrl: (form.mapUrl || '').trim(),
       lat: form.lat ? Number(form.lat) : null,
       lng: form.lng ? Number(form.lng) : null,
@@ -241,6 +321,14 @@ export default function PropertyForm() {
           }
         }
         payload.images = imageUrls
+        // ถ้า coverImageUrl เป็น URL.createObjectURL (ยังไม่ได้อัปโหลด) ให้หา URL ที่ถูกต้อง
+        if (form.coverImageUrl && form.coverImageUrl.startsWith('blob:')) {
+          // ถ้า coverImageUrl เป็น blob URL (รูปใหม่) ให้ใช้รูปแรกที่อัปโหลดแล้ว
+          payload.coverImageUrl = imageUrls.length > 0 ? imageUrls[imageUrls.length - newFiles.length] : null
+        } else {
+          // ถ้า coverImageUrl เป็น URL ที่มีอยู่แล้ว ให้ใช้ตามเดิม
+          payload.coverImageUrl = form.coverImageUrl && imageUrls.includes(form.coverImageUrl) ? form.coverImageUrl : (imageUrls.length > 0 ? imageUrls[0] : null)
+        }
         await updatePropertyById(id, payload)
         // Activity Log: แก้ไขทรัพย์ (รวมเปรียบเทียบราคา)
         const oldPrice = Number(form.price) || 0
@@ -293,7 +381,16 @@ export default function PropertyForm() {
             })
             imageUrls.push(url)
           }
-          await updatePropertyById(newId, { images: imageUrls })
+          // ตั้งค่า coverImageUrl: ใช้รูปแรกที่อัปโหลดแล้ว
+          await updatePropertyById(newId, { 
+            images: imageUrls,
+            coverImageUrl: imageUrls.length > 0 ? imageUrls[0] : null,
+          })
+        } else {
+          // ถ้าไม่มีรูปใหม่ แต่มี coverImageUrl ใน form ให้บันทึกด้วย
+          if (form.coverImageUrl) {
+            await updatePropertyById(newId, { coverImageUrl: form.coverImageUrl })
+          }
         }
         // Activity Log: เพิ่มทรัพย์ใหม่
         const userForLog = user ? { email: user.email, role: userRole || 'member' } : null
@@ -365,6 +462,20 @@ export default function PropertyForm() {
       <form onSubmit={handleSubmit} className="space-y-6">
         <div className="bg-white rounded-xl border border-slate-200 p-6 space-y-4">
           <div>
+            <label className="block text-sm font-medium text-slate-700 mb-1">รหัสทรัพย์</label>
+            <input
+              type="text"
+              value={form.propertyId}
+              onChange={(e) => {
+                setPropertyIdManuallyEdited(true)
+                update({ propertyId: e.target.value })
+              }}
+              className="w-full px-4 py-3 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-900/20"
+              placeholder="เช่น SPS-S-06 (เว้นว่างเพื่อสร้างอัตโนมัติ)"
+            />
+            <p className="text-xs text-slate-500 mt-1">แก้ไขได้เองเมื่อจำเป็น (Manual Override)</p>
+          </div>
+          <div>
             <label className="block text-sm font-medium text-slate-700 mb-1">ชื่อประกาศ *</label>
             <input
               type="text"
@@ -396,7 +507,7 @@ export default function PropertyForm() {
               <label className="block text-sm font-medium text-slate-700 mb-1">ประเภท *</label>
               <select
                 value={form.type}
-                onChange={(e) => update({ type: e.target.value, isRental: e.target.value === 'บ้านเช่า' })}
+                onChange={(e) => handleTypeChange(e.target.value)}
                 className="w-full px-4 py-3 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-900/20"
               >
                 {CATEGORIES.map((c) => (
@@ -405,6 +516,173 @@ export default function PropertyForm() {
               </select>
             </div>
           </div>
+
+          {/* Conditional: Buy -> มือ 1/มือ 2 | Rent -> ว่าง/ไม่ว่าง */}
+          {!form.isRental ? (
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-2">ประเภทสินทรัพย์ (ซื้อ)</label>
+              <div className="flex flex-wrap gap-3">
+                {BUY_SUB_STATUS_OPTIONS.map((opt) => (
+                  <button
+                    key={opt.value}
+                    type="button"
+                    onClick={() => update({ propertySubStatus: opt.value })}
+                    className={`px-4 py-2.5 rounded-lg border-2 transition ${
+                      form.propertySubStatus === opt.value
+                        ? `${opt.color} border-blue-900 font-semibold`
+                        : 'bg-white border-slate-200 text-slate-700 hover:border-blue-300'
+                    }`}
+                  >
+                    {opt.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+          ) : (
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-2">สถานะ (เช่า)</label>
+              <div className="flex flex-wrap gap-3">
+                {RENT_AVAILABILITY_OPTIONS.map((opt) => (
+                  <button
+                    key={opt.value}
+                    type="button"
+                    onClick={() => update({ availability: opt.value })}
+                    className={`px-4 py-2.5 rounded-lg border-2 transition ${
+                      form.availability === opt.value
+                        ? `${opt.color} border-blue-900 font-semibold`
+                        : 'bg-white border-slate-200 text-slate-700 hover:border-blue-300'
+                    }`}
+                  >
+                    {opt.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+          {/* Status - แสดงเฉพาะเมื่อเป็นทรัพย์ซื้อ (ไม่ใช่เช่า) */}
+          {!form.isRental && (
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-2">สถานะทรัพย์สิน</label>
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                {STATUS_OPTIONS.map((option) => (
+                  <button
+                    key={option.value}
+                    type="button"
+                    onClick={() => update({ status: option.value })}
+                    className={`px-4 py-2.5 rounded-lg border-2 transition ${
+                      form.status === option.value
+                        ? `${option.color} border-blue-900 font-semibold`
+                        : 'bg-white border-slate-200 text-slate-700 hover:border-blue-300'
+                    }`}
+                  >
+                    {option.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
+          <div className="flex flex-wrap gap-6">
+            <label className="flex items-center gap-2 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={form.featured}
+                onChange={(e) => update({ featured: e.target.checked })}
+                className="rounded border-slate-300"
+              />
+              <span className="text-slate-700">แสดงในทรัพย์เด่น</span>
+            </label>
+            <label className="flex items-center gap-2 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={form.hotDeal}
+                onChange={(e) => update({ hotDeal: e.target.checked })}
+                className="rounded border-slate-300"
+              />
+              <span className="text-slate-700">Hot Deal</span>
+            </label>
+            <label className="flex items-center gap-2 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={form.directInstallment}
+                onChange={(e) => update({ directInstallment: e.target.checked })}
+                className="rounded border-slate-300"
+              />
+              <span className="text-slate-700">ผ่อนตรง</span>
+            </label>
+            <label className="flex items-center gap-2 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={form.showPrice !== false}
+                onChange={(e) => update({ showPrice: e.target.checked })}
+                className="rounded border-slate-300"
+              />
+              <span className="text-slate-700">แสดงราคาเต็มหน้าเว็บ</span>
+            </label>
+          </div>
+
+          {/* Custom Tags Input */}
+          <div>
+            <label className="block text-sm font-medium text-slate-700 mb-2">Custom Tags</label>
+            <div className="space-y-3">
+              {/* Input for adding new tag */}
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  placeholder="พิมพ์ Tag แล้วกด Enter เพื่อเพิ่ม"
+                  className="flex-1 px-4 py-2.5 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-900/20"
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      e.preventDefault()
+                      const tagValue = e.target.value.trim()
+                      if (tagValue) {
+                        const currentTags = form.customTags || []
+                        const normalizedTag = tagValue.toLowerCase()
+                        const isDuplicate = currentTags.some(
+                          (tag) => tag.toLowerCase() === normalizedTag
+                        )
+                        if (!isDuplicate) {
+                          update({ customTags: [...currentTags, tagValue] })
+                          e.target.value = ''
+                        } else {
+                          alert(`Tag "${tagValue}" มีอยู่แล้ว`)
+                        }
+                      }
+                    }
+                  }}
+                />
+              </div>
+              {/* Display existing tags */}
+              {form.customTags && form.customTags.length > 0 && (
+                <div className="flex flex-wrap gap-2">
+                  {form.customTags.map((tag, index) => (
+                    <span
+                      key={index}
+                      className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-blue-50 text-blue-900 rounded-md text-sm font-medium border border-blue-200"
+                    >
+                      {tag}
+                      <button
+                        type="button"
+                        onClick={() => {
+                          update({
+                            customTags: form.customTags.filter((_, i) => i !== index),
+                          })
+                        }}
+                        className="ml-1 text-blue-600 hover:text-blue-800 transition-colors"
+                        aria-label={`ลบ ${tag}`}
+                      >
+                        <X className="h-4 w-4" />
+                      </button>
+                    </span>
+                  ))}
+                </div>
+              )}
+            </div>
+            <p className="text-xs text-slate-500 mt-2">
+              Tags เหล่านี้จะถูกแสดงผลในหน้าบ้านพร้อมไอคอนอัตโนมัติ
+            </p>
+          </div>
+
           <div>
             <label className="block text-sm font-medium text-slate-700 mb-1">พื้นที่ (จังหวัด/อำเภอ/ตำบล) *</label>
             <LocationAutocomplete
@@ -528,37 +806,118 @@ export default function PropertyForm() {
         {/* Images */}
         <div className="bg-white rounded-xl border border-slate-200 p-6">
           <label className="block text-sm font-medium text-slate-700 mb-3">รูปภาพทรัพย์</label>
+          <p className="text-xs text-slate-500 mb-3">คลิกที่ไอคอน ⭐ เพื่อตั้งเป็นภาพหน้าปก</p>
           <div className="flex flex-wrap gap-3 mb-4">
-            {form.images.map((url, i) => (
-              <div key={i} className="relative group">
-                <img src={url} alt="" className="w-24 h-24 object-cover rounded-lg" />
-                {isEdit && (
+            {form.images.map((url, i) => {
+              const isCoverImage = form.coverImageUrl === url || (!form.coverImageUrl && i === 0)
+              return (
+                <div
+                  key={i}
+                  className={`relative group ${isCoverImage ? 'ring-4 ring-green-500 ring-offset-2' : ''}`}
+                >
+                  <img
+                    src={url}
+                    alt=""
+                    className={`w-24 h-24 object-cover rounded-lg ${isCoverImage ? 'opacity-90' : ''}`}
+                  />
+                  {/* Cover Image Badge */}
+                  {isCoverImage && (
+                    <div className="absolute top-1 left-1 bg-green-500 text-white text-xs px-1.5 py-0.5 rounded flex items-center gap-1">
+                      <Star className="h-3 w-3 fill-white" />
+                      <span>ภาพหน้าปก</span>
+                    </div>
+                  )}
+                  {/* Set Cover Image Button */}
+                  {!isCoverImage && (
+                    <button
+                      type="button"
+                      onClick={() => setForm((prev) => ({ ...prev, coverImageUrl: url }))}
+                      className="absolute top-1 left-1 bg-white/90 hover:bg-white text-slate-700 p-1.5 rounded shadow-sm opacity-0 group-hover:opacity-100 transition"
+                      title="ตั้งเป็นภาพหน้าปก"
+                    >
+                      <Star className="h-4 w-4" />
+                    </button>
+                  )}
+                  {/* Remove Image Button */}
+                  {isEdit && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        // ถ้าลบรูปที่เป็น coverImageUrl ให้ reset coverImageUrl
+                        if (form.coverImageUrl === url) {
+                          const remainingImages = form.images.filter((_, idx) => idx !== i)
+                          setForm((prev) => ({
+                            ...prev,
+                            images: remainingImages,
+                            coverImageUrl: remainingImages.length > 0 ? remainingImages[0] : '',
+                          }))
+                        } else {
+                          removeExistingImage(i)
+                        }
+                      }}
+                      className="absolute -top-2 -right-2 w-6 h-6 rounded-full bg-red-500 text-white flex items-center justify-center opacity-0 group-hover:opacity-100 transition"
+                    >
+                      <X className="h-3 w-3" />
+                    </button>
+                  )}
+                </div>
+              )
+            })}
+            {newFiles.map((file, i) => {
+              const fileUrl = URL.createObjectURL(file)
+              const isCoverImage = form.coverImageUrl === fileUrl
+              return (
+                <div
+                  key={`new-${i}`}
+                  className={`relative group ${isCoverImage ? 'ring-4 ring-green-500 ring-offset-2' : ''}`}
+                >
+                  <img
+                    src={fileUrl}
+                    alt=""
+                    className={`w-24 h-24 object-cover rounded-lg ${isCoverImage ? 'opacity-90' : ''}`}
+                  />
+                  {/* Cover Image Badge */}
+                  {isCoverImage && (
+                    <div className="absolute top-1 left-1 bg-green-500 text-white text-xs px-1.5 py-0.5 rounded flex items-center gap-1">
+                      <Star className="h-3 w-3 fill-white" />
+                      <span>ภาพหน้าปก</span>
+                    </div>
+                  )}
+                  {/* Set Cover Image Button */}
+                  {!isCoverImage && (
+                    <button
+                      type="button"
+                      onClick={() => setForm((prev) => ({ ...prev, coverImageUrl: fileUrl }))}
+                      className="absolute top-1 left-1 bg-white/90 hover:bg-white text-slate-700 p-1.5 rounded shadow-sm opacity-0 group-hover:opacity-100 transition"
+                      title="ตั้งเป็นภาพหน้าปก"
+                    >
+                      <Star className="h-4 w-4" />
+                    </button>
+                  )}
+                  {/* Remove Image Button */}
                   <button
                     type="button"
-                    onClick={() => removeExistingImage(i)}
-                    className="absolute -top-2 -right-2 w-6 h-6 rounded-full bg-red-500 text-white flex items-center justify-center opacity-0 group-hover:opacity-100 transition"
+                    onClick={() => {
+                      // ถ้าลบรูปที่เป็น coverImageUrl ให้ reset coverImageUrl
+                      if (form.coverImageUrl === fileUrl) {
+                        const remainingNewFiles = newFiles.filter((_, idx) => idx !== i)
+                        const remainingImages = form.images
+                        setForm((prev) => ({
+                          ...prev,
+                          coverImageUrl: remainingImages.length > 0 ? remainingImages[0] : '',
+                        }))
+                        setNewFiles(remainingNewFiles)
+                      } else {
+                        removeNewFile(i)
+                      }
+                    }}
+                    className="absolute -top-2 -right-2 w-6 h-6 rounded-full bg-red-500 text-white flex items-center justify-center"
                   >
                     <X className="h-3 w-3" />
                   </button>
-                )}
-              </div>
-            ))}
-            {newFiles.map((file, i) => (
-              <div key={`new-${i}`} className="relative group">
-                <img
-                  src={URL.createObjectURL(file)}
-                  alt=""
-                  className="w-24 h-24 object-cover rounded-lg"
-                />
-                <button
-                  type="button"
-                  onClick={() => removeNewFile(i)}
-                  className="absolute -top-2 -right-2 w-6 h-6 rounded-full bg-red-500 text-white flex items-center justify-center"
-                >
-                  <X className="h-3 w-3" />
-                </button>
-              </div>
-            ))}
+                </div>
+              )
+            })}
           </div>
           <label className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-slate-100 text-slate-700 cursor-pointer hover:bg-slate-200 disabled:opacity-50 disabled:cursor-not-allowed">
             <ImagePlus className="h-5 w-5" />
@@ -610,56 +969,7 @@ export default function PropertyForm() {
             </div>
           </div>
 
-          {/* Status */}
-          <div>
-            <label className="block text-sm font-medium text-slate-700 mb-2">สถานะทรัพย์สิน</label>
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-              {STATUS_OPTIONS.map((option) => (
-                <button
-                  key={option.value}
-                  type="button"
-                  onClick={() => update({ status: option.value })}
-                  className={`px-4 py-2.5 rounded-lg border-2 transition ${
-                    form.status === option.value
-                      ? `${option.color} border-blue-900 font-semibold`
-                      : 'bg-white border-slate-200 text-slate-700 hover:border-blue-300'
-                  }`}
-                >
-                  {option.label}
-                </button>
-              ))}
-            </div>
-          </div>
-
-          <div className="flex flex-wrap gap-6">
-            <label className="flex items-center gap-2 cursor-pointer">
-              <input
-                type="checkbox"
-                checked={form.featured}
-                onChange={(e) => update({ featured: e.target.checked })}
-                className="rounded border-slate-300"
-              />
-              <span className="text-slate-700">แสดงในทรัพย์เด่น</span>
-            </label>
-            <label className="flex items-center gap-2 cursor-pointer">
-              <input
-                type="checkbox"
-                checked={form.hotDeal}
-                onChange={(e) => update({ hotDeal: e.target.checked })}
-                className="rounded border-slate-300"
-              />
-              <span className="text-slate-700">Hot Deal</span>
-            </label>
-            <label className="flex items-center gap-2 cursor-pointer">
-              <input
-                type="checkbox"
-                checked={form.directInstallment}
-                onChange={(e) => update({ directInstallment: e.target.checked })}
-                className="rounded border-slate-300"
-              />
-              <span className="text-slate-700">ผ่อนตรง</span>
-            </label>
-          </div>
+          
         </div>
 
         <div className="flex gap-3">

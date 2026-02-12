@@ -1,6 +1,14 @@
 import { useState, useRef, useEffect } from 'react'
 import { MapPin } from 'lucide-react'
 import { searchLocations } from '../data/thaiLocations'
+import { useTypingPlaceholder } from './TypingPlaceholder'
+
+const TYPING_PHRASES = [
+  'ค้นหาพื้นที่ จังหวัด อำเภอ...',
+  'ค้นหาชลบุรี...',
+  'ค้นหาฉะเชิงเทรา...',
+  'ค้นหาระยอง...',
+]
 
 export default function LocationAutocomplete({
   value = '',
@@ -9,28 +17,51 @@ export default function LocationAutocomplete({
   placeholder = 'ค้นหาพื้นที่ จังหวัด อำเภอ ตำบล...',
   className = '',
   inputClassName = '',
+  enableTypingAnimation = true,
 }) {
-  const [query, setQuery] = useState(value)
+  // State Separation: แยกตัวแปรออกเป็น 2 ตัว
+  const [searchQuery, setSearchQuery] = useState(value) // ค่าจริงที่ผู้ใช้พิมพ์ (ใช้สำหรับ Filter)
   const [suggestions, setSuggestions] = useState([])
   const [isOpen, setIsOpen] = useState(false)
   const [highlightIndex, setHighlightIndex] = useState(-1)
+  const [isFocused, setIsFocused] = useState(false)
   const wrapperRef = useRef(null)
+  
+  // Typing animation สำหรับ placeholder (Decoupled จาก searchQuery)
+  const { displayText: typingPlaceholder, stop: stopTyping, start: startTyping } = useTypingPlaceholder(
+    TYPING_PHRASES,
+    100,
+    50,
+    2000
+  )
 
   useEffect(() => {
-    setQuery(value)
+    setSearchQuery(value)
   }, [value])
 
+  // Strict Focus Logic: หยุด animation เมื่อ focus, เริ่มใหม่เมื่อ blur และไม่มีค่า
   useEffect(() => {
-    if (!query.trim()) {
+    if (enableTypingAnimation) {
+      if (isFocused) {
+        stopTyping()
+      } else if (!searchQuery.trim()) {
+        startTyping()
+      }
+    }
+  }, [isFocused, searchQuery, enableTypingAnimation, stopTyping, startTyping])
+
+  // Filtering Dependency: ใช้ searchQuery เป็น dependency เพียงอย่างเดียว (ห้ามใช้ typingPlaceholder)
+  useEffect(() => {
+    if (!searchQuery.trim()) {
       setSuggestions([])
       setIsOpen(false)
       return
     }
-    const results = searchLocations(query)
+    const results = searchLocations(searchQuery)
     setSuggestions(results.slice(0, 8))
     setIsOpen(results.length > 0)
     setHighlightIndex(-1)
-  }, [query])
+  }, [searchQuery])
 
   useEffect(() => {
     function handleClickOutside(e) {
@@ -44,13 +75,13 @@ export default function LocationAutocomplete({
 
   const handleInputChange = (e) => {
     const v = e.target.value
-    setQuery(v)
+    setSearchQuery(v) // อัปเดต searchQuery (ค่าจริงที่ผู้ใช้พิมพ์)
     onChange?.(v)
   }
 
   const handleSelect = (location) => {
     const display = location.displayName
-    setQuery(display)
+    setSearchQuery(display) // อัปเดต searchQuery (ค่าจริงที่ผู้ใช้พิมพ์)
     onChange?.(display)
     onSelect?.(location)
     setIsOpen(false)
@@ -79,11 +110,25 @@ export default function LocationAutocomplete({
         <MapPin className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400 pointer-events-none" />
         <input
           type="text"
-          value={query}
+          value={searchQuery}
           onChange={handleInputChange}
-          onFocus={() => query.trim() && suggestions.length > 0 && setIsOpen(true)}
+          onFocus={(e) => {
+            setIsFocused(true)
+            stopTyping() // หยุด animation ทันทีเมื่อ focus
+            if (searchQuery.trim() && suggestions.length > 0) {
+              setIsOpen(true)
+            }
+          }}
+          onBlur={() => {
+            setIsFocused(false)
+            if (!searchQuery.trim()) {
+              startTyping() // เริ่ม animation ใหม่เมื่อ blur และไม่มีค่า
+            }
+            // Delay เพื่อให้ click suggestion ทำงานได้
+            setTimeout(() => setIsOpen(false), 200)
+          }}
           onKeyDown={handleKeyDown}
-          placeholder={placeholder}
+          placeholder={isFocused ? 'ค้นหาทำเล, จังหวัด, อำเภอ...' : (enableTypingAnimation && !searchQuery.trim() ? typingPlaceholder : placeholder)}
           autoComplete="off"
           className={`w-full pl-10 pr-4 py-3 rounded-xl bg-gray-100 text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-200 focus:bg-white transition-all border-0 ${inputClassName}`}
         />

@@ -2,18 +2,10 @@ import { Link } from 'react-router-dom'
 import { MapPin, Bed, Bath, Heart } from 'lucide-react'
 import { useState, useEffect } from 'react'
 import { isFavorite, toggleFavorite } from '../lib/favorites'
-import ImageSlider from './ImageSlider'
+import { formatPrice } from '../lib/priceFormat'
+import ProtectedImageContainer from './ProtectedImageContainer'
 
 const DEFAULT_IMAGE = 'https://images.unsplash.com/photo-1564013799919-ab600027ffc6?w=400'
-
-function formatPrice(price, isRental) {
-  if (price == null || price === '') return '-'
-  const num = Number(price)
-  if (isRental) {
-    return `${num.toLocaleString('th-TH')} บาท/เดือน`
-  }
-  return `${num.toLocaleString('th-TH')} บาท`
-}
 
 function getBadges(property) {
   const badges = []
@@ -30,11 +22,104 @@ function getBadges(property) {
   return badges
 }
 
+/**
+ * Get rental status badge (ว่าง/ไม่ว่าง) - สำหรับทรัพย์เช่าเท่านั้น
+ */
+function getRentalStatusBadge(property) {
+  if (!property.isRental) return null
+  
+  const availability = property.availability
+  if (availability === 'unavailable') {
+    return { label: 'ไม่ว่าง', color: 'bg-red-500 text-white' }
+  }
+  // default: available
+  return { label: 'ว่าง', color: 'bg-green-500 text-white' }
+}
+
+/**
+ * Get property status badge (ว่าง, ติดจอง, ขายแล้ว) - สำหรับทรัพย์ซื้อเท่านั้น
+ * ไม่แสดง 'รออนุมัติ' (pending)
+ */
+function getPropertyStatusBadge(property) {
+  // ถ้าเป็นเช่า ไม่แสดงสถานะทรัพย์สิน
+  if (property.isRental) return null
+  
+  const status = property.status
+  if (!status || status === 'pending') return null
+  
+  switch (status) {
+    case 'available':
+      return { label: 'ว่าง', color: 'bg-green-500 text-white' }
+    case 'reserved':
+      return { label: 'ติดจอง', color: 'bg-orange-500 text-white' }
+    case 'sold':
+      return { label: 'ขายแล้ว', color: 'bg-red-600 text-white' }
+    default:
+      return null
+  }
+}
+
+/**
+ * Get transaction type badge (ขาย/เช่า) - แสดงประเภทรายการ
+ */
+function getTransactionTypeBadge(property) {
+  // ใช้ isRental เพื่อตรวจสอบว่าเป็นเช่าหรือซื้อ
+  if (property.isRental === true) {
+    return { label: 'เช่า', color: 'bg-emerald-700 text-white' }
+  } else if (property.isRental === false) {
+    return { label: 'ขาย', color: 'bg-blue-700 text-white' }
+  }
+  // ถ้าไม่ระบุชัดเจน ให้ตรวจสอบจาก type
+  if (property.type === 'บ้านเช่า') {
+    return { label: 'เช่า', color: 'bg-emerald-700 text-white' }
+  }
+  return { label: 'ขาย', color: 'bg-blue-700 text-white' }
+}
+
+/**
+ * Get sub-status badge (มือ 1, มือ 2) - แสดงเฉพาะเมื่อเป็นทรัพย์ซื้อ
+ */
+function getSubStatusBadge(property) {
+  if (property.isRental) return null
+  const sub = property.propertySubStatus
+  if (sub === 'มือ 1') return { label: 'มือ 1', color: 'bg-blue-100 text-blue-900' }
+  if (sub === 'มือ 2') return { label: 'มือ 2', color: 'bg-slate-100 text-slate-900' }
+  return null
+}
+
+/**
+ * Check if property is sold/rented (for grayscale overlay)
+ */
+function isSoldOrRented(property) {
+  return property.status === 'sold'
+}
+
 export default function PropertyCard({ property, featuredLabel = 'แนะนำ' }) {
-  const imgs = property.images && property.images.length > 0 ? property.images : []
-  const loc = property.location || {}
-  const badges = getBadges(property)
-  const [favorited, setFavorited] = useState(false)
+  // Safety check: ถ้าไม่มี property หรือไม่มี id ให้ return null
+  if (!property || !property.id) {
+    console.warn('PropertyCard: Invalid property', property)
+    return null
+  }
+
+  try {
+    // Image Selection Logic: ใช้ coverImageUrl ถ้ามี หรือ images[0] ถ้าไม่มี
+    const coverImage = property.coverImageUrl || 
+      (property.images && Array.isArray(property.images) && property.images.length > 0 
+        ? property.images[0] 
+        : DEFAULT_IMAGE)
+    
+    const loc = property.location || {}
+    const badges = getBadges(property)
+    
+    // Logic การแสดง Badge ตามประเภททรัพย์
+    const isRental = property.isRental
+    const transactionTypeBadge = getTransactionTypeBadge(property) // ประเภทรายการ (ขาย/เช่า)
+    const rentalStatusBadge = isRental ? getRentalStatusBadge(property) : null
+    const propertyStatusBadge = !isRental ? getPropertyStatusBadge(property) : null
+    const subStatusBadge = !isRental ? getSubStatusBadge(property) : null
+    
+    const isSold = isSoldOrRented(property)
+    const [favorited, setFavorited] = useState(false)
 
   useEffect(() => {
     setFavorited(isFavorite(property.id))
@@ -52,32 +137,58 @@ export default function PropertyCard({ property, featuredLabel = 'แนะน�
       to={`/properties/${property.id}`}
       className="group block bg-white rounded-2xl overflow-hidden shadow-sm hover:-translate-y-1 hover:shadow-md transition-all duration-300"
     >
-      <div className="relative overflow-hidden rounded-t-2xl">
-        <ImageSlider
-          images={imgs}
-          defaultImage={DEFAULT_IMAGE}
-          showDots={false}
-          showArrows={false}
-          autoPlay={true}
-          className="rounded-t-2xl"
-        />
-        <div className="absolute top-3 left-3 z-10 flex items-center gap-2">
+      <div 
+        className="relative overflow-hidden rounded-t-2xl"
+        style={isSold ? { filter: 'grayscale(60%)' } : {}}
+      >
+        {/* Dark overlay for sold/rented properties */}
+        {isSold && (
+          <div className="absolute inset-0 bg-black/25 z-[15] pointer-events-none rounded-t-2xl" />
+        )}
+        {/* Single Cover Image - Disable Slideshow */}
+        <div className="relative aspect-[4/3] overflow-hidden rounded-t-2xl">
+          <ProtectedImageContainer className="absolute inset-0 w-full h-full" propertyId={property.propertyId}>
+            <img
+              src={coverImage}
+              alt={property.title || 'Property image'}
+              className="w-full h-full object-cover protected-image"
+              draggable={false}
+              onContextMenu={(e) => e.preventDefault()}
+              onDragStart={(e) => e.preventDefault()}
+            />
+          </ProtectedImageContainer>
+        </div>
+        {/* Top Left Section - Transaction Type Badge + Favorite Button + Other Badges */}
+        <div className="absolute top-3 left-3 z-30 flex items-start gap-2">
+          
+          {/* Favorite Button */}
           <button
             onClick={handleFavoriteClick}
-            className="p-2 bg-white/80 backdrop-blur-md rounded-full shadow-sm hover:bg-white/90 transition z-30"
+            className="p-2 bg-white/80 backdrop-blur-md rounded-full shadow-sm hover:bg-white/90 transition"
             title={favorited ? 'ลบออกจากรายการโปรด' : 'บันทึกเป็นรายการโปรด'}
           >
+            
             <Heart
               className={`h-5 w-5 transition ${
                 favorited ? 'fill-red-500 text-red-500' : 'text-slate-600'
               }`}
             />
           </button>
+          
+          {/* Transaction Type Badge - ลำดับแรกสุด (มุมซ้ายบน) */}
+          {transactionTypeBadge && (
+            <span
+              className={`px-2.5 py-1 rounded-md text-xs font-semibold text-white shadow-lg ${transactionTypeBadge.color}`}
+            >
+              {transactionTypeBadge.label}
+            </span>
+          )}
+          {/* Other Badges (Hot Deal, ผ่อนตรง) */}
           <div className="flex flex-wrap gap-1.5">
             {badges.map(({ label, key }) => (
               <span
                 key={key}
-                className={`px-2 py-0.5 rounded text-xs font-semibold z-20 ${
+                className={`px-2 py-0.5 rounded text-xs font-semibold ${
                   key === 'featured' || key === 'hotDeal'
                     ? 'bg-yellow-400 text-blue-900'
                     : 'bg-blue-900 text-white'
@@ -88,9 +199,41 @@ export default function PropertyCard({ property, featuredLabel = 'แนะน�
             ))}
           </div>
         </div>
-        <span className="absolute bottom-3 left-3 text-white font-bold text-lg drop-shadow z-20">
-          {formatPrice(property.price, property.isRental)}
+        {/* Price - ขยับขึ้นเพื่อไม่ให้จมกับลายน้ำ */}
+        <span className="absolute bottom-9 left-3 text-white font-bold text-lg drop-shadow z-20">
+          {formatPrice(property.price, property.isRental, property.showPrice)}
         </span>
+        {/* Status Badges - มุมขวาล่าง */}
+        <div className="absolute bottom-9 right-3 z-20 flex flex-col items-end gap-1.5">
+          {isRental ? (
+            /* สำหรับทรัพย์เช่า: แสดงเฉพาะสถานะการเช่า (ว่าง/ไม่ว่าง) */
+            rentalStatusBadge && (
+              <span
+                className={`px-2.5 py-1 rounded-md text-xs font-medium shadow-md backdrop-blur-sm ${rentalStatusBadge.color}`}
+              >
+                {rentalStatusBadge.label}
+              </span>
+            )
+          ) : (
+            /* สำหรับทรัพย์ซื้อ: แสดงสถานะทรัพย์สิน (ว่าง/ติดจอง/ขายแล้ว) และประเภทสินทรัพย์ (มือ 1/มือ 2) */
+            <>
+              {propertyStatusBadge && (
+                <span
+                  className={`px-2.5 py-1 rounded-md text-xs font-medium shadow-md backdrop-blur-sm ${propertyStatusBadge.color}`}
+                >
+                  {propertyStatusBadge.label}
+                </span>
+              )}
+              {subStatusBadge && (
+                <span
+                  className={`px-2.5 py-1 rounded-md text-xs font-medium shadow-md backdrop-blur-sm ${subStatusBadge.color}`}
+                >
+                  {subStatusBadge.label}
+                </span>
+              )}
+            </>
+          )}
+        </div>
       </div>
       <div className="p-4 rounded-b-2xl">
         <h3 className="font-semibold text-blue-900 line-clamp-2 group-hover:underline">{property.title}</h3>
@@ -105,4 +248,12 @@ export default function PropertyCard({ property, featuredLabel = 'แนะน�
       </div>
     </Link>
   )
+  } catch (error) {
+    console.error('PropertyCard render error:', error, property)
+    return (
+      <div className="bg-white rounded-2xl p-4 border border-red-200">
+        <p className="text-red-600 text-sm">เกิดข้อผิดพลาดในการแสดงผลทรัพย์สิน</p>
+      </div>
+    )
+  }
 }
