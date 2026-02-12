@@ -208,6 +208,16 @@ export async function createViewingRequest(data) {
   })
 }
 
+/** Appointments - นัดหมายเข้าชมโครงการ */
+const APPOINTMENTS = 'appointments'
+
+export async function createAppointment(data) {
+  await addDoc(collection(db, APPOINTMENTS), {
+    ...data,
+    createdAt: serverTimestamp(),
+  })
+}
+
 /** Inquiries - คำถามติดต่อจากหน้า Contact */
 const INQUIRIES = 'inquiries'
 

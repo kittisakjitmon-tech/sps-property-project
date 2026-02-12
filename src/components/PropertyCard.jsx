@@ -69,10 +69,11 @@ function hasDirectInstallment(property) {
 
 function getBadges(property) {
   const badges = []
+  // Badge 'แนะนำ' และ 'Hot Deal' - คงไว้ตามเดิม
   if (property.featured) badges.push({ label: 'แนะนำ', key: 'featured' })
   if (property.hotDeal) badges.push({ label: 'Hot Deal', key: 'hotDeal' })
-  // ใช้ strict check function แทนการตรวจสอบตรงๆ
-  if (hasDirectInstallment(property)) badges.push({ label: 'ผ่อนตรง', key: 'directInstallment' })
+  
+  // Badge 'New' - คงไว้ตามเดิม
   const createdAt = property.createdAt
   if (createdAt) {
     const ms = createdAt?.toMillis ? createdAt.toMillis() : (typeof createdAt === 'number' ? createdAt : null)
@@ -80,79 +81,117 @@ function getBadges(property) {
       badges.push({ label: 'New', key: 'new' })
     }
   }
+  
+  // ไม่ต้องแสดง Badge 'ผ่อนตรง' ที่นี่แล้ว เพราะจะแสดงใน Transaction Type Badge เมื่อ subListingType === 'installment_only'
+  // แต่ถ้าเป็นข้อมูลเก่าที่มี directInstallment แต่ไม่มี subListingType ให้แสดง Badge 'ผ่อนตรง' ที่นี่
+  const listingType = property.listingType || (property.isRental ? 'rent' : 'sale')
+  const subListingType = property.subListingType
+  
+  // แสดง Badge 'ผ่อนตรง' เฉพาะกรณีข้อมูลเก่าที่ไม่มี subListingType แต่มี directInstallment
+  if (listingType === 'rent' && !subListingType && hasDirectInstallment(property)) {
+    badges.push({ label: 'ผ่อนตรง', key: 'directInstallment' })
+  }
+  
   return badges
 }
 
 /**
- * Get rental status badge (ว่าง/ไม่ว่าง) - สำหรับทรัพย์เช่าเท่านั้น
- */
-function getRentalStatusBadge(property) {
-  if (!property.isRental) return null
-  
-  const availability = property.availability
-  if (availability === 'unavailable') {
-    return { label: 'ไม่ว่าง', color: 'bg-red-500 text-white' }
-  }
-  // default: available
-  return { label: 'ว่าง', color: 'bg-green-500 text-white' }
-}
-
-/**
- * Get property status badge (ว่าง, ติดจอง, ขายแล้ว) - สำหรับทรัพย์ซื้อเท่านั้น
- * ไม่แสดง 'รออนุมัติ' (pending)
- */
-function getPropertyStatusBadge(property) {
-  // ถ้าเป็นเช่า ไม่แสดงสถานะทรัพย์สิน
-  if (property.isRental) return null
-  
-  const status = property.status
-  if (!status || status === 'pending') return null
-  
-  switch (status) {
-    case 'available':
-      return { label: 'ว่าง', color: 'bg-green-500 text-white' }
-    case 'reserved':
-      return { label: 'ติดจอง', color: 'bg-orange-500 text-white' }
-    case 'sold':
-      return { label: 'ขายแล้ว', color: 'bg-red-600 text-white' }
-    default:
-      return null
-  }
-}
-
-/**
- * Get transaction type badge (ขาย/เช่า) - แสดงประเภทรายการ
+ * Get listing type badge (ขาย/เช่า/ผ่อนตรง) - แสดงประเภทรายการ
+ * ใช้โครงสร้างข้อมูลใหม่ (listingType, subListingType)
  */
 function getTransactionTypeBadge(property) {
-  // ใช้ isRental เพื่อตรวจสอบว่าเป็นเช่าหรือซื้อ
+  // ตรวจสอบ listingType ใหม่ก่อน
+  const listingType = property.listingType || (property.isRental ? 'rent' : 'sale')
+  
+  if (listingType === 'sale') {
+    return { label: 'ขาย', color: 'bg-blue-700 text-white' }
+  } else if (listingType === 'rent') {
+    // ตรวจสอบ subListingType เพื่อแยก 'เช่า' กับ 'ผ่อนตรง'
+    const subListingType = property.subListingType
+    if (subListingType === 'installment_only') {
+      return { label: 'ผ่อนตรง', color: 'bg-blue-900 text-white' }
+    } else if (subListingType === 'rent_only') {
+      return { label: 'เช่า', color: 'bg-orange-600 text-white' }
+    }
+    // Backward compatibility: ตรวจสอบ directInstallment
+    if (property.directInstallment === true) {
+      return { label: 'ผ่อนตรง', color: 'bg-blue-900 text-white' }
+    }
+    // Default สำหรับ rent: แสดง 'เช่า'
+    return { label: 'เช่า', color: 'bg-emerald-700 text-white' }
+  }
+  
+  // Backward compatibility: ใช้ isRental ถ้าไม่มี listingType
   if (property.isRental === true) {
     return { label: 'เช่า', color: 'bg-emerald-700 text-white' }
   } else if (property.isRental === false) {
     return { label: 'ขาย', color: 'bg-blue-700 text-white' }
   }
-  // ถ้าไม่ระบุชัดเจน ให้ตรวจสอบจาก type
+  
+  // Fallback: ตรวจสอบจาก type
   if (property.type === 'บ้านเช่า') {
     return { label: 'เช่า', color: 'bg-emerald-700 text-white' }
   }
+  
   return { label: 'ขาย', color: 'bg-blue-700 text-white' }
 }
 
 /**
- * Get sub-status badge (มือ 1, มือ 2) - แสดงเฉพาะเมื่อเป็นทรัพย์ซื้อ
+ * Get availability status badge (ว่าง, ติดจอง, ขายแล้ว)
+ * ใช้โครงสร้างข้อมูลใหม่ (availability)
  */
-function getSubStatusBadge(property) {
-  if (property.isRental) return null
-  const sub = property.propertySubStatus
-  if (sub === 'มือ 1') return { label: 'มือ 1', color: 'bg-blue-100 text-blue-900' }
-  if (sub === 'มือ 2') return { label: 'มือ 2', color: 'bg-slate-100 text-slate-900' }
+function getAvailabilityBadge(property) {
+  // ตรวจสอบ availability ใหม่ก่อน
+  const availability = property.availability || property.status
+  
+  if (!availability || availability === 'pending') return null
+  
+  switch (availability) {
+    case 'available':
+    case 'ว่าง':
+      return { label: 'ว่าง', color: 'bg-green-500 text-white' }
+    case 'reserved':
+    case 'ติดจอง':
+      return { label: 'ติดจอง', color: 'bg-orange-500 text-white' }
+    case 'sold':
+    case 'ขายแล้ว':
+      return { label: 'ขายแล้ว', color: 'bg-red-600 text-white' }
+    case 'unavailable':
+    case 'ไม่ว่าง':
+      return { label: 'ไม่ว่าง', color: 'bg-red-500 text-white' }
+    default:
+      // Backward compatibility: แสดงเป็น Badge สีเทา
+      return { label: String(availability), color: 'bg-slate-100 text-slate-700' }
+  }
+}
+
+/**
+ * Get property condition badge (มือ 1, มือ 2) - แสดงเฉพาะเมื่อเป็น listingType === 'sale'
+ * ใช้โครงสร้างข้อมูลใหม่ (propertyCondition)
+ */
+function getPropertyConditionBadge(property) {
+  // ตรวจสอบ listingType ก่อน
+  const listingType = property.listingType || (property.isRental ? 'rent' : 'sale')
+  if (listingType !== 'sale') return null
+  
+  // ตรวจสอบ propertyCondition ใหม่ก่อน
+  const condition = property.propertyCondition || property.propertySubStatus
+  if (condition === 'มือ 1') {
+    return { label: 'มือ 1', color: 'bg-blue-100 text-blue-900' }
+  }
+  if (condition === 'มือ 2') {
+    return { label: 'มือ 2', color: 'bg-blue-100 text-blue-900' }
+  }
   return null
 }
 
 /**
  * Check if property is sold/rented (for grayscale overlay)
+ * ใช้โครงสร้างข้อมูลใหม่ (availability)
  */
 function isSoldOrRented(property) {
-  return property.status === 'sold'
+  const availability = property.availability || property.status
+  return availability === 'sold' || availability === 'ขายแล้ว'
 }
 
 function PropertyCard({ property, featuredLabel = 'แนะนำ' }) {
@@ -171,14 +210,16 @@ function PropertyCard({ property, featuredLabel = 'แนะนำ' }) {
     const loc = property.location || {}
     const badges = getBadges(property)
     
-    // Logic การแสดง Badge ตามประเภททรัพย์
-    const isRental = property.isRental
-    const transactionTypeBadge = getTransactionTypeBadge(property) // ประเภทรายการ (ขาย/เช่า)
-    const rentalStatusBadge = isRental ? getRentalStatusBadge(property) : null
-    const propertyStatusBadge = !isRental ? getPropertyStatusBadge(property) : null
-    const subStatusBadge = !isRental ? getSubStatusBadge(property) : null
+    // Logic การแสดง Badge ตามประเภททรัพย์ (ใช้โครงสร้างข้อมูลใหม่)
+    const listingType = property.listingType || (property.isRental ? 'rent' : 'sale')
+    const transactionTypeBadge = getTransactionTypeBadge(property) // ประเภทรายการ (ขาย/เช่า/ผ่อนตรง)
+    const availabilityBadge = getAvailabilityBadge(property) // สถานะ (ว่าง/ติดจอง/ขายแล้ว)
+    const propertyConditionBadge = listingType === 'sale' ? getPropertyConditionBadge(property) : null // สภาพ (มือ 1/มือ 2) - เฉพาะ sale
     
     const isSold = isSoldOrRented(property)
+    
+    // ตรวจสอบว่าเป็น rental หรือไม่ (สำหรับการแสดงราคา)
+    const isRental = listingType === 'rent' || property.isRental === true
     const [favorited, setFavorited] = useState(false)
 
   useEffect(() => {
@@ -195,7 +236,7 @@ function PropertyCard({ property, featuredLabel = 'แนะนำ' }) {
   return (
     <Link
       to={`/properties/${property.id}`}
-      className="group block bg-white rounded-2xl overflow-hidden shadow-sm hover:-translate-y-1 hover:shadow-md transition-all duration-300"
+      className="group block bg-white rounded-2xl overflow-hidden shadow-sm hover:shadow-2xl hover:-translate-y-2 transition-all duration-300 ease-in-out"
     >
       <div 
         className="relative overflow-hidden rounded-t-2xl"
@@ -211,7 +252,7 @@ function PropertyCard({ property, featuredLabel = 'แนะนำ' }) {
             <img
               src={coverImage}
               alt={property.title || 'Property image'}
-              className="w-full h-full object-cover protected-image"
+              className="w-full h-full object-cover protected-image transition-transform duration-700 ease-in-out group-hover:scale-110"
               loading="lazy"
               decoding="async"
               draggable={false}
@@ -240,7 +281,7 @@ function PropertyCard({ property, featuredLabel = 'แนะนำ' }) {
           {/* Transaction Type Badge - ลำดับแรกสุด (มุมซ้ายบน) */}
           {transactionTypeBadge && (
             <span
-              className={`px-2.5 py-1 rounded-md text-xs font-semibold text-white shadow-lg ${transactionTypeBadge.color}`}
+              className={`px-2.5 py-1 rounded-md text-xs font-semibold text-white shadow-lg hover:scale-105 transition-transform ${transactionTypeBadge.color}`}
             >
               {transactionTypeBadge.label}
             </span>
@@ -250,7 +291,7 @@ function PropertyCard({ property, featuredLabel = 'แนะนำ' }) {
             {badges.map(({ label, key }) => (
               <span
                 key={key}
-                className={`px-2 py-0.5 rounded text-xs font-semibold ${
+                className={`px-2 py-0.5 rounded text-xs font-semibold hover:scale-105 transition-transform ${
                   key === 'featured' || key === 'hotDeal'
                     ? 'bg-yellow-400 text-blue-900'
                     : 'bg-blue-900 text-white'
@@ -263,37 +304,25 @@ function PropertyCard({ property, featuredLabel = 'แนะนำ' }) {
         </div>
         {/* Price - ขยับขึ้นเพื่อไม่ให้จมกับลายน้ำ */}
         <span className="absolute bottom-9 left-3 text-white font-bold text-lg drop-shadow z-20">
-          {formatPrice(property.price, property.isRental, property.showPrice)}
+          {formatPrice(property.price, isRental, property.showPrice)}
         </span>
         {/* Status Badges - มุมขวาล่าง */}
         <div className="absolute bottom-9 right-3 z-20 flex flex-col items-end gap-1.5">
-          {isRental ? (
-            /* สำหรับทรัพย์เช่า: แสดงเฉพาะสถานะการเช่า (ว่าง/ไม่ว่าง) */
-            rentalStatusBadge && (
-              <span
-                className={`px-2.5 py-1 rounded-md text-xs font-medium shadow-md backdrop-blur-sm ${rentalStatusBadge.color}`}
-              >
-                {rentalStatusBadge.label}
-              </span>
-            )
-          ) : (
-            /* สำหรับทรัพย์ซื้อ: แสดงสถานะทรัพย์สิน (ว่าง/ติดจอง/ขายแล้ว) และประเภทสินทรัพย์ (มือ 1/มือ 2) */
-            <>
-              {propertyStatusBadge && (
-                <span
-                  className={`px-2.5 py-1 rounded-md text-xs font-medium shadow-md backdrop-blur-sm ${propertyStatusBadge.color}`}
-                >
-                  {propertyStatusBadge.label}
-                </span>
-              )}
-              {subStatusBadge && (
-                <span
-                  className={`px-2.5 py-1 rounded-md text-xs font-medium shadow-md backdrop-blur-sm ${subStatusBadge.color}`}
-                >
-                  {subStatusBadge.label}
-                </span>
-              )}
-            </>
+          {/* Badge สถานะ (availability) - แสดงทุกประเภท */}
+          {availabilityBadge && (
+            <span
+              className={`px-2.5 py-1 rounded-md text-xs font-medium shadow-md backdrop-blur-sm hover:scale-105 transition-transform ${availabilityBadge.color}`}
+            >
+              {availabilityBadge.label}
+            </span>
+          )}
+          {/* Badge สภาพ (propertyCondition - มือ 1/มือ 2) - แสดงเฉพาะ listingType === 'sale' */}
+          {propertyConditionBadge && (
+            <span
+              className={`px-2.5 py-1 rounded-md text-xs font-medium shadow-md backdrop-blur-sm hover:scale-105 transition-transform ${propertyConditionBadge.color}`}
+            >
+              {propertyConditionBadge.label}
+            </span>
           )}
         </div>
       </div>

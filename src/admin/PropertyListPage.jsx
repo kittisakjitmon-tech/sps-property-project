@@ -7,33 +7,71 @@ import { FileText, Plus, Pencil, Search, Trash2, ChevronLeft, ChevronRight } fro
 
 /**
  * Get status badges for property - returns array of badges
- * Badge 1: Asset Type (มือ 1/มือ 2) - only for non-rental properties
- * Badge 2: Availability Status (ว่าง/ติดจอง/ขายแล้ว/รออนุมัติ/ไม่ว่าง)
+ * Logic ใหม่ตาม listingType:
+ * - sale: แสดง propertyCondition (มือ 1/มือ 2) และ availability (ว่าง/ขายแล้ว)
+ * - rent: แสดง subListingType (เช่า/ผ่อนตรง) และ availability (ว่าง/ติดจอง)
+ * - Backward compatibility: ถ้าไม่มี listingType ให้ใช้ status เดิม
  */
 function getStatusBadges(property) {
   const badges = []
-  const isRental = property.isRental
+  
+  // Determine listingType (รองรับข้อมูลเก่า)
+  const listingType = property.listingType || (property.isRental ? 'rent' : 'sale')
 
-  if (isRental) {
-    // สำหรับทรัพย์เช่า: แสดงเฉพาะสถานะการเช่า
-    const avail = property.availability
-    if (avail === 'unavailable') {
-      badges.push({ label: 'ไม่ว่าง', color: 'bg-red-100 text-red-800' })
-    } else {
-      badges.push({ label: 'ว่าง', color: 'bg-green-100 text-green-800' })
-    }
-  } else {
-    // สำหรับทรัพย์ขาย: แสดงทั้งประเภทสินทรัพย์และสถานะทรัพย์สิน
+  if (listingType === 'sale') {
+    // กรณี listingType === 'sale' (ซื้อ)
     
-    // Badge 1: ประเภทสินทรัพย์ (มือ 1/มือ 2)
-    const sub = property.propertySubStatus
-    if (sub === 'มือ 1') {
+    // Badge 1: สภาพบ้าน (มือ 1/มือ 2)
+    const propertyCondition = property.propertyCondition || property.propertySubStatus
+    if (propertyCondition === 'มือ 1') {
       badges.push({ label: 'มือ 1', color: 'bg-blue-100 text-blue-800' })
-    } else if (sub === 'มือ 2') {
+    } else if (propertyCondition === 'มือ 2') {
       badges.push({ label: 'มือ 2', color: 'bg-blue-100 text-blue-800' })
     }
 
-    // Badge 2: สถานะทรัพย์สิน (ว่าง/ติดจอง/ขายแล้ว/รออนุมัติ)
+    // Badge 2: สถานะการขาย (ว่าง/ขายแล้ว)
+    const availability = property.availability || property.status
+    if (availability === 'available' || availability === 'ว่าง') {
+      badges.push({ label: 'ว่าง', color: 'bg-green-100 text-green-800' })
+    } else if (availability === 'sold' || availability === 'ขายแล้ว') {
+      badges.push({ label: 'ขายแล้ว', color: 'bg-red-100 text-red-800' })
+    } else if (availability === 'reserved' || availability === 'ติดจอง') {
+      badges.push({ label: 'ติดจอง', color: 'bg-orange-100 text-orange-800' })
+    } else if (availability === 'pending' || availability === 'รออนุมัติ') {
+      badges.push({ label: 'รออนุมัติ', color: 'bg-yellow-100 text-yellow-800' })
+    } else if (availability) {
+      badges.push({ label: String(availability), color: 'bg-slate-100 text-slate-700' })
+    }
+  } else if (listingType === 'rent') {
+    // กรณี listingType === 'rent' (เช่า/ผ่อนตรง)
+    
+    // Badge 1: ประเภท (เช่า/ผ่อนตรง)
+    const subListingType = property.subListingType
+    if (subListingType === 'rent_only') {
+      badges.push({ label: 'เช่า', color: 'bg-purple-100 text-purple-800' })
+    } else if (subListingType === 'installment_only') {
+      badges.push({ label: 'ผ่อนตรง', color: 'bg-purple-100 text-purple-800' })
+    } else if (property.directInstallment) {
+      // Backward compatibility: ถ้ามี directInstallment ให้แสดง 'ผ่อนตรง'
+      badges.push({ label: 'ผ่อนตรง', color: 'bg-purple-100 text-purple-800' })
+    } else {
+      // Default: ถ้าไม่มี subListingType ให้แสดง 'เช่า'
+      badges.push({ label: 'เช่า', color: 'bg-purple-100 text-purple-800' })
+    }
+
+    // Badge 2: สถานะการจอง (ว่าง/ติดจอง)
+    const availability = property.availability
+    if (availability === 'available' || availability === 'ว่าง') {
+      badges.push({ label: 'ว่าง', color: 'bg-green-100 text-green-800' })
+    } else if (availability === 'reserved' || availability === 'ติดจอง') {
+      badges.push({ label: 'ติดจอง', color: 'bg-red-100 text-red-800' })
+    } else if (availability === 'unavailable' || availability === 'ไม่ว่าง') {
+      badges.push({ label: 'ไม่ว่าง', color: 'bg-red-100 text-red-800' })
+    } else if (availability) {
+      badges.push({ label: String(availability), color: 'bg-slate-100 text-slate-700' })
+    }
+  } else {
+    // Backward compatibility: ถ้าไม่มี listingType ให้ใช้ status เดิม
     const status = property.status
     if (status === 'available') {
       badges.push({ label: 'ว่าง', color: 'bg-green-100 text-green-800' })
@@ -44,7 +82,7 @@ function getStatusBadges(property) {
     } else if (status === 'pending') {
       badges.push({ label: 'รออนุมัติ', color: 'bg-yellow-100 text-yellow-800' })
     } else if (status) {
-      badges.push({ label: status, color: 'bg-slate-100 text-slate-700' })
+      badges.push({ label: String(status), color: 'bg-slate-100 text-slate-700' })
     }
   }
 
@@ -69,9 +107,14 @@ export default function PropertyListPage() {
   const [searchTerm, setSearchTerm] = useState('')
   const [filters, setFilters] = useState({
     type: '', // ประเภททรัพย์ (เช่น บ้านเดี่ยว, คอนโด)
-    assetType: '', // ประเภทสินทรัพย์ (มือ 1, มือ 2)
-    status: '', // สถานะ (ว่าง, ติดจอง, ขายแล้ว, รออนุมัติ)
-    category: '', // หมวดหมู่ (ซื้อ, เช่า)
+    listingType: '', // ประเภทการดีล (sale, rent)
+    propertyCondition: '', // สภาพบ้าน (มือ 1, มือ 2) - สำหรับ sale
+    subListingType: '', // รูปแบบ (rent_only, installment_only) - สำหรับ rent
+    availability: '', // สถานะ (available, sold, reserved)
+    // Backward compatibility fields
+    assetType: '', // ประเภทสินทรัพย์ (มือ 1, มือ 2) - สำหรับข้อมูลเก่า
+    status: '', // สถานะ (ว่าง, ติดจอง, ขายแล้ว, รออนุมัติ) - สำหรับข้อมูลเก่า
+    category: '', // หมวดหมู่ (ซื้อ, เช่า) - สำหรับข้อมูลเก่า
   })
   const [currentPage, setCurrentPage] = useState(1)
   const [itemsPerPage, setItemsPerPage] = useState(10)
@@ -171,50 +214,96 @@ export default function PropertyListPage() {
         })
       }
 
-      // Filter: ประเภทสินทรัพย์ (assetType - มือ 1/มือ 2)
-      if (filters?.assetType) {
+      // Filter: ประเภทการดีล (listingType - sale/rent)
+      if (filters?.listingType) {
         filtered = filtered.filter((p) => {
           try {
-            return p?.propertySubStatus === filters.assetType
+            // ตรวจสอบ listingType ใหม่ หรือ fallback ไปที่ isRental (backward compatibility)
+            const pListingType = p?.listingType || (p?.isRental ? 'rent' : 'sale')
+            return pListingType === filters.listingType
           } catch {
             return false
           }
         })
       }
 
-      // Filter: สถานะ (status)
-      if (filters?.status) {
-        if (filters.status === 'available-rental') {
-          // กรณีเช่า: ตรวจสอบ availability
-          filtered = filtered.filter((p) => {
-            try {
-              return p?.isRental && p?.availability === 'available'
-            } catch {
-              return false
-            }
-          })
-        } else if (filters.status === 'unavailable-rental') {
-          filtered = filtered.filter((p) => {
-            try {
-              return p?.isRental && p?.availability === 'unavailable'
-            } catch {
-              return false
-            }
-          })
-        } else {
-          // กรณีซื้อ: ตรวจสอบ status
-          filtered = filtered.filter((p) => {
-            try {
-              return !p?.isRental && p?.status === filters.status
-            } catch {
-              return false
-            }
-          })
-        }
+      // Filter: สภาพบ้าน (propertyCondition - มือ 1/มือ 2) - สำหรับ sale เท่านั้น
+      if (filters?.propertyCondition && filters.listingType === 'sale') {
+        filtered = filtered.filter((p) => {
+          try {
+            // ตรวจสอบ propertyCondition ใหม่ หรือ fallback ไปที่ propertySubStatus (backward compatibility)
+            const pCondition = p?.propertyCondition || p?.propertySubStatus
+            return pCondition === filters.propertyCondition
+          } catch {
+            return false
+          }
+        })
       }
 
-      // Filter: หมวดหมู่ (category - ซื้อ/เช่า)
-      if (filters?.category) {
+      // Filter: รูปแบบ (subListingType - rent_only/installment_only) - สำหรับ rent เท่านั้น
+      if (filters?.subListingType && filters.listingType === 'rent') {
+        filtered = filtered.filter((p) => {
+          try {
+            // ตรวจสอบ subListingType ใหม่ หรือ fallback ไปที่ directInstallment (backward compatibility)
+            if (p?.subListingType) {
+              return p.subListingType === filters.subListingType
+            } else if (filters.subListingType === 'installment_only') {
+              return p?.directInstallment === true
+            } else if (filters.subListingType === 'rent_only') {
+              return !p?.directInstallment || p.directInstallment === false
+            }
+            return false
+          } catch {
+            return false
+          }
+        })
+      }
+
+      // Filter: สถานะ (availability - available/sold/reserved)
+      if (filters?.availability) {
+        filtered = filtered.filter((p) => {
+          try {
+            // ตรวจสอบ availability ใหม่ หรือ fallback ไปที่ status (backward compatibility)
+            const pAvailability = p?.availability || p?.status
+            return pAvailability === filters.availability
+          } catch {
+            return false
+          }
+        })
+      }
+
+      // Backward Compatibility: Filter ประเภทสินทรัพย์ (assetType - มือ 1/มือ 2) - สำหรับข้อมูลเก่า
+      if (filters?.assetType && !filters.propertyCondition) {
+        filtered = filtered.filter((p) => {
+          try {
+            const pCondition = p?.propertyCondition || p?.propertySubStatus
+            return pCondition === filters.assetType
+          } catch {
+            return false
+          }
+        })
+      }
+
+      // Backward Compatibility: Filter สถานะ (status) - สำหรับข้อมูลเก่า
+      if (filters?.status && !filters.availability) {
+        filtered = filtered.filter((p) => {
+          try {
+            const pStatus = p?.availability || p?.status
+            if (filters.status === 'available-rental') {
+              return p?.isRental && pStatus === 'available'
+            } else if (filters.status === 'unavailable-rental') {
+              return p?.isRental && (pStatus === 'unavailable' || pStatus === 'reserved')
+            } else {
+              return !p?.isRental && pStatus === filters.status
+            }
+          } catch {
+            return false
+          }
+        })
+      }
+
+      // Backward Compatibility: Filter หมวดหมู่ (category - ซื้อ/เช่า) - สำหรับข้อมูลเก่า
+      if (filters?.category && !filters.listingType) {
         if (filters.category === 'buy') {
           filtered = filtered.filter((p) => {
             try {
@@ -313,6 +402,10 @@ export default function PropertyListPage() {
     setSearchTerm('')
     setFilters({
       type: '',
+      listingType: '',
+      propertyCondition: '',
+      subListingType: '',
+      availability: '',
       assetType: '',
       status: '',
       category: '',
@@ -431,7 +524,7 @@ export default function PropertyListPage() {
         </div>
 
         {/* Filter Dropdowns */}
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4 items-end">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4 items-end">
           {/* ประเภททรัพย์ */}
           <div>
             <label className="block text-sm font-medium text-slate-700 mb-2">ประเภททรัพย์</label>
@@ -449,63 +542,109 @@ export default function PropertyListPage() {
             </select>
           </div>
 
-          {/* ประเภทสินทรัพย์ */}
+          {/* ประเภทการดีล (Listing Type) */}
           <div>
-            <label className="block text-sm font-medium text-slate-700 mb-2">ประเภทสินทรัพย์</label>
+            <label className="block text-sm font-medium text-slate-700 mb-2">ประเภทการดีล</label>
             <select
-              value={filters.assetType}
-              onChange={(e) => handleFilterChange('assetType', e.target.value)}
+              value={filters.listingType}
+              onChange={(e) => {
+                const newListingType = e.target.value
+                handleFilterChange('listingType', newListingType)
+                // Reset sub-filters when listingType changes
+                if (newListingType !== 'sale') {
+                  handleFilterChange('propertyCondition', '')
+                }
+                if (newListingType !== 'rent') {
+                  handleFilterChange('subListingType', '')
+                }
+              }}
               className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
             >
               <option value="">ทั้งหมด</option>
-              <option value="มือ 1">มือ 1</option>
-              <option value="มือ 2">มือ 2</option>
+              <option value="sale">ซื้อ</option>
+              <option value="rent">เช่า/ผ่อนตรง</option>
             </select>
           </div>
 
-          {/* สถานะ */}
+          {/* Dynamic Filter: สภาพบ้าน (สำหรับ sale) หรือ รูปแบบ (สำหรับ rent) */}
+          {filters.listingType === 'sale' ? (
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-2">สภาพ</label>
+              <select
+                value={filters.propertyCondition}
+                onChange={(e) => handleFilterChange('propertyCondition', e.target.value)}
+                className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+              >
+                <option value="">ทั้งหมด</option>
+                <option value="มือ 1">มือ 1</option>
+                <option value="มือ 2">มือ 2</option>
+              </select>
+            </div>
+          ) : filters.listingType === 'rent' ? (
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-2">รูปแบบ</label>
+              <select
+                value={filters.subListingType}
+                onChange={(e) => handleFilterChange('subListingType', e.target.value)}
+                className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+              >
+                <option value="">ทั้งหมด</option>
+                <option value="rent_only">เช่าเท่านั้น</option>
+                <option value="installment_only">ผ่อนตรง</option>
+              </select>
+            </div>
+          ) : (
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-2">สภาพ/รูปแบบ</label>
+              <select
+                disabled
+                className="w-full px-4 py-2 border border-slate-200 rounded-lg bg-slate-50 text-slate-400 cursor-not-allowed"
+              >
+                <option value="">เลือกประเภทการดีลก่อน</option>
+              </select>
+            </div>
+          )}
+
+          {/* สถานะ (Availability) */}
           <div>
             <label className="block text-sm font-medium text-slate-700 mb-2">สถานะ</label>
             <select
-              value={filters.status}
-              onChange={(e) => handleFilterChange('status', e.target.value)}
+              value={filters.availability}
+              onChange={(e) => handleFilterChange('availability', e.target.value)}
               className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
             >
               <option value="">ทั้งหมด</option>
-              <option value="available">ว่าง (ขาย)</option>
-              <option value="reserved">ติดจอง</option>
+              <option value="available">ว่าง</option>
               <option value="sold">ขายแล้ว</option>
-              <option value="pending">รออนุมัติ</option>
-              <option value="available-rental">ว่าง (เช่า)</option>
-              <option value="unavailable-rental">ไม่ว่าง (เช่า)</option>
+              <option value="reserved">ติดจอง</option>
             </select>
           </div>
 
-          {/* หมวดหมู่ */}
+          {/* Reset Filters Button */}
           <div>
-            <label className="block text-sm font-medium text-slate-700 mb-2">หมวดหมู่</label>
-            <select
-              value={filters.category}
-              onChange={(e) => handleFilterChange('category', e.target.value)}
-              className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-            >
-              <option value="">ทั้งหมด</option>
-              <option value="buy">ซื้อ</option>
-              <option value="rent">เช่า</option>
-            </select>
-          </div>
-        </div>
-
-        {/* Reset Filters Button */}
-        {(searchTerm || filters.type || filters.assetType || filters.status || filters.category) && (
-          <div className="mt-4 flex justify-end">
             <button
               onClick={handleResetFilters}
-              className="inline-flex items-center gap-2 px-4 py-2 bg-slate-100 text-slate-700 rounded-lg hover:bg-slate-200 transition"
+              className="w-full px-4 py-2 bg-slate-100 text-slate-700 rounded-lg hover:bg-slate-200 transition border border-slate-300 flex items-center justify-center gap-2"
             >
               <Trash2 className="h-4 w-4" />
               Reset Filters
             </button>
+          </div>
+        </div>
+
+        {/* Filter Summary (แสดงเมื่อมี filter active) */}
+        {(searchTerm || filters.type || filters.listingType || filters.propertyCondition || filters.subListingType || filters.availability) && (
+          <div className="mt-4 pt-4 border-t border-slate-200">
+            <p className="text-xs text-slate-500 mb-2">
+              Active Filters: {[
+                searchTerm && `ค้นหา: "${searchTerm}"`,
+                filters.type && `ประเภท: ${filters.type}`,
+                filters.listingType && `ดีล: ${filters.listingType === 'sale' ? 'ซื้อ' : 'เช่า/ผ่อนตรง'}`,
+                filters.propertyCondition && `สภาพ: ${filters.propertyCondition}`,
+                filters.subListingType && `รูปแบบ: ${filters.subListingType === 'rent_only' ? 'เช่าเท่านั้น' : 'ผ่อนตรง'}`,
+                filters.availability && `สถานะ: ${filters.availability === 'available' ? 'ว่าง' : filters.availability === 'sold' ? 'ขายแล้ว' : 'ติดจอง'}`,
+              ].filter(Boolean).join(' • ')}
+            </p>
           </div>
         )}
       </div>

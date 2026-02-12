@@ -42,8 +42,32 @@ const BUY_SUB_STATUS_OPTIONS = [
 ]
 
 const RENT_AVAILABILITY_OPTIONS = [
-  { value: 'available', label: 'ว่าง', color: 'bg-green-100 text-green-900' },
-  { value: 'unavailable', label: 'ไม่ว่าง', color: 'bg-red-100 text-red-900' },
+  { value: 'available', label: 'ว่าง', color: 'bg-green-100 text-green-800' },
+  { value: 'reserved', label: 'ติดจอง', color: 'bg-red-100 text-red-800' },
+]
+
+// Listing Type Options (ประเภทการดีล)
+const LISTING_TYPE_OPTIONS = [
+  { value: 'sale', label: 'ซื้อ' },
+  { value: 'rent', label: 'เช่า/ผ่อนตรง' },
+]
+
+// Sub Listing Type Options (ตัวเลือกย่อยสำหรับเช่า/ผ่อนตรง)
+const SUB_LISTING_TYPE_OPTIONS = [
+  { value: 'rent_only', label: 'เช่า' },
+  { value: 'installment_only', label: 'ผ่อนตรง' },
+]
+
+// Property Condition Options (สภาพบ้าน - สำหรับซื้อเท่านั้น)
+const PROPERTY_CONDITION_OPTIONS = [
+  { value: 'มือ 1', label: 'มือ 1', color: 'bg-blue-100 text-blue-800' },
+  { value: 'มือ 2', label: 'มือ 2', color: 'bg-slate-100 text-slate-800' },
+]
+
+// Sale Availability Options (สถานะการขาย - สำหรับซื้อเท่านั้น)
+const SALE_AVAILABILITY_OPTIONS = [
+  { value: 'available', label: 'ว่าง', color: 'bg-green-100 text-green-800' },
+  { value: 'sold', label: 'ขายแล้ว', color: 'bg-red-100 text-red-800' },
 ]
 
 const defaultForm = {
@@ -64,9 +88,12 @@ const defaultForm = {
   isRental: false,
   directInstallment: false,
   hotDeal: false,
-  status: 'available',
-  propertySubStatus: '',
-  availability: 'available',
+  listingType: 'sale', // ประเภทการดีล: 'sale' หรือ 'rent'
+  subListingType: '', // ตัวเลือกย่อยสำหรับเช่า/ผ่อนตรง: 'rent_only' หรือ 'installment_only'
+  propertyCondition: '', // สภาพบ้าน: 'มือ 1' หรือ 'มือ 2' (สำหรับซื้อเท่านั้น)
+  availability: 'available', // สถานะ: 'available', 'sold' (ซื้อ) หรือ 'available', 'reserved' (เช่า)
+  status: 'available', // เก็บไว้เพื่อ backward compatibility
+  propertySubStatus: '', // เก็บไว้เพื่อ backward compatibility
   showPrice: true,
   customTags: [],
   mapUrl: '',
@@ -108,6 +135,48 @@ export default function PropertyForm() {
     getPropertyByIdOnce(id).then((p) => {
       if (cancelled || !p) return
       const loc = p.location || {}
+      
+      // Determine listingType from existing data
+      let listingType = 'sale'
+      if (p.listingType) {
+        listingType = p.listingType
+      } else if (p.isRental) {
+        listingType = 'rent'
+      }
+      
+      // Determine subListingType from existing data
+      let subListingType = ''
+      if (p.subListingType) {
+        subListingType = p.subListingType
+      } else if (p.directInstallment && listingType === 'rent') {
+        // ถ้ามี directInstallment และเป็น rent ให้ตั้งเป็น 'installment_only'
+        subListingType = 'installment_only'
+      } else if (listingType === 'rent') {
+        // ถ้าเป็น rent แต่ไม่มี directInstallment ให้ตั้งเป็น 'rent_only'
+        subListingType = 'rent_only'
+      }
+      
+      // Determine propertyCondition from existing data
+      let propertyCondition = ''
+      if (p.propertyCondition) {
+        propertyCondition = p.propertyCondition
+      } else if (p.propertySubStatus) {
+        propertyCondition = p.propertySubStatus
+      }
+      
+      // Determine availability from existing data
+      let availability = 'available'
+      if (p.availability) {
+        availability = p.availability
+      } else if (p.status && listingType === 'sale') {
+        // Map old status to new availability for sale
+        if (p.status === 'sold') {
+          availability = 'sold'
+        } else {
+          availability = 'available'
+        }
+      }
+      
       setForm({
         title: p.title ?? '',
         price: p.price ?? '',
@@ -134,9 +203,12 @@ export default function PropertyForm() {
         isRental: Boolean(p.isRental),
         directInstallment: Boolean(p.directInstallment),
         hotDeal: Boolean(p.hotDeal),
-        status: p.status ?? 'available',
-        propertySubStatus: p.propertySubStatus ?? '',
-        availability: p.availability ?? 'available',
+        listingType,
+        subListingType,
+        propertyCondition,
+        availability,
+        status: p.status ?? 'available', // Keep for backward compatibility
+        propertySubStatus: p.propertySubStatus ?? '', // Keep for backward compatibility
         showPrice: p.showPrice !== false,
         customTags: Array.isArray(p.customTags) ? p.customTags : [],
         mapUrl: p.mapUrl ?? '',
@@ -159,10 +231,48 @@ export default function PropertyForm() {
     if (isRental) {
       next.propertySubStatus = ''
       next.availability = 'available'
+      next.listingType = 'rent'
+      next.propertyCondition = ''
     } else {
-      next.availability = ''
+      next.availability = 'available'
       next.propertySubStatus = ''
+      next.listingType = 'sale'
+      next.propertyCondition = ''
     }
+    update(next)
+  }
+
+  const handleListingTypeChange = (newListingType) => {
+    const next = { listingType: newListingType }
+    
+    if (newListingType === 'sale') {
+      // ถ้าเปลี่ยนเป็น 'ซื้อ': reset availability, propertyCondition และ subListingType
+      next.availability = 'available'
+      next.propertyCondition = ''
+      next.subListingType = ''
+      next.isRental = false
+      next.directInstallment = false
+    } else if (newListingType === 'rent') {
+      // ถ้าเปลี่ยนเป็น 'เช่า/ผ่อนตรง': reset propertyCondition และตั้งค่า subListingType default
+      next.availability = 'available'
+      next.propertyCondition = ''
+      next.subListingType = form.subListingType || 'rent_only' // ถ้ายังไม่มีให้ default เป็น 'rent_only'
+      next.isRental = true
+    }
+    
+    update(next)
+  }
+
+  const handleSubListingTypeChange = (newSubListingType) => {
+    const next = { subListingType: newSubListingType }
+    
+    // Sync directInstallment กับ subListingType
+    if (newSubListingType === 'installment_only') {
+      next.directInstallment = true
+    } else if (newSubListingType === 'rent_only') {
+      next.directInstallment = false
+    }
+    
     update(next)
   }
 
@@ -289,9 +399,12 @@ export default function PropertyForm() {
       isRental: form.isRental,
       directInstallment: form.directInstallment,
       hotDeal: form.hotDeal,
-      status: form.status || 'available',
-      propertySubStatus: form.propertySubStatus || null,
-      availability: form.isRental ? (form.availability || 'available') : null,
+      listingType: form.listingType || (form.isRental ? 'rent' : 'sale'),
+      subListingType: form.subListingType || null, // บันทึก subListingType
+      propertyCondition: form.propertyCondition || null,
+      availability: form.availability || 'available',
+      status: form.status || 'available', // Keep for backward compatibility
+      propertySubStatus: form.propertySubStatus || form.propertyCondition || null, // Keep for backward compatibility
       showPrice: form.showPrice !== false,
       customTags: Array.isArray(form.customTags) ? form.customTags.filter((tag) => tag && tag.trim()) : [],
       coverImageUrl: form.coverImageUrl || null, // บันทึก coverImageUrl
@@ -517,81 +630,119 @@ export default function PropertyForm() {
             </div>
           </div>
 
-          {/* Conditional: Buy -> มือ 1/มือ 2 | Rent -> ว่าง/ไม่ว่าง */}
-          {!form.isRental ? (
-            <div>
-              <label className="block text-sm font-medium text-slate-700 mb-2">ประเภทสินทรัพย์ (ซื้อ)</label>
-              <div className="flex flex-wrap gap-3">
-                {BUY_SUB_STATUS_OPTIONS.map((opt) => (
-                  <button
-                    key={opt.value}
-                    type="button"
-                    onClick={() => update({ propertySubStatus: opt.value })}
-                    className={`px-4 py-2.5 rounded-lg border-2 transition ${
-                      form.propertySubStatus === opt.value
-                        ? `${opt.color} border-blue-900 font-semibold`
-                        : 'bg-white border-slate-200 text-slate-700 hover:border-blue-300'
-                    }`}
-                  >
-                    {opt.label}
-                  </button>
-                ))}
-              </div>
+          {/* Listing Type (ประเภทการดีล) */}
+          <div>
+            <label className="block text-sm font-medium text-slate-700 mb-2">ประเภทการดีล *</label>
+            <div className="flex flex-wrap gap-3">
+              {LISTING_TYPE_OPTIONS.map((opt) => (
+                <button
+                  key={opt.value}
+                  type="button"
+                  onClick={() => handleListingTypeChange(opt.value)}
+                  className={`px-4 py-2.5 rounded-lg border-2 transition ${
+                    form.listingType === opt.value
+                      ? 'bg-blue-900 text-white border-blue-900 font-semibold'
+                      : 'bg-white border-slate-200 text-slate-700 hover:border-blue-300'
+                  }`}
+                >
+                  {opt.label}
+                </button>
+              ))}
             </div>
+          </div>
+
+          {/* Conditional Fields based on listingType */}
+          {form.listingType === 'sale' ? (
+            <>
+              {/* สภาพบ้าน (มือ 1/มือ 2) - แสดงเฉพาะเมื่อเลือก 'ซื้อ' */}
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-2">สภาพบ้าน *</label>
+                <div className="flex flex-wrap gap-3">
+                  {PROPERTY_CONDITION_OPTIONS.map((opt) => (
+                    <button
+                      key={opt.value}
+                      type="button"
+                      onClick={() => update({ propertyCondition: opt.value, propertySubStatus: opt.value })}
+                      className={`px-4 py-2.5 rounded-lg border-2 transition ${
+                        form.propertyCondition === opt.value
+                          ? `${opt.color} border-blue-900 font-semibold`
+                          : 'bg-white border-slate-200 text-slate-700 hover:border-blue-300'
+                      }`}
+                    >
+                      {opt.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              
+              {/* สถานะการขาย (ว่าง/ขายแล้ว) - แสดงเฉพาะเมื่อเลือก 'ซื้อ' */}
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-2">สถานะการขาย *</label>
+                <div className="flex flex-wrap gap-3">
+                  {SALE_AVAILABILITY_OPTIONS.map((opt) => (
+                    <button
+                      key={opt.value}
+                      type="button"
+                      onClick={() => update({ availability: opt.value, status: opt.value === 'sold' ? 'sold' : 'available' })}
+                      className={`px-4 py-2.5 rounded-lg border-2 transition ${
+                        form.availability === opt.value
+                          ? `${opt.color} border-blue-900 font-semibold`
+                          : 'bg-white border-slate-200 text-slate-700 hover:border-blue-300'
+                      }`}
+                    >
+                      {opt.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </>
           ) : (
-            <div>
-              <label className="block text-sm font-medium text-slate-700 mb-2">สถานะ (เช่า)</label>
-              <div className="flex flex-wrap gap-3">
-                {RENT_AVAILABILITY_OPTIONS.map((opt) => (
-                  <button
-                    key={opt.value}
-                    type="button"
-                    onClick={() => update({ availability: opt.value })}
-                    className={`px-4 py-2.5 rounded-lg border-2 transition ${
-                      form.availability === opt.value
-                        ? `${opt.color} border-blue-900 font-semibold`
-                        : 'bg-white border-slate-200 text-slate-700 hover:border-blue-300'
-                    }`}
-                  >
-                    {opt.label}
-                  </button>
-                ))}
+            <>
+              {/* Sub-selection: เช่า หรือ ผ่อนตรง - แสดงเฉพาะเมื่อเลือก 'เช่า/ผ่อนตรง' */}
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-2">เลือกประเภท *</label>
+                <div className="flex flex-wrap gap-3">
+                  {SUB_LISTING_TYPE_OPTIONS.map((opt) => (
+                    <button
+                      key={opt.value}
+                      type="button"
+                      onClick={() => handleSubListingTypeChange(opt.value)}
+                      className={`px-4 py-2.5 rounded-lg border-2 transition ${
+                        form.subListingType === opt.value
+                          ? 'bg-blue-900 text-white border-blue-900 font-semibold'
+                          : 'bg-white border-slate-200 text-slate-700 hover:border-blue-300'
+                      }`}
+                    >
+                      {opt.label}
+                    </button>
+                  ))}
+                </div>
               </div>
-            </div>
-          )}
-          {/* Status - แสดงเฉพาะเมื่อเป็นทรัพย์ซื้อ (ไม่ใช่เช่า) */}
-          {!form.isRental && (
-            <div>
-              <label className="block text-sm font-medium text-slate-700 mb-2">สถานะทรัพย์สิน</label>
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                {STATUS_OPTIONS.map((option) => (
-                  <button
-                    key={option.value}
-                    type="button"
-                    onClick={() => update({ status: option.value })}
-                    className={`px-4 py-2.5 rounded-lg border-2 transition ${
-                      form.status === option.value
-                        ? `${option.color} border-blue-900 font-semibold`
-                        : 'bg-white border-slate-200 text-slate-700 hover:border-blue-300'
-                    }`}
-                  >
-                    {option.label}
-                  </button>
-                ))}
+              
+              {/* สถานะการจอง (ว่าง/ติดจอง) - แสดงเฉพาะเมื่อเลือก 'เช่า/ผ่อนตรง' */}
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-2">สถานะการจอง *</label>
+                <div className="flex flex-wrap gap-3">
+                  {RENT_AVAILABILITY_OPTIONS.map((opt) => (
+                    <button
+                      key={opt.value}
+                      type="button"
+                      onClick={() => update({ availability: opt.value })}
+                      className={`px-4 py-2.5 rounded-lg border-2 transition ${
+                        form.availability === opt.value
+                          ? `${opt.color} border-blue-900 font-semibold`
+                          : 'bg-white border-slate-200 text-slate-700 hover:border-blue-300'
+                      }`}
+                    >
+                      {opt.label}
+                    </button>
+                  ))}
+                </div>
               </div>
-            </div>
+            </>
           )}
 
           <div className="flex flex-wrap gap-6">
-            <label className="flex items-center gap-2 cursor-pointer">
-              <input
-                type="checkbox"
-                checked={form.featured}
-                onChange={(e) => update({ featured: e.target.checked })}
-                className="rounded border-slate-300"
-              />
-              <span className="text-slate-700">แสดงในทรัพย์เด่น</span>
-            </label>
             <label className="flex items-center gap-2 cursor-pointer">
               <input
                 type="checkbox"
@@ -600,15 +751,6 @@ export default function PropertyForm() {
                 className="rounded border-slate-300"
               />
               <span className="text-slate-700">Hot Deal</span>
-            </label>
-            <label className="flex items-center gap-2 cursor-pointer">
-              <input
-                type="checkbox"
-                checked={form.directInstallment}
-                onChange={(e) => update({ directInstallment: e.target.checked })}
-                className="rounded border-slate-300"
-              />
-              <span className="text-slate-700">ผ่อนตรง</span>
             </label>
             <label className="flex items-center gap-2 cursor-pointer">
               <input

@@ -23,14 +23,20 @@ export function maskFormattedNumber(formatted) {
 /**
  * Format price for display
  * @param {number|string} price - Price value
- * @param {boolean} isRental - Whether it's rental (บาท/เดือน)
+ * @param {boolean|string} isRentalOrListingType - Whether it's rental (boolean) or listingType ('rent'/'sale')
  * @param {boolean} [showPrice=true] - If false, mask the price (2,xxx,xxx)
  */
-export function formatPrice(price, isRental, showPrice = true) {
+export function formatPrice(price, isRentalOrListingType, showPrice = true) {
   if (price == null || price === '') return '-'
   const num = Number(price)
   if (!Number.isFinite(num)) return '-'
   const formatted = num.toLocaleString('th-TH')
   const displayNumber = showPrice !== false ? formatted : maskFormattedNumber(formatted)
+  
+  // ตรวจสอบว่าเป็น rental หรือไม่ (รองรับทั้ง boolean และ listingType string)
+  const isRental = isRentalOrListingType === true || 
+                   isRentalOrListingType === 'rent' ||
+                   (typeof isRentalOrListingType === 'string' && isRentalOrListingType.toLowerCase() === 'rent')
+  
   return isRental ? `${displayNumber} บาท/เดือน` : `${displayNumber} บาท`
 }

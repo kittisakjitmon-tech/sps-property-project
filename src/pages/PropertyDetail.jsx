@@ -3,7 +3,7 @@ import { useParams, Link } from 'react-router-dom'
 import { Helmet } from 'react-helmet-async'
 import { MapPin, Bed, Bath, Maximize2, Phone, MessageCircle, Share2, CheckCircle2, Copy } from 'lucide-react'
 import NeighborhoodData from '../components/NeighborhoodData'
-import { getPropertyByIdOnce, createViewingRequest } from '../lib/firestore'
+import { getPropertyByIdOnce, createAppointment } from '../lib/firestore'
 import PageLayout from '../components/PageLayout'
 import Toast from '../components/Toast'
 import ProtectedImageContainer from '../components/ProtectedImageContainer'
@@ -225,41 +225,28 @@ function LeadForm({ propertyId, propertyTitle, propertyPrice, isRental, onSucces
     setIsLoading(true)
     setErrors({})
     try {
-      const requestData = activeTab === 'customer'
+      const appointmentData = activeTab === 'customer'
         ? {
             type: 'Customer',
-            name: customerName.trim(),
-            phone: customerPhone.trim(),
-            visitDate: visitDate.trim(),
-            visitTime: visitTime.trim(),
-            propertyName: propertyTitle || '',
-            price: priceFormatted,
+            contactName: customerName.trim(),
+            tel: customerPhone.trim(),
+            date: visitDate.trim(),
+            time: visitTime.trim(),
             propertyId: propertyId || '',
+            propertyTitle: propertyTitle || '',
           }
         : {
             type: 'Agent',
-            customerName: agentCustomerName.trim(),
             agentName: agentName.trim(),
-            phone: agentPhone.trim(),
-            visitDate: agentVisitDate.trim(),
-            visitTime: agentVisitTime.trim(),
-            propertyName: propertyTitle || '',
-            price: priceFormatted,
+            contactName: agentCustomerName.trim(),
+            tel: agentPhone.trim(),
+            date: agentVisitDate.trim(),
+            time: agentVisitTime.trim(),
             propertyId: propertyId || '',
+            propertyTitle: propertyTitle || '',
           }
 
-      await createViewingRequest(requestData)
-
-      try {
-        await fetch(GAS_WEBHOOK_URL, {
-          method: 'POST',
-          mode: 'no-cors',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(requestData),
-        })
-      } catch {
-        // Firestore saved; LINE notify is best-effort
-      }
+      await createAppointment(appointmentData)
 
       // Reset form fields
       if (activeTab === 'customer') {
@@ -274,6 +261,13 @@ function LeadForm({ propertyId, propertyTitle, propertyPrice, isRental, onSucces
         setAgentVisitDate('')
         setAgentVisitTime('')
       }
+      
+      // Show success alert
+      const message = activeTab === 'customer'
+        ? 'ส่งคำขอนัดเยี่ยมชมสำเร็จ! เจ้าหน้าที่จะติดต่อกลับเร็วๆ นี้'
+        : 'ส่งคำขอนัดเยี่ยมชมสำเร็จ! เจ้าหน้าที่จะติดต่อกลับเร็วๆ นี้'
+      alert(message)
+      
       onSuccess?.()
     } catch (err) {
       console.error(err)
