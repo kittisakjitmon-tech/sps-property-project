@@ -174,9 +174,21 @@ function validatePhone(phone) {
 }
 
 function LeadForm({ propertyId, propertyTitle, propertyPrice, isRental, onSuccess, onError }) {
-  const [name, setName] = useState('')
-  const [phone, setPhone] = useState('')
-  const [message, setMessage] = useState('')
+  const [activeTab, setActiveTab] = useState('customer') // 'customer' or 'agent'
+  
+  // Form fields for Customer tab
+  const [customerName, setCustomerName] = useState('')
+  const [customerPhone, setCustomerPhone] = useState('')
+  const [visitDate, setVisitDate] = useState('')
+  const [visitTime, setVisitTime] = useState('')
+  
+  // Form fields for Agent tab
+  const [agentCustomerName, setAgentCustomerName] = useState('')
+  const [agentName, setAgentName] = useState('')
+  const [agentPhone, setAgentPhone] = useState('')
+  const [agentVisitDate, setAgentVisitDate] = useState('')
+  const [agentVisitTime, setAgentVisitTime] = useState('')
+  
   const [isLoading, setIsLoading] = useState(false)
   const [errors, setErrors] = useState({})
 
@@ -189,44 +201,79 @@ function LeadForm({ propertyId, propertyTitle, propertyPrice, isRental, onSucces
   const handleSubmit = async (e) => {
     e.preventDefault()
     const newErrors = {}
-    if (!name.trim()) newErrors.name = 'กรุณากรอกชื่อ'
-    if (!phone.trim()) newErrors.phone = 'กรุณากรอกเบอร์โทร'
-    else if (!validatePhone(phone.trim())) newErrors.phone = 'เบอร์โทรต้องเป็นตัวเลข 10 หลัก (เช่น 0812345678)'
+    
+    if (activeTab === 'customer') {
+      // Customer form validation
+      if (!customerName.trim()) newErrors.customerName = 'กรุณากรอกชื่อลูกค้า'
+      if (!customerPhone.trim()) newErrors.customerPhone = 'กรุณากรอกเบอร์โทร'
+      else if (!validatePhone(customerPhone.trim())) newErrors.customerPhone = 'เบอร์โทรต้องเป็นตัวเลข 10 หลัก (เช่น 0812345678)'
+      if (!visitDate.trim()) newErrors.visitDate = 'กรุณาเลือกวันที่เข้าชม'
+      if (!visitTime.trim()) newErrors.visitTime = 'กรุณาเลือกเวลา'
+    } else {
+      // Agent form validation
+      if (!agentCustomerName.trim()) newErrors.agentCustomerName = 'กรุณากรอกชื่อลูกค้า'
+      if (!agentName.trim()) newErrors.agentName = 'กรุณากรอกชื่อเอเจ้นท์ที่ดูแล'
+      if (!agentPhone.trim()) newErrors.agentPhone = 'กรุณากรอกเบอร์โทรเอเจ้นท์'
+      else if (!validatePhone(agentPhone.trim())) newErrors.agentPhone = 'เบอร์โทรต้องเป็นตัวเลข 10 หลัก (เช่น 0812345678)'
+      if (!agentVisitDate.trim()) newErrors.agentVisitDate = 'กรุณาเลือกวันที่เข้าชม'
+      if (!agentVisitTime.trim()) newErrors.agentVisitTime = 'กรุณาเลือกเวลา'
+    }
+    
     setErrors(newErrors)
     if (Object.keys(newErrors).length > 0) return
 
     setIsLoading(true)
     setErrors({})
     try {
-      await createViewingRequest({
-        name: name.trim(),
-        phone: phone.trim(),
-        message: message.trim() || '',
-        propertyName: propertyTitle || '',
-        price: priceFormatted,
-        propertyId: propertyId || '',
-      })
+      const requestData = activeTab === 'customer'
+        ? {
+            type: 'Customer',
+            name: customerName.trim(),
+            phone: customerPhone.trim(),
+            visitDate: visitDate.trim(),
+            visitTime: visitTime.trim(),
+            propertyName: propertyTitle || '',
+            price: priceFormatted,
+            propertyId: propertyId || '',
+          }
+        : {
+            type: 'Agent',
+            customerName: agentCustomerName.trim(),
+            agentName: agentName.trim(),
+            phone: agentPhone.trim(),
+            visitDate: agentVisitDate.trim(),
+            visitTime: agentVisitTime.trim(),
+            propertyName: propertyTitle || '',
+            price: priceFormatted,
+            propertyId: propertyId || '',
+          }
+
+      await createViewingRequest(requestData)
 
       try {
         await fetch(GAS_WEBHOOK_URL, {
           method: 'POST',
           mode: 'no-cors',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            name: name.trim(),
-            phone: phone.trim(),
-            propertyName: propertyTitle || '',
-            price: priceFormatted,
-            message: message.trim() || '',
-          }),
+          body: JSON.stringify(requestData),
         })
       } catch {
         // Firestore saved; LINE notify is best-effort
       }
 
-      setName('')
-      setPhone('')
-      setMessage('')
+      // Reset form fields
+      if (activeTab === 'customer') {
+        setCustomerName('')
+        setCustomerPhone('')
+        setVisitDate('')
+        setVisitTime('')
+      } else {
+        setAgentCustomerName('')
+        setAgentName('')
+        setAgentPhone('')
+        setAgentVisitDate('')
+        setAgentVisitTime('')
+      }
       onSuccess?.()
     } catch (err) {
       console.error(err)
@@ -237,54 +284,186 @@ function LeadForm({ propertyId, propertyTitle, propertyPrice, isRental, onSucces
   }
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-4">
-      <div>
-        <label className="block text-sm font-medium text-slate-700 mb-1">ชื่อ-นามสกุล *</label>
-        <input
-          type="text"
-          value={name}
-          onChange={(e) => { setName(e.target.value); setErrors((prev) => ({ ...prev, name: '' })) }}
-          placeholder="กรอกชื่อ-นามสกุล"
-          className={`w-full px-4 py-2.5 rounded-lg border text-sm bg-white transition-colors ${errors.name ? 'border-amber-500 focus:ring-amber-200' : 'border-slate-200 focus:ring-blue-200'} focus:ring-2 focus:outline-none`}
-        />
-        {errors.name && <p className="mt-1 text-xs text-amber-600">{errors.name}</p>}
+    <div className="space-y-4">
+      {/* Tab System */}
+      <div className="flex gap-2 border-b border-slate-200">
+        <button
+          type="button"
+          onClick={() => {
+            setActiveTab('customer')
+            setErrors({})
+          }}
+          className={`flex-1 px-4 py-2 text-sm font-medium transition-colors ${
+            activeTab === 'customer'
+              ? 'bg-blue-900 text-white rounded-t-lg'
+              : 'bg-gray-100 text-gray-600 hover:bg-gray-200 rounded-t-lg'
+          }`}
+        >
+          สำหรับลูกค้า
+        </button>
+        <button
+          type="button"
+          onClick={() => {
+            setActiveTab('agent')
+            setErrors({})
+          }}
+          className={`flex-1 px-4 py-2 text-sm font-medium transition-colors ${
+            activeTab === 'agent'
+              ? 'bg-blue-900 text-white rounded-t-lg'
+              : 'bg-gray-100 text-gray-600 hover:bg-gray-200 rounded-t-lg'
+          }`}
+        >
+          สำหรับเอเจนท์
+        </button>
       </div>
-      <div>
-        <label className="block text-sm font-medium text-slate-700 mb-1">เบอร์โทร *</label>
-        <input
-          type="tel"
-          value={phone}
-          onChange={(e) => { setPhone(e.target.value); setErrors((prev) => ({ ...prev, phone: '' })) }}
-          placeholder="เช่น 0812345678"
-          className={`w-full px-4 py-2.5 rounded-lg border text-sm bg-white transition-colors ${errors.phone ? 'border-amber-500 focus:ring-amber-200' : 'border-slate-200 focus:ring-blue-200'} focus:ring-2 focus:outline-none`}
-        />
-        {errors.phone && <p className="mt-1 text-xs text-amber-600">{errors.phone}</p>}
-      </div>
-      <div>
-        <label className="block text-sm font-medium text-slate-700 mb-1">ข้อความเพิ่มเติม</label>
-        <textarea
-          value={message}
-          onChange={(e) => setMessage(e.target.value)}
-          placeholder="ข้อความ (ถ้ามี)"
-          rows={3}
-          className="w-full px-4 py-2.5 rounded-lg border border-slate-200 text-sm bg-white resize-none focus:ring-2 focus:ring-blue-200 focus:outline-none"
-        />
-      </div>
-      <button
-        type="submit"
-        disabled={isLoading}
-        className="w-full py-3 rounded-lg bg-blue-900 text-white text-sm font-semibold hover:bg-blue-800 hover:ring-2 hover:ring-yellow-400 hover:ring-offset-1 disabled:opacity-60 disabled:cursor-not-allowed transition-all flex items-center justify-center gap-2"
-      >
-        {isLoading ? (
+
+      <form onSubmit={handleSubmit} className="space-y-4">
+        {/* Header */}
+        <h4 className="text-base font-semibold text-blue-900">
+          {activeTab === 'customer' ? 'ลูกค้านัดเข้าชมโครงการ' : 'เอเจ้นท์พาลูกค้าเข้าชม'}
+        </h4>
+
+        {activeTab === 'customer' ? (
           <>
-            <span className="inline-block w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-            กำลังส่งข้อมูล...
+            {/* Customer Form Fields */}
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-1">ชื่อลูกค้า *</label>
+              <input
+                type="text"
+                value={customerName}
+                onChange={(e) => { setCustomerName(e.target.value); setErrors((prev) => ({ ...prev, customerName: '' })) }}
+                placeholder="กรอกชื่อลูกค้า"
+                className={`w-full px-4 py-2.5 rounded-lg border text-sm bg-white transition-colors ${errors.customerName ? 'border-amber-500 focus:ring-amber-200' : 'border-slate-200 focus:ring-blue-200'} focus:ring-2 focus:outline-none`}
+              />
+              {errors.customerName && <p className="mt-1 text-xs text-amber-600">{errors.customerName}</p>}
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-1">เบอร์โทร *</label>
+              <input
+                type="tel"
+                value={customerPhone}
+                onChange={(e) => { setCustomerPhone(e.target.value); setErrors((prev) => ({ ...prev, customerPhone: '' })) }}
+                placeholder="เช่น 0812345678"
+                className={`w-full px-4 py-2.5 rounded-lg border text-sm bg-white transition-colors ${errors.customerPhone ? 'border-amber-500 focus:ring-amber-200' : 'border-slate-200 focus:ring-blue-200'} focus:ring-2 focus:outline-none`}
+              />
+              {errors.customerPhone && <p className="mt-1 text-xs text-amber-600">{errors.customerPhone}</p>}
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-1">วันที่เข้าชม *</label>
+              <input
+                type="date"
+                value={visitDate}
+                onChange={(e) => { setVisitDate(e.target.value); setErrors((prev) => ({ ...prev, visitDate: '' })) }}
+                min={new Date().toISOString().split('T')[0]}
+                className={`w-full px-4 py-2.5 rounded-lg border text-sm bg-white transition-colors ${errors.visitDate ? 'border-amber-500 focus:ring-amber-200' : 'border-slate-200 focus:ring-blue-200'} focus:ring-2 focus:outline-none`}
+              />
+              {errors.visitDate && <p className="mt-1 text-xs text-amber-600">{errors.visitDate}</p>}
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-1">เวลา *</label>
+              <input
+                type="time"
+                value={visitTime}
+                onChange={(e) => { setVisitTime(e.target.value); setErrors((prev) => ({ ...prev, visitTime: '' })) }}
+                className={`w-full px-4 py-2.5 rounded-lg border text-sm bg-white transition-colors ${errors.visitTime ? 'border-amber-500 focus:ring-amber-200' : 'border-slate-200 focus:ring-blue-200'} focus:ring-2 focus:outline-none`}
+              />
+              {errors.visitTime && <p className="mt-1 text-xs text-amber-600">{errors.visitTime}</p>}
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-1">รหัสทรัพย์</label>
+              <input
+                type="text"
+                value={propertyId || ''}
+                readOnly
+                className="w-full px-4 py-2.5 rounded-lg border border-slate-200 text-sm bg-gray-100 text-gray-600 cursor-not-allowed"
+              />
+            </div>
           </>
         ) : (
-          'ส่งคำขอจองเยี่ยมชม'
+          <>
+            {/* Agent Form Fields */}
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-1">ชื่อลูกค้า *</label>
+              <input
+                type="text"
+                value={agentCustomerName}
+                onChange={(e) => { setAgentCustomerName(e.target.value); setErrors((prev) => ({ ...prev, agentCustomerName: '' })) }}
+                placeholder="กรอกชื่อลูกค้า"
+                className={`w-full px-4 py-2.5 rounded-lg border text-sm bg-white transition-colors ${errors.agentCustomerName ? 'border-amber-500 focus:ring-amber-200' : 'border-slate-200 focus:ring-blue-200'} focus:ring-2 focus:outline-none`}
+              />
+              {errors.agentCustomerName && <p className="mt-1 text-xs text-amber-600">{errors.agentCustomerName}</p>}
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-1">ชื่อเอเจ้นท์ที่ดูแล *</label>
+              <input
+                type="text"
+                value={agentName}
+                onChange={(e) => { setAgentName(e.target.value); setErrors((prev) => ({ ...prev, agentName: '' })) }}
+                placeholder="กรอกชื่อเอเจ้นท์"
+                className={`w-full px-4 py-2.5 rounded-lg border text-sm bg-white transition-colors ${errors.agentName ? 'border-amber-500 focus:ring-amber-200' : 'border-slate-200 focus:ring-blue-200'} focus:ring-2 focus:outline-none`}
+              />
+              {errors.agentName && <p className="mt-1 text-xs text-amber-600">{errors.agentName}</p>}
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-1">เบอร์โทรเอเจ้นท์ *</label>
+              <input
+                type="tel"
+                value={agentPhone}
+                onChange={(e) => { setAgentPhone(e.target.value); setErrors((prev) => ({ ...prev, agentPhone: '' })) }}
+                placeholder="เช่น 0812345678"
+                className={`w-full px-4 py-2.5 rounded-lg border text-sm bg-white transition-colors ${errors.agentPhone ? 'border-amber-500 focus:ring-amber-200' : 'border-slate-200 focus:ring-blue-200'} focus:ring-2 focus:outline-none`}
+              />
+              {errors.agentPhone && <p className="mt-1 text-xs text-amber-600">{errors.agentPhone}</p>}
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-1">วันที่เข้าชม *</label>
+              <input
+                type="date"
+                value={agentVisitDate}
+                onChange={(e) => { setAgentVisitDate(e.target.value); setErrors((prev) => ({ ...prev, agentVisitDate: '' })) }}
+                min={new Date().toISOString().split('T')[0]}
+                className={`w-full px-4 py-2.5 rounded-lg border text-sm bg-white transition-colors ${errors.agentVisitDate ? 'border-amber-500 focus:ring-amber-200' : 'border-slate-200 focus:ring-blue-200'} focus:ring-2 focus:outline-none`}
+              />
+              {errors.agentVisitDate && <p className="mt-1 text-xs text-amber-600">{errors.agentVisitDate}</p>}
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-1">เวลา *</label>
+              <input
+                type="time"
+                value={agentVisitTime}
+                onChange={(e) => { setAgentVisitTime(e.target.value); setErrors((prev) => ({ ...prev, agentVisitTime: '' })) }}
+                className={`w-full px-4 py-2.5 rounded-lg border text-sm bg-white transition-colors ${errors.agentVisitTime ? 'border-amber-500 focus:ring-amber-200' : 'border-slate-200 focus:ring-blue-200'} focus:ring-2 focus:outline-none`}
+              />
+              {errors.agentVisitTime && <p className="mt-1 text-xs text-amber-600">{errors.agentVisitTime}</p>}
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-1">รหัสทรัพย์</label>
+              <input
+                type="text"
+                value={propertyId || ''}
+                readOnly
+                className="w-full px-4 py-2.5 rounded-lg border border-slate-200 text-sm bg-gray-100 text-gray-600 cursor-not-allowed"
+              />
+            </div>
+          </>
         )}
-      </button>
-    </form>
+
+        <button
+          type="submit"
+          disabled={isLoading}
+          className="w-full py-3 rounded-lg bg-blue-900 text-white text-sm font-semibold hover:bg-blue-800 hover:ring-2 hover:ring-yellow-400 hover:ring-offset-1 disabled:opacity-60 disabled:cursor-not-allowed transition-all flex items-center justify-center gap-2"
+        >
+          {isLoading ? (
+            <>
+              <span className="inline-block w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+              กำลังส่งข้อมูล...
+            </>
+          ) : (
+            'ส่งคำขอนัดเยี่ยมชม'
+          )}
+        </button>
+      </form>
+    </div>
   )
 }
 
@@ -690,7 +869,7 @@ export default function PropertyDetail() {
                 <div className="mt-4 pt-4 border-t border-slate-100">
                   <p className="text-sm font-medium text-slate-700 mb-2">จองเยี่ยมชม (ส่งข้อความ)</p>
                   <LeadForm
-                    propertyId={property.id}
+                    propertyId={property.propertyId || property.id}
                     propertyTitle={property.title}
                     propertyPrice={property.price}
                     isRental={property.isRental}
