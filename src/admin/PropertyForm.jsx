@@ -16,6 +16,7 @@ import { generatePropertyID, checkPropertyIdDuplicate } from '../lib/propertyId'
 import { logActivity } from '../services/activityLogger'
 import { fetchAndCacheNearbyPlaces } from '../services/nearbyPlacesService'
 import { compressImages } from '../lib/imageCompressor'
+import { generateAutoTags, mergeTags } from '../lib/autoTags'
 import { ImagePlus, X, ArrowLeft, RefreshCw, Plus, Star } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import GoogleMapsInputWithPreview from '../components/GoogleMapsInputWithPreview'
@@ -99,6 +100,7 @@ const defaultForm = {
   mapUrl: '',
   lat: null,
   lng: null,
+  nearbyPlace: [],
 }
 
 export default function PropertyForm() {
@@ -214,12 +216,64 @@ export default function PropertyForm() {
         mapUrl: p.mapUrl ?? '',
         lat: p.lat ?? null,
         lng: p.lng ?? null,
+        nearbyPlace: Array.isArray(p.nearbyPlace) ? p.nearbyPlace : [],
       })
     }).finally(() => setLoading(false))
     return () => { cancelled = true }
   }, [id, isEdit])
 
   const update = (partial) => setForm((prev) => ({ ...prev, ...partial }))
+
+  // Auto-update tags when key fields change
+  useEffect(() => {
+    // Skip auto-update during initial load or if form is not ready
+    if (loading || !form.title) return
+
+    // Prepare property data for auto-tag generation
+    const propertyDataForTags = {
+      propertyId: form.propertyId || '',
+      type: form.type,
+      locationDisplay: form.locationDisplay || '',
+      nearbyPlace: form.nearbyPlace || [],
+      listingType: form.listingType || (form.isRental ? 'rent' : 'sale'),
+      subListingType: form.subListingType || null,
+      directInstallment: form.directInstallment || form.subListingType === 'installment_only',
+      availability: form.availability || 'available',
+      status: form.status || form.availability || 'available',
+      propertyCondition: form.propertyCondition || null,
+      propertySubStatus: form.propertySubStatus || form.propertyCondition || null,
+      price: Number(form.price) || 0,
+    }
+
+    // Generate auto tags
+    const autoTags = generateAutoTags(propertyDataForTags)
+
+    // Get current custom tags (exclude auto-generated ones)
+    const currentCustomTags = Array.isArray(form.customTags) ? form.customTags.filter((tag) => tag && tag.trim()) : []
+
+    // Merge custom tags with auto-generated tags
+    const mergedTags = mergeTags(currentCustomTags, autoTags)
+
+    // Only update if tags have changed (to avoid infinite loops)
+    const currentTagsStr = JSON.stringify((form.customTags || []).sort())
+    const mergedTagsStr = JSON.stringify(mergedTags.sort())
+    
+    if (currentTagsStr !== mergedTagsStr) {
+      update({ customTags: mergedTags })
+    }
+  }, [
+    form.price,
+    form.availability,
+    form.listingType,
+    form.subListingType,
+    form.propertyCondition,
+    form.locationDisplay,
+    form.nearbyPlace,
+    form.type,
+    form.propertyId,
+    // Don't include form.customTags to avoid infinite loop
+    // Don't include loading to avoid updating during initial load
+  ])
 
   const handleTypeChange = (newType) => {
     const isRental = newType === 'บ้านเช่า'
@@ -383,6 +437,32 @@ export default function PropertyForm() {
     setSaving(true)
     const price = Number(form.price) || 0
     const area = Number(form.area) || 0
+    
+    // Prepare property data for auto-tag generation
+    const propertyDataForTags = {
+      propertyId: propertyIdTrimmed || null,
+      type: form.type,
+      locationDisplay: form.locationDisplay.trim(),
+      nearbyPlace: form.nearbyPlace || [],
+      listingType: form.listingType || (form.isRental ? 'rent' : 'sale'),
+      subListingType: form.subListingType || null,
+      directInstallment: form.directInstallment || form.subListingType === 'installment_only',
+      availability: form.availability || 'available',
+      status: form.status || form.availability || 'available', // Backward compatibility
+      propertyCondition: form.propertyCondition || null,
+      propertySubStatus: form.propertySubStatus || form.propertyCondition || null, // Backward compatibility
+      price,
+    }
+
+    // Generate auto tags
+    const autoTags = generateAutoTags(propertyDataForTags)
+
+    // Clean customTags: filter out empty strings
+    const cleanedCustomTags = Array.isArray(form.customTags) ? form.customTags.filter((tag) => tag && tag.trim()) : []
+
+    // Merge custom tags with auto-generated tags (remove duplicates)
+    const mergedTags = mergeTags(cleanedCustomTags, autoTags)
+    
     const payload = {
       title: form.title.trim(),
       price,
@@ -406,11 +486,12 @@ export default function PropertyForm() {
       status: form.status || 'available', // Keep for backward compatibility
       propertySubStatus: form.propertySubStatus || form.propertyCondition || null, // Keep for backward compatibility
       showPrice: form.showPrice !== false,
-      customTags: Array.isArray(form.customTags) ? form.customTags.filter((tag) => tag && tag.trim()) : [],
+      customTags: mergedTags, // Use merged tags (custom + auto-generated)
       coverImageUrl: form.coverImageUrl || null, // บันทึก coverImageUrl
       mapUrl: (form.mapUrl || '').trim(),
       lat: form.lat ? Number(form.lat) : null,
       lng: form.lng ? Number(form.lng) : null,
+      nearbyPlace: form.nearbyPlace || [],
     }
     let imageUrls = [...(form.images || [])]
     const totalNew = newFiles.length

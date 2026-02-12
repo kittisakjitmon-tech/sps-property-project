@@ -1,5 +1,4 @@
 import { Component } from 'react'
-import { Link } from 'react-router-dom'
 
 export default class ErrorBoundary extends Component {
   state = { hasError: false, error: null }
@@ -12,6 +11,12 @@ export default class ErrorBoundary extends Component {
     console.error('ErrorBoundary caught:', error, errorInfo)
   }
 
+  handleGoHome = () => {
+    // Use window.location.href instead of navigate() for safety
+    // ErrorBoundary may catch errors that break Router context
+    window.location.href = '/'
+  }
+
   render() {
     if (this.state.hasError) {
       return (
@@ -21,12 +26,12 @@ export default class ErrorBoundary extends Component {
             <p className="text-slate-600 mb-6">
               {this.state.error?.message || 'เกิดข้อผิดพลาดที่ไม่ anticipated กรุณารีเฟรชหน้าหรือลองใหม่ภายหลัง'}
             </p>
-            <Link
-              to="/"
-              className="inline-block px-6 py-3 bg-blue-900 text-white font-medium rounded-xl hover:bg-blue-800"
+            <button
+              onClick={this.handleGoHome}
+              className="inline-block px-6 py-3 bg-blue-900 text-white font-medium rounded-xl hover:bg-blue-800 transition-colors"
             >
               กลับหน้าแรก
-            </Link>
+            </button>
           </div>
         </div>
       )

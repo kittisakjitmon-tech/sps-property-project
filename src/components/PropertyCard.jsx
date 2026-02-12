@@ -4,6 +4,7 @@ import { useState, useEffect, memo } from 'react'
 import { isFavorite, toggleFavorite } from '../lib/favorites'
 import { formatPrice } from '../lib/priceFormat'
 import ProtectedImageContainer from './ProtectedImageContainer'
+import { highlightText, highlightTags } from '../lib/textHighlight'
 
 const DEFAULT_IMAGE = 'https://images.unsplash.com/photo-1564013799919-ab600027ffc6?w=400'
 
@@ -194,7 +195,7 @@ function isSoldOrRented(property) {
   return availability === 'sold' || availability === 'ขายแล้ว'
 }
 
-function PropertyCard({ property, featuredLabel = 'แนะนำ' }) {
+function PropertyCard({ property, featuredLabel = 'แนะนำ', searchQuery = '' }) {
   // Safety check: ถ้าไม่มี property หรือไม่มี id ให้ return null
   if (!property || !property.id) {
     return null
@@ -327,11 +328,14 @@ function PropertyCard({ property, featuredLabel = 'แนะนำ' }) {
         </div>
       </div>
       <div className="p-4 rounded-b-2xl">
-        <h3 className="font-semibold text-blue-900 line-clamp-2 group-hover:underline">{property.title}</h3>
+        <h3 className="font-semibold text-blue-900 line-clamp-2 group-hover:underline">
+          {searchQuery ? highlightText(property.title, searchQuery) : property.title}
+        </h3>
         <p className="flex items-center gap-1 text-slate-600 text-sm mt-1">
           <MapPin className="h-4 w-4 shrink-0" />
           {loc.district}, {loc.province}
         </p>
+        
         <div className="flex gap-3 mt-2 text-slate-500 text-sm">
           <span className="flex items-center gap-1"><Bed className="h-4 w-4" /> {property.bedrooms ?? '-'}</span>
           <span className="flex items-center gap-1"><Bath className="h-4 w-4" /> {property.bathrooms ?? '-'}</span>

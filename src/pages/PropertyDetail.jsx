@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { useParams, Link } from 'react-router-dom'
+import { useParams, Link, useSearchParams, useNavigate } from 'react-router-dom'
 import { Helmet } from 'react-helmet-async'
 import { MapPin, Bed, Bath, Maximize2, Phone, MessageCircle, Share2, CheckCircle2, Copy } from 'lucide-react'
 import NeighborhoodData from '../components/NeighborhoodData'
@@ -8,6 +8,7 @@ import PageLayout from '../components/PageLayout'
 import Toast from '../components/Toast'
 import ProtectedImageContainer from '../components/ProtectedImageContainer'
 import { formatPrice } from '../lib/priceFormat'
+import { highlightText, highlightTags } from '../lib/textHighlight'
 
 function MortgageCalculator({ price, directInstallment }) {
   const [loanType, setLoanType] = useState(directInstallment ? 'direct' : 'bank')
@@ -462,7 +463,12 @@ function LeadForm({ propertyId, propertyTitle, propertyPrice, isRental, onSucces
 }
 
 export default function PropertyDetail() {
+  // All hooks must be called unconditionally at the top level (React Rules of Hooks)
   const { id } = useParams()
+  const navigate = useNavigate()
+  const [searchParams] = useSearchParams()
+  const searchQuery = searchParams.get('q') || ''
+  
   const [property, setProperty] = useState(null)
   const [loading, setLoading] = useState(true)
   const [galleryIndex, setGalleryIndex] = useState(0)
@@ -706,6 +712,8 @@ export default function PropertyDetail() {
                     <p className="text-2xl font-bold text-amber-700 mb-4">
                       {formatPrice(property.price, property.isRental, property.showPrice)}
                     </p>
+                    {/* Custom Tags with Highlight */}
+                    
                   </div>
                   <button
                     onClick={handleShare}
@@ -771,6 +779,40 @@ export default function PropertyDetail() {
                         </li>
                       ))}
                     </ul>
+                  </div>
+                )}
+
+                {/* Tags Section */}
+                {property.customTags && Array.isArray(property.customTags) && property.customTags.length > 0 && (
+                  <div className="mt-6">
+                    <h3 className="text-xl font-semibold text-blue-900 mb-3">Tag</h3>
+                    <div className="flex flex-wrap gap-2">
+                      {property.customTags.map((tag, index) => {
+                        if (searchQuery && typeof tag === 'string') {
+                          // Use highlightText when there's a search query
+                          return (
+                            <Link
+                              key={index}
+                              to={`/properties?search=${encodeURIComponent(tag)}`}
+                              className="px-3 py-1.5 bg-blue-50 text-gray-700 text-sm rounded-full border border-blue-200 font-medium hover:bg-blue-600 hover:text-white hover:border-blue-600 transition-colors cursor-pointer inline-block"
+                            >
+                              {highlightText(tag, searchQuery)}
+                            </Link>
+                          )
+                        } else {
+                          // Regular display without highlight - Clickable
+                          return (
+                            <Link
+                              key={index}
+                              to={`/properties?search=${encodeURIComponent(tag)}`}
+                              className="px-3 py-1.5 bg-blue-50 text-gray-700 text-sm rounded-full border border-blue-200 font-medium hover:bg-blue-600 hover:text-white hover:border-blue-600 transition-colors cursor-pointer inline-block"
+                            >
+                              {tag}
+                            </Link>
+                          )
+                        }
+                      })}
+                    </div>
                   </div>
                 )}
               </div>

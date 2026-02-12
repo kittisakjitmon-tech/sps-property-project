@@ -18,8 +18,8 @@ import logo from '../assets/logo.png'; // นำเข้าไฟล์โล�
 
 const buyHomeLinks = [
   { to: '/properties', label: 'รวมโครงการทั้งหมด', icon: Home },
-  { to: '/properties?status=มือ1', label: 'บ้านมือ 1', icon: Sparkles },
-  { to: '/properties?status=มือ2', label: 'บ้านมือ 2', icon: House },
+  { to: '/properties?category=buy&&propertySubStatus=มือ 1', label: 'บ้านมือ 1', icon: Sparkles },
+  { to: '/properties?category=buy&propertySubStatus=มือ 2', label: 'บ้านมือ 2', icon: House },
   { to: '/properties?feature=directInstallment', label: 'บ้านผ่อนตรง', icon: Flame, highlight: true },
 ]
 

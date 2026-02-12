@@ -1,4 +1,4 @@
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
+import { Routes, Route, Navigate } from 'react-router-dom'
 import { HelmetProvider } from 'react-helmet-async'
 import { SearchProvider } from './context/SearchContext'
 import { AuthProvider } from './context/AuthContext'
@@ -32,8 +32,7 @@ export default function App() {
     <HelmetProvider>
       <AuthProvider>
         <SearchProvider>
-          <BrowserRouter>
-            <Routes>
+          <Routes>
               {/* Public: no navbar for admin login */}
               <Route path="/admin/login" element={<Login />} />
               {/* Admin protected */}
@@ -78,7 +77,6 @@ export default function App() {
               {/* Catch-all: หน้าที่ไม่พบ -> กลับหน้าแรก */}
               <Route path="*" element={<Navigate to="/" replace />} />
             </Routes>
-          </BrowserRouter>
         </SearchProvider>
       </AuthProvider>
     </HelmetProvider>
