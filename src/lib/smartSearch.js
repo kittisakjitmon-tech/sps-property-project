@@ -511,6 +511,59 @@ export function searchProperties(properties, keyword = '', filters = {}) {
     })
   }
 
+  // Direct Installment filter (ผ่อนตรง)
+  // Strict Boolean/Tag Check: ตรวจสอบจากฟิลด์เฉพาะเท่านั้น
+  if (filters.feature === 'directInstallment' || filters.directInstallment === true) {
+    results = results.filter((p) => {
+      try {
+        // ตรวจสอบจากฟิลด์ directInstallment (Boolean) ก่อน
+        if (p?.directInstallment === true) {
+          return true
+        }
+        
+        // ตรวจสอบจาก tags array (ถ้ามี)
+        const tags = p?.tags || p?.customTags || []
+        if (Array.isArray(tags) && tags.length > 0) {
+          const tagText = tags.map((t) => {
+            if (typeof t === 'string') return normalizeText(t)
+            if (t && typeof t === 'object') return normalizeText(t.label || t.name || t.value || '')
+            return ''
+          }).join(' ')
+          if (tagText.includes('ผ่อนตรง')) {
+            return true
+          }
+        }
+        
+        // Fallback: ตรวจสอบจาก description ด้วย Negative Lookbehind Logic
+        // เฉพาะกรณีที่ข้อมูลยังไม่ได้แยก Field ชัดเจน
+        const description = normalizeText(p?.description || '')
+        if (description.includes('ผ่อนตรง')) {
+          // Negative Lookbehind: ต้องไม่เจอคำว่า 'ไม่รับ', 'งด', 'ไม่' อยู่ข้างหน้า
+          const negativePatterns = [
+            /ไม่รับ\s*ผ่อนตรง/i,
+            /งด\s*ผ่อนตรง/i,
+            /ไม่\s*ผ่อนตรง/i,
+            /ไม่มี\s*ผ่อนตรง/i,
+            /ไม่สามารถ\s*ผ่อนตรง/i,
+          ]
+          
+          // ตรวจสอบว่ามี negative patterns หรือไม่
+          const hasNegative = negativePatterns.some((pattern) => pattern.test(description))
+          if (hasNegative) {
+            return false // ถ้ามี negative pattern ให้ return false
+          }
+          
+          // ถ้าไม่มี negative pattern และเจอคำว่า 'ผ่อนตรง' ให้ return true
+          return true
+        }
+        
+        return false
+      } catch {
+        return false
+      }
+    })
+  }
+
     // Sort by relevance score
     if (q.length > 0) {
       try {

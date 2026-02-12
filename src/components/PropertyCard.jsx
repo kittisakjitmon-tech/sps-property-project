@@ -1,21 +1,82 @@
 import { Link } from 'react-router-dom'
 import { MapPin, Bed, Bath, Heart } from 'lucide-react'
-import { useState, useEffect } from 'react'
+import { useState, useEffect, memo } from 'react'
 import { isFavorite, toggleFavorite } from '../lib/favorites'
 import { formatPrice } from '../lib/priceFormat'
 import ProtectedImageContainer from './ProtectedImageContainer'
 
 const DEFAULT_IMAGE = 'https://images.unsplash.com/photo-1564013799919-ab600027ffc6?w=400'
 
+// Constants
+const NEW_PROPERTY_DAYS = 14
+const NEW_PROPERTY_MS = NEW_PROPERTY_DAYS * 24 * 60 * 60 * 1000
+
+/**
+ * ตรวจสอบว่าทรัพย์สินมีคุณสมบัติ 'ผ่อนตรง' จริงๆ หรือไม่
+ * Strict Boolean/Tag Check: ตรวจสอบจากฟิลด์เฉพาะเท่านั้น
+ * Moved outside component for better performance
+ */
+function hasDirectInstallment(property) {
+  try {
+    if (!property || typeof property !== 'object') return false
+    
+    // ตรวจสอบจากฟิลด์ directInstallment (Boolean) ก่อน
+    if (property.directInstallment === true) {
+      return true
+    }
+    
+    // ตรวจสอบจาก tags array (ถ้ามี)
+    const tags = property.tags || property.customTags || []
+    if (Array.isArray(tags) && tags.length > 0) {
+      const tagText = tags.map((t) => {
+        if (typeof t === 'string') return String(t).toLowerCase().trim()
+        if (t && typeof t === 'object') return String(t.label || t.name || t.value || '').toLowerCase().trim()
+        return ''
+      }).join(' ')
+      if (tagText.includes('ผ่อนตรง')) {
+        return true
+      }
+    }
+    
+    // Fallback: ตรวจสอบจาก description ด้วย Negative Lookbehind Logic
+    // เฉพาะกรณีที่ข้อมูลยังไม่ได้แยก Field ชัดเจน
+    const description = String(property.description || '').toLowerCase()
+    if (description.includes('ผ่อนตรง')) {
+      // Negative Lookbehind: ต้องไม่เจอคำว่า 'ไม่รับ', 'งด', 'ไม่' อยู่ข้างหน้า
+      const negativePatterns = [
+        /ไม่รับ\s*ผ่อนตรง/,
+        /งด\s*ผ่อนตรง/,
+        /ไม่\s*ผ่อนตรง/,
+        /ไม่มี\s*ผ่อนตรง/,
+        /ไม่สามารถ\s*ผ่อนตรง/,
+      ]
+      
+      // ตรวจสอบว่ามี negative patterns หรือไม่
+      const hasNegative = negativePatterns.some((pattern) => pattern.test(description))
+      if (hasNegative) {
+        return false // ถ้ามี negative pattern ให้ return false
+      }
+      
+      // ถ้าไม่มี negative pattern และเจอคำว่า 'ผ่อนตรง' ให้ return true
+      return true
+    }
+    
+    return false
+  } catch {
+    return false
+  }
+}
+
 function getBadges(property) {
   const badges = []
   if (property.featured) badges.push({ label: 'แนะนำ', key: 'featured' })
   if (property.hotDeal) badges.push({ label: 'Hot Deal', key: 'hotDeal' })
-  if (property.directInstallment) badges.push({ label: 'ผ่อนตรง', key: 'directInstallment' })
+  // ใช้ strict check function แทนการตรวจสอบตรงๆ
+  if (hasDirectInstallment(property)) badges.push({ label: 'ผ่อนตรง', key: 'directInstallment' })
   const createdAt = property.createdAt
   if (createdAt) {
     const ms = createdAt?.toMillis ? createdAt.toMillis() : (typeof createdAt === 'number' ? createdAt : null)
-    if (ms && Date.now() - ms < 14 * 24 * 60 * 60 * 1000) {
+    if (ms && Date.now() - ms < NEW_PROPERTY_MS) {
       badges.push({ label: 'New', key: 'new' })
     }
   }
@@ -94,10 +155,9 @@ function isSoldOrRented(property) {
   return property.status === 'sold'
 }
 
-export default function PropertyCard({ property, featuredLabel = 'แนะนำ' }) {
+function PropertyCard({ property, featuredLabel = 'แนะนำ' }) {
   // Safety check: ถ้าไม่มี property หรือไม่มี id ให้ return null
   if (!property || !property.id) {
-    console.warn('PropertyCard: Invalid property', property)
     return null
   }
 
@@ -152,6 +212,8 @@ export default function PropertyCard({ property, featuredLabel = 'แนะน�
               src={coverImage}
               alt={property.title || 'Property image'}
               className="w-full h-full object-cover protected-image"
+              loading="lazy"
+              decoding="async"
               draggable={false}
               onContextMenu={(e) => e.preventDefault()}
               onDragStart={(e) => e.preventDefault()}
@@ -249,7 +311,10 @@ export default function PropertyCard({ property, featuredLabel = 'แนะน�
     </Link>
   )
   } catch (error) {
-    console.error('PropertyCard render error:', error, property)
+    // Keep error logging for critical errors
+    if (process.env.NODE_ENV === 'development') {
+      console.error('PropertyCard render error:', error, property)
+    }
     return (
       <div className="bg-white rounded-2xl p-4 border border-red-200">
         <p className="text-red-600 text-sm">เกิดข้อผิดพลาดในการแสดงผลทรัพย์สิน</p>
@@ -257,3 +322,6 @@ export default function PropertyCard({ property, featuredLabel = 'แนะน�
     )
   }
 }
+
+// Memoize component to prevent unnecessary re-renders
+export default memo(PropertyCard)

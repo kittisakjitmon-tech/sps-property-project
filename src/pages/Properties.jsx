@@ -39,9 +39,11 @@ export default function Properties() {
   
   // Typing animation สำหรับ placeholder (Decoupled จาก searchQuery)
   const TYPING_PHRASES = [
-    //'ค้นหา: ชื่อประกาศ, รหัสทรัพย์, Tags...',
-    //'ค้นหา: คอนโด, บ้านเดี่ยว, ทาวน์โฮม...',
-    //'ค้นหา: ราคา เช่น "2.5 ล้าน" หรือ "2500000"...',
+    'บ้านมือสอง',
+    'คอนโดผ่อนตรง',
+    'ทาวน์โฮมใกล้นิคม',
+    'บ้านเดี่ยวชลบุรี',
+    'คอนโดอมตะนคร',
   ]
   const { displayText: typingPlaceholder, stop: stopTyping, start: startTyping } = useTypingPlaceholder(
     TYPING_PHRASES,
@@ -65,12 +67,11 @@ export default function Properties() {
   useEffect(() => {
     try {
       const unsub = getPropertiesSnapshot((props) => {
-        if (Array.isArray(props)) {
-          setProperties(props)
-        } else {
-          console.warn('getPropertiesSnapshot returned non-array:', props)
-          setProperties([])
-        }
+      if (Array.isArray(props)) {
+        setProperties(props)
+      } else {
+        setProperties([])
+      }
       })
       return () => {
         try {
@@ -308,7 +309,6 @@ export default function Properties() {
   const filtered = useMemo(() => {
     try {
       if (!Array.isArray(properties)) {
-        console.warn('Properties is not an array:', properties)
         return []
       }
       
@@ -326,6 +326,8 @@ export default function Properties() {
         // ใช้ filters.propertySubStatus ที่ถูก normalize แล้ว (รองรับทั้ง 'มือ 1' และ 'มือ1')
         propertySubStatus: filters?.propertySubStatus || normalizeSubStatusFromURL(searchParams.get('status') || '') || '',
         isRental: isRentalFilter !== null ? isRentalFilter : (filters?.isRental !== null ? filters.isRental : null),
+        // Feature filter (เช่น 'directInstallment' สำหรับ 'ผ่อนตรง')
+        feature: filters?.feature || searchParams.get('feature') || '',
       }
 
       // Use Hybrid Smart Search - ใช้ debouncedKeyword (มาจาก searchQuery) เท่านั้น
@@ -334,7 +336,6 @@ export default function Properties() {
       
       // Ensure result is an array
       if (!Array.isArray(result)) {
-        console.warn('searchProperties returned non-array:', result)
         return []
       }
       
@@ -353,17 +354,7 @@ export default function Properties() {
   // Safety check: Ensure filtered is always an array
   const safeFiltered = Array.isArray(filtered) ? filtered : []
 
-  // Debug logging (remove in production)
-  useEffect(() => {
-    console.log('Properties component state:', {
-      propertiesCount: properties.length,
-      filteredCount: safeFiltered.length,
-      searchQuery,
-      debouncedKeyword,
-      filters,
-      isRentalFilter,
-    })
-  }, [properties.length, safeFiltered.length, searchQuery, debouncedKeyword, filters, isRentalFilter])
+  // Debug logging removed for production
 
   return (
     <PageLayout 
@@ -468,13 +459,15 @@ export default function Properties() {
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
           {safeFiltered.map((p) => {
             if (!p || !p.id) {
-              console.warn('Invalid property in filtered results:', p)
               return null
             }
             try {
               return <PropertyCard key={p.id} property={p} />
             } catch (error) {
-              console.error('Error rendering PropertyCard:', error, p)
+              // Keep error logging for critical errors
+              if (process.env.NODE_ENV === 'development') {
+                console.error('Error rendering PropertyCard:', error, p)
+              }
               return null
             }
           })}

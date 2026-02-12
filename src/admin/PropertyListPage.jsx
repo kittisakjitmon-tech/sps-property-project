@@ -105,7 +105,6 @@ export default function PropertyListPage() {
           if (Array.isArray(allProperties)) {
             setProperties(allProperties)
           } else {
-            console.warn('PropertyListPage: getPropertiesSnapshot returned non-array:', allProperties)
             setProperties([])
           }
         } catch (error) {
@@ -141,7 +140,6 @@ export default function PropertyListPage() {
   const filteredProperties = useMemo(() => {
     try {
       if (!Array.isArray(properties)) {
-        console.warn('PropertyListPage: properties is not an array', properties)
         return []
       }
 
@@ -346,15 +344,7 @@ export default function PropertyListPage() {
   // Ensure we have valid data before rendering
   const safeProperties = Array.isArray(properties) ? properties : []
 
-  // Debug logging
-  useEffect(() => {
-    console.log('PropertyListPage render state:', {
-      loading,
-      propertiesCount: safeProperties.length,
-      filteredCount: Array.isArray(filteredProperties) ? filteredProperties.length : 0,
-      user: user ? 'exists' : 'null',
-    })
-  }, [loading, safeProperties.length, filteredProperties, user])
+  // Debug logging removed for production
 
   // Check admin access safely (after all hooks)
   let hasAdminAccess = false
@@ -561,7 +551,6 @@ export default function PropertyListPage() {
                   ) : (
                     paginatedProperties.map((property) => {
                       if (!property || !property.id) {
-                        console.warn('PropertyListPage: Invalid property in paginatedProperties:', property)
                         return null
                       }
                       try {

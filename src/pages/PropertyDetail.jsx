@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { useParams, Link } from 'react-router-dom'
 import { Helmet } from 'react-helmet-async'
-import { MapPin, Bed, Bath, Maximize2, Phone, MessageCircle, Share2, CheckCircle2 } from 'lucide-react'
+import { MapPin, Bed, Bath, Maximize2, Phone, MessageCircle, Share2, CheckCircle2, Copy } from 'lucide-react'
 import NeighborhoodData from '../components/NeighborhoodData'
 import { getPropertyByIdOnce, createViewingRequest } from '../lib/firestore'
 import PageLayout from '../components/PageLayout'
@@ -445,17 +445,92 @@ export default function PropertyDetail() {
               </div>
 
               <div className="bg-white rounded-xl border border-slate-200 p-6">
+                {/* Top Row: Badges Area */}
+                <div className="flex flex-wrap items-center gap-2 mb-4">
+                  {/* Badge 1: ID with Copy */}
+                  {property.propertyId && (
+                    <div className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-gray-100 text-gray-700 text-sm font-medium">
+                      <span className="font-mono">{property.propertyId}</span>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          navigator.clipboard.writeText(property.propertyId)
+                          setToastMessage('คัดลอกรหัสทรัพย์แล้ว')
+                          setShowToast(true)
+                          setTimeout(() => setShowToast(false), 2000)
+                        }}
+                        className="p-0.5 hover:bg-gray-200 rounded transition"
+                        title="คัดลอกรหัสทรัพย์"
+                      >
+                        <Copy className="h-3.5 w-3.5" />
+                      </button>
+                    </div>
+                  )}
+                  
+                  {/* Badge 2: Transaction Type (ซื้อ/เช่า) */}
+                  {property.type && (
+                    <span className="px-3 py-1.5 rounded-full bg-blue-100 text-blue-800 text-sm font-medium">
+                      {property.isRental ? 'เช่า' : 'ซื้อ'}
+                    </span>
+                  )}
+                  
+                  {/* Badge 3: Asset Type (มือ 1/มือ 2) - แสดงเฉพาะทรัพย์ขาย */}
+                  {!property.isRental && property.propertySubStatus && (
+                    <span className="px-3 py-1.5 rounded-full bg-blue-900 text-white text-sm font-medium">
+                      {property.propertySubStatus}
+                    </span>
+                  )}
+                  
+                  {/* Badge 4: Status */}
+                  {(() => {
+                    let statusLabel = ''
+                    let statusColor = ''
+                    if (property.isRental) {
+                      // สำหรับทรัพย์เช่า: ใช้ availability
+                      if (property.availability === 'unavailable') {
+                        statusLabel = 'ไม่ว่าง'
+                        statusColor = 'bg-red-600 text-white'
+                      } else {
+                        statusLabel = 'ว่าง'
+                        statusColor = 'bg-emerald-500 text-white'
+                      }
+                    } else {
+                      // สำหรับทรัพย์ขาย: ใช้ status
+                      if (property.status === 'available') {
+                        statusLabel = 'ว่าง'
+                        statusColor = 'bg-emerald-500 text-white'
+                      } else if (property.status === 'reserved') {
+                        statusLabel = 'ติดจอง'
+                        statusColor = 'bg-orange-500 text-white'
+                      } else if (property.status === 'sold') {
+                        statusLabel = 'ขายแล้ว'
+                        statusColor = 'bg-red-600 text-white'
+                      }
+                    }
+                    return statusLabel ? (
+                      <span className={`px-3 py-1.5 rounded-full ${statusColor} text-sm font-medium`}>
+                        {statusLabel}
+                      </span>
+                    ) : null
+                  })()}
+                  
+                  {/* ผ่อนตรง Badge */}
+                  {property.directInstallment && (
+                    <span className="px-3 py-1.5 rounded-full text-sm font-semibold bg-yellow-400 text-blue-900">
+                      ผ่อนตรง
+                    </span>
+                  )}
+                </div>
+
+                {/* Title Section */}
                 <div className="flex items-start justify-between mb-4">
                   <div className="flex-1">
-                    <div className="flex flex-wrap items-center gap-3 mb-4">
-                    <h1 className="text-2xl font-bold text-blue-900">{property.title}</h1>
-                    {property.directInstallment && (
-                      <span className="px-3 py-1 rounded-full text-sm font-semibold bg-yellow-400 text-blue-900">
-                        ผ่อนตรง
-                      </span>
-                    )}
-                  </div>
-                    <p className="text-2xl font-bold text-yellow-900 mb-4">
+                    <h1 className="text-2xl sm:text-3xl font-bold text-blue-900 mb-4">
+                      {property.title}
+                    </h1>
+                    
+                    {/* Price Section */}
+                    <p className="text-2xl font-bold text-amber-700 mb-4">
                       {formatPrice(property.price, property.isRental, property.showPrice)}
                     </p>
                   </div>
@@ -468,11 +543,32 @@ export default function PropertyDetail() {
                     <span className="sm:hidden">แชร์</span>
                   </button>
                 </div>
-                <div className="flex flex-wrap gap-4 text-slate-600 mb-4">
-                  <span className="flex items-center gap-1"><MapPin className="h-4 w-4" /> {loc.district}, {loc.province}</span>
-                  <span className="flex items-center gap-1"><Bed className="h-4 w-4" /> {property.bedrooms} ห้องนอน</span>
-                  <span className="flex items-center gap-1"><Bath className="h-4 w-4" /> {property.bathrooms} ห้องน้ำ</span>
-                  <span className="flex items-center gap-1"><Maximize2 className="h-4 w-4" /> {property.area != null && property.area > 0 ? (Number(property.area) / 4).toFixed(1) : '-'} ตร.ว.</span>
+
+                {/* Location & Specs */}
+                <div className="space-y-3 mb-4">
+                  {/* Location */}
+                  <div className="flex items-center gap-2 text-gray-600">
+                    <MapPin className="h-4 w-4 shrink-0" />
+                    <span>{loc.district || ''}{loc.district && loc.province ? ', ' : ''}{loc.province || ''}</span>
+                  </div>
+                  
+                  {/* Specs Row */}
+                  <div className="flex flex-wrap items-center gap-4 text-gray-600">
+                    <span className="flex items-center gap-1.5">
+                      <Bed className="h-4 w-4 shrink-0" />
+                      <span>{property.bedrooms || '-'} ห้องนอน</span>
+                    </span>
+                    <span className="flex items-center gap-1.5">
+                      <Bath className="h-4 w-4 shrink-0" />
+                      <span>{property.bathrooms || '-'} ห้องน้ำ</span>
+                    </span>
+                    {property.area != null && property.area > 0 && (
+                      <span className="flex items-center gap-1.5">
+                        <Maximize2 className="h-4 w-4 shrink-0" />
+                        <span>{(Number(property.area) / 4).toFixed(1)} ตร.ว.</span>
+                      </span>
+                    )}
+                  </div>
                 </div>
                 <p
                   className="text-slate-700 leading-relaxed whitespace-pre-wrap"

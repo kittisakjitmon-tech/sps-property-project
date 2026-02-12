@@ -1,8 +1,13 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { X, SlidersHorizontal } from 'lucide-react'
 
 export default function FilterSidebar({ filters, onUpdateFilters, onApply, onClear, isOpen, onClose }) {
   const [localFilters, setLocalFilters] = useState(filters)
+
+  // Sync localFilters with props.filters when parent updates
+  useEffect(() => {
+    setLocalFilters(filters)
+  }, [filters])
 
   const handleChange = (key, value) => {
     setLocalFilters((prev) => ({ ...prev, [key]: value }))

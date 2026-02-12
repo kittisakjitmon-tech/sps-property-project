@@ -54,7 +54,7 @@ img.protected-image {
 }
 
 .share-image-watermark::before {
-  content: "SPS Property Solution";
+  content: "SPS Property";
   position: absolute;
   inset: 0;
   display: grid;
