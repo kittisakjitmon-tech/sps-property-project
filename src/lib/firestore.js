@@ -214,7 +214,22 @@ const APPOINTMENTS = 'appointments'
 export async function createAppointment(data) {
   await addDoc(collection(db, APPOINTMENTS), {
     ...data,
+    status: data.status ?? 'pending',
     createdAt: serverTimestamp(),
+  })
+}
+
+export function getAppointmentsSnapshot(callback) {
+  return onSnapshot(collection(db, APPOINTMENTS), (snap) => {
+    const list = snap.docs.map((d) => ({ id: d.id, ...d.data() }))
+    callback(list)
+  })
+}
+
+export async function updateAppointmentStatus(id, status) {
+  await updateDoc(doc(db, APPOINTMENTS, id), {
+    status,
+    updatedAt: serverTimestamp(),
   })
 }
 
@@ -227,6 +242,45 @@ export async function createInquiry(data) {
     status: 'pending',
     createdAt: serverTimestamp(),
   })
+}
+
+/** Loan Requests - คำขอกู้สินเชื่อ/ปิดหนี้ (PDPA - Super Admin only) */
+const LOAN_REQUESTS = 'loan_requests'
+
+export async function createLoanRequest(data) {
+  await addDoc(collection(db, LOAN_REQUESTS), {
+    ...data,
+    status: 'pending',
+    createdAt: serverTimestamp(),
+  })
+}
+
+export function getLoanRequestsSnapshot(callback) {
+  const q = query(
+    collection(db, LOAN_REQUESTS),
+    orderBy('createdAt', 'desc')
+  )
+  return onSnapshot(q, (snap) => {
+    const list = snap.docs.map((d) => {
+      const data = d.data()
+      return {
+        id: d.id,
+        ...data,
+        createdAt: data.createdAt,
+      }
+    })
+    callback(list)
+  })
+}
+
+export async function updateLoanRequestStatus(id, status, approvedAmount) {
+  const payload = { status, updatedAt: serverTimestamp() }
+  if (approvedAmount != null) payload.approvedAmount = approvedAmount
+  await updateDoc(doc(db, LOAN_REQUESTS, id), payload)
+}
+
+export async function deleteLoanRequest(id) {
+  await deleteDoc(doc(db, LOAN_REQUESTS, id))
 }
 
 /** Hero Slides - สไลด์หน้าแรก */

@@ -17,10 +17,10 @@ import { useAuth } from '../context/AuthContext'
 import logo from '../assets/logo.png'; // นำเข้าไฟล์โลโก้
 
 const buyHomeLinks = [
-  { to: '/properties', label: 'รวมโครงการทั้งหมด', icon: Home },
-  { to: '/properties?category=buy&&propertySubStatus=มือ 1', label: 'บ้านมือ 1', icon: Sparkles },
-  { to: '/properties?category=buy&propertySubStatus=มือ 2', label: 'บ้านมือ 2', icon: House },
-  { to: '/properties?feature=directInstallment', label: 'บ้านผ่อนตรง', icon: Flame, highlight: true },
+  { to: '/properties?listingType=sale', label: 'รวมโครงการทั้งหมด', icon: Home },
+  { to: '/properties?listingType=sale&propertyCondition=มือ 1', label: 'บ้านมือ 1', icon: Sparkles },
+  { to: '/properties?listingType=sale&propertyCondition=มือ 2', label: 'บ้านมือ 2', icon: House },
+  { to: '/properties?listingType=rent&subListingType=installment_only', label: 'บ้านผ่อนตรง', icon: Flame, highlight: true },
 ]
 
 const serviceLinks = [
@@ -163,7 +163,7 @@ export default function Navbar() {
               </div>
             </div>
 
-            <Link to="/properties?type=rent" className="text-slate-600 hover:text-blue-900 font-medium transition text-sm">
+            <Link to="/properties?listingType=rent&subListingType=rent_only" className="text-slate-600 hover:text-blue-900 font-medium transition text-sm">
               เช่า
             </Link>
 
@@ -298,7 +298,7 @@ export default function Navbar() {
               )}
 
               <Link
-                to="/properties?type=rent"
+                to="/properties?listingType=rent&subListingType=rent_only"
                 onClick={() => setMobileOpen(false)}
                 className="px-4 py-3 rounded-lg text-slate-700 hover:bg-slate-50 font-medium"
               >

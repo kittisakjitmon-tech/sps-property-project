@@ -48,7 +48,7 @@ service cloud.firestore {
       allow delete: if isSuperAdmin();
     }
     
-    // properties: อ่านได้ทุกคน, เขียนได้ตาม role
+    // properties: อ่านได้ทุกคน, เขียนได้เฉพาะ Admin
     match /properties/{id} {
       allow read: if true;
       allow create: if isAuthenticated() && (
@@ -60,6 +60,12 @@ service cloud.firestore {
         (isMember() && resource.data.createdBy == request.auth.uid)
       );
     }
+
+    // loan_requests: ข้อมูลการเงิน (PDPA) - สร้างได้ทุกคน (ฟอร์มส่ง), อ่าน/เขียนได้เฉพาะ Super Admin
+    match /loan_requests/{id} {
+      allow create: if true;
+      allow read, update, delete: if isSuperAdmin();
+    }
     // leads: อ่าน/เขียนได้เฉพาะ Admin และ Member, สร้างได้ทุกคน (ฟอร์มส่งข้อความ)
     match /leads/{id} {
       allow read: if isAdmin() || isMember();
@@ -70,6 +76,11 @@ service cloud.firestore {
     match /viewing_requests/{id} {
       allow read, write: if request.auth != null;
       allow create: if true;
+    }
+    // appointments: นัดหมายเข้าชม - สร้างได้ทุกคน, อ่าน/เขียนได้เฉพาะผู้ที่ login
+    match /appointments/{id} {
+      allow create: if true;
+      allow read, update, delete: if request.auth != null;
     }
     // inquiries: อ่านได้เฉพาะ Admin, สร้างได้ทุกคน (ฟอร์มติดต่อเรา)
     match /inquiries/{id} {

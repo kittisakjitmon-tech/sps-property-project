@@ -14,6 +14,7 @@ import {
   FileText,
   LayoutList,
   Activity,
+  CreditCard,
 } from 'lucide-react'
 
 // Menu items with role requirements
@@ -28,7 +29,8 @@ const allNavItems = [
   { to: '/admin/popular-locations', end: false, label: 'จัดการทำเลยอดฮิต', icon: MapPin, roles: ['super_admin', 'admin'] },
   { to: '/admin/users', end: false, label: 'จัดการสมาชิก', icon: Users, roles: ['super_admin'] },
   { to: '/admin/settings', end: false, label: 'การตั้งค่าระบบ', icon: Settings, roles: ['super_admin'] },
-  { to: '/admin/leads', end: false, label: 'กล่องข้อความ', icon: Inbox, roles: ['super_admin', 'admin', 'member'] },
+  { to: '/admin/leads', end: false, label: 'จัดการนัดหมาย', icon: Inbox, roles: ['super_admin', 'admin', 'member'] },
+  { to: '/admin/loan-requests', end: false, label: 'จัดการสินเชื่อ', icon: CreditCard, roles: ['super_admin'] },
   { to: '/admin/activities', end: false, label: 'บันทึกกิจกรรม', icon: Activity, roles: ['super_admin', 'admin'] },
 ]
 

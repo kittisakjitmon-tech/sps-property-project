@@ -18,11 +18,13 @@ import PopularLocationsAdmin from './admin/PopularLocationsAdmin'
 import PendingProperties from './admin/PendingProperties'
 import UserManagement from './admin/UserManagement'
 import PropertyListPage from './admin/PropertyListPage'
+import AdminLoanRequests from './admin/AdminLoanRequests'
 import MyProperties from './admin/MyProperties'
 import Settings from './admin/Settings'
 import ActivityLogsPage from './admin/ActivityLogsPage'
 import Login from './admin/Login'
 import Contact from './pages/Contact'
+import LoanService from './pages/LoanService'
 import PostProperty from './pages/PostProperty'
 import Favorites from './pages/Favorites'
 import Profile from './pages/Profile'
@@ -56,6 +58,7 @@ export default function App() {
                 <Route path="settings" element={<Settings />} />
                 <Route path="my-properties" element={<MyProperties />} />
                 <Route path="leads" element={<LeadsInbox />} />
+                <Route path="loan-requests" element={<AdminLoanRequests />} />
                 <Route path="activities" element={<ActivityLogsPage />} />
               </Route>
               {/* Public site */}
@@ -64,6 +67,7 @@ export default function App() {
               <Route path="/properties/:id" element={<PropertyDetail />} />
               <Route path="/share/:id" element={<SharePage />} />
               <Route path="/contact" element={<Contact />} />
+              <Route path="/loan-services" element={<LoanService />} />
               <Route path="/post" element={<PostProperty />} />
               <Route path="/favorites" element={<Favorites />} />
               <Route
