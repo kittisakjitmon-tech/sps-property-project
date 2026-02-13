@@ -21,12 +21,22 @@ export default function ProtectedImageContainer({
       className={`protected-image-container relative overflow-hidden ${className}`}
       onContextMenu={handleContextMenu}
     >
+      {/* Image Container - z-0 (lowest) */}
+      <div
+        className="absolute inset-0 z-0 [&_img]:select-none [&_img]:[touch-action:none]"
+        onDragStart={handleDragStart}
+      >
+        {children}
+      </div>
+
+      {/* Protection Layer - z-[1] (middle) */}
       <div
         className="absolute inset-0 z-[1] pointer-events-auto select-none"
         onContextMenu={handleContextMenu}
         aria-hidden
       />
 
+      {/* Watermark Layer - z-[2] (top) */}
       <div className="absolute inset-0 z-[2] pointer-events-none" aria-hidden>
         <div
           className="absolute inset-0 opacity-[0.14]"
@@ -48,13 +58,6 @@ export default function ProtectedImageContainer({
             SPS Property Solution {propertyId ? ` | ${propertyId}` : ''}
           </span>
         </div>
-      </div>
-
-      <div
-        className="absolute inset-0 z-0 [&_img]:select-none [&_img]:[touch-action:none]"
-        onDragStart={handleDragStart}
-      >
-        {children}
       </div>
     </div>
   )

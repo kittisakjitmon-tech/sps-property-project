@@ -159,29 +159,43 @@ export default function Home() {
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4 sm:gap-5">
               {popularLocations.map((loc) => {
                 const displayName = loc.displayName || loc.district || loc.province
+                const imageUrl = loc.imageUrl || loc.image_url || null
                 return (
                   <Link
                     key={loc.id}
                     to={buildLocationPath(loc)}
                     className="group relative aspect-video rounded-2xl overflow-hidden shadow-sm hover:-translate-y-1 hover:shadow-md transition-all duration-300 block"
                   >
-                    {loc.imageUrl ? (
+                    {imageUrl ? (
                       <ProtectedImageContainer className="absolute inset-0">
                         <img
-                          src={loc.imageUrl}
+                          src={imageUrl}
                           alt={displayName}
                           className="w-full h-full object-cover protected-image group-hover:scale-105 transition-transform duration-300"
                           loading="lazy"
                           draggable={false}
+                          onError={(e) => {
+                            // Fallback to placeholder if image fails to load
+                            e.target.style.display = 'none'
+                            const parent = e.target.closest('.group')
+                            if (parent) {
+                              const placeholder = parent.querySelector('.image-placeholder')
+                              if (placeholder) placeholder.style.display = 'flex'
+                            }
+                          }}
                         />
+                        {/* Fallback placeholder (hidden by default) */}
+                        <div className="image-placeholder hidden absolute inset-0 w-full h-full bg-gradient-to-br from-blue-900 to-blue-700 items-center justify-center z-0">
+                          <MapPinned className="h-16 w-16 text-white/50" />
+                        </div>
                       </ProtectedImageContainer>
                     ) : (
                       <div className="w-full h-full bg-gradient-to-br from-blue-900 to-blue-700 flex items-center justify-center">
                         <MapPinned className="h-16 w-16 text-white/50" />
                       </div>
                     )}
-                    <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/20 to-transparent" />
-                    <span className="absolute bottom-4 left-4 right-4 text-white text-xl font-bold drop-shadow-lg">
+                    <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/20 to-transparent z-10" />
+                    <span className="absolute bottom-4 left-4 right-4 text-white text-xl font-bold drop-shadow-lg z-20">
                       {displayName}
                     </span>
                   </Link>
