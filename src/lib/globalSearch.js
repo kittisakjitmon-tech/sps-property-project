@@ -92,6 +92,67 @@ function smartTokenize(query) {
 }
 
 /**
+ * Parse Natural Language Price Query
+ * Detects patterns like 'ไม่เกิน 2 ล้าน', '2-3 ล้าน', 'งบ 1.5 ล้าน'
+ * @param {string} query - Search query string
+ * @returns {{ min: number|null, max: number|null, cleanedQuery: string }}
+ */
+function parsePriceQuery(query) {
+  if (!query || typeof query !== 'string') {
+    return { min: null, max: null, cleanedQuery: (query || '').trim() }
+  }
+
+  let cleanedQuery = query.trim()
+  let min = null
+  let max = null
+
+  const LAAN = 1000000
+  const SAEN = 100000
+
+  function toAmount(numStr, unit) {
+    const num = parseFloat(String(numStr).replace(/,/g, ''))
+    if (isNaN(num)) return null
+    const u = (unit || '').trim().toLowerCase()
+    if (u === 'ล้าน' || u === 'laan') return Math.round(num * LAAN)
+    if (u === 'แสน' || u === 'saen') return Math.round(num * SAEN)
+    return Math.round(num)
+  }
+
+  // Pattern 1: Range "X-Y ล้าน" or "X - Y ล้าน"
+  const rangeRe = /(\d+(?:\.\d+)?)\s*-\s*(\d+(?:\.\d+)?)\s*(ล้าน|แสน)/gi
+  let rangeMatch = rangeRe.exec(cleanedQuery)
+  if (rangeMatch) {
+    min = toAmount(rangeMatch[1], rangeMatch[3])
+    max = toAmount(rangeMatch[2], rangeMatch[3])
+    cleanedQuery = cleanedQuery.replace(rangeMatch[0], ' ')
+  }
+
+  // Pattern 2: Max-only "ไม่เกิน X ล้าน", "ต่ำกว่า X ล้าน", "งบ X ล้าน", "ราคา(ไม่เกิน) X ล้าน"
+  if (max === null) {
+    const maxPatterns = [
+      /(?:ไม่เกิน|ต่ำกว่า)\s*(\d+(?:\.\d+)?)\s*(ล้าน|แสน)/gi,
+      /งบ\s*(\d+(?:\.\d+)?)\s*(ล้าน|แสน)/gi,
+      /ราคา\s*(?:ไม่เกิน|ต่ำกว่า)?\s*(\d+(?:\.\d+)?)\s*(ล้าน|แสน)/gi,
+      /ราคา\s*(\d+(?:\.\d+)?)\s*(ล้าน|แสน)/gi,
+    ]
+    for (const re of maxPatterns) {
+      re.lastIndex = 0
+      const m = re.exec(cleanedQuery)
+      if (m) {
+        max = toAmount(m[1], m[2])
+        cleanedQuery = cleanedQuery.replace(m[0], ' ')
+        break
+      }
+    }
+  }
+
+  // Clean up: collapse spaces, trim
+  cleanedQuery = cleanedQuery.replace(/\s+/g, ' ').trim()
+
+  return { min, max, cleanedQuery }
+}
+
+/**
  * Check if a value matches a query (case-insensitive, partial match)
  */
 function matchesField(value, query) {
@@ -153,15 +214,21 @@ export function filterProperties(properties = [], filters = {}) {
       availability = '',
       type = '',
       location = '',
-      minPrice,
-      maxPrice,
+      minPrice: filterMinPrice,
+      maxPrice: filterMaxPrice,
       bedrooms,
       bathrooms,
       areaMin,
       areaMax,
     } = filters
 
-    const normalizedKeyword = normalizeText(keyword)
+    // Parse Natural Language Price from keyword (e.g. "ทาวน์โฮม ไม่เกิน 2 ล้าน")
+    const { min: parsedMin, max: parsedMax, cleanedQuery } = parsePriceQuery(keyword)
+    const keywordForSearch = cleanedQuery || keyword
+    const minPrice = parsedMin ?? filterMinPrice
+    const maxPrice = parsedMax ?? filterMaxPrice
+
+    const normalizedKeyword = normalizeText(keywordForSearch)
     const normalizedLocation = normalizeText(location)
 
     return properties.filter((property) => {
