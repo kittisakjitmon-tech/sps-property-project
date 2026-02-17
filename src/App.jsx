@@ -28,6 +28,9 @@ import LoanService from './pages/LoanService'
 import PostProperty from './pages/PostProperty'
 import Favorites from './pages/Favorites'
 import Profile from './pages/Profile'
+import Blogs from './pages/Blogs'
+import BlogDetail from './pages/BlogDetail'
+import AdminBlogs from './admin/AdminBlogs'
 
 export default function App() {
   return (
@@ -60,6 +63,7 @@ export default function App() {
                 <Route path="leads" element={<LeadsInbox />} />
                 <Route path="loan-requests" element={<AdminLoanRequests />} />
                 <Route path="activities" element={<ActivityLogsPage />} />
+                <Route path="blogs" element={<AdminBlogs />} />
               </Route>
               {/* Public site */}
               <Route path="/" element={<Home />} />
@@ -70,6 +74,8 @@ export default function App() {
               <Route path="/loan-services" element={<LoanService />} />
               <Route path="/post" element={<PostProperty />} />
               <Route path="/favorites" element={<Favorites />} />
+              <Route path="/blogs" element={<Blogs />} />
+              <Route path="/blogs/:id" element={<BlogDetail />} />
               <Route
                 path="/profile"
                 element={

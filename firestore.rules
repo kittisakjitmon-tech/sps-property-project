@@ -102,6 +102,13 @@ service cloud.firestore {
       allow read: if true;
       allow create, update, delete: if isAdmin();
     }
+    // blogs: อ่านได้ทุกคน (เฉพาะ published), เขียนได้เฉพาะ Admin
+    match /blogs/{id} {
+      // อ่านได้ทุกคนถ้า published: true, หรือ Admin อ่านได้ทั้งหมด
+      allow read: if resource.data.published == true || isAdmin();
+      // สร้าง/แก้ไข/ลบได้เฉพาะ Admin
+      allow create, update, delete: if isAdmin();
+    }
     // pending_properties: สร้างได้ทุกคน (ฟอร์มลงประกาศ), อ่าน/เขียนได้เฉพาะ Admin
     match /pending_properties/{id} {
       allow read: if isAdmin();

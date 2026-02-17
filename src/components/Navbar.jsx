@@ -12,6 +12,7 @@ import {
   Flame,
   CreditCard,
   Megaphone,
+  BookOpen,
 } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
 import logo from '../assets/logo.png'; // นำเข้าไฟล์โลโก้
@@ -167,6 +168,11 @@ export default function Navbar() {
               เช่า
             </Link>
 
+            <Link to="/blogs" className="text-slate-600 hover:text-blue-900 font-medium transition text-sm flex items-center gap-1">
+              <BookOpen className="h-4 w-4" />
+              บทความ
+            </Link>
+
             {/* Service Dropdown */}
             <div
               className="relative"
@@ -298,6 +304,15 @@ export default function Navbar() {
                 className="px-4 py-3 rounded-lg text-slate-700 hover:bg-slate-50 font-medium"
               >
                 เช่า
+              </Link>
+
+              <Link
+                to="/blogs"
+                onClick={() => setMobileOpen(false)}
+                className="px-4 py-3 rounded-lg text-slate-700 hover:bg-slate-50 font-medium flex items-center gap-2"
+              >
+                <BookOpen className="h-4 w-4" />
+                บทความ
               </Link>
 
               <button

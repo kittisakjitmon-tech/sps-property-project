@@ -15,6 +15,7 @@ import {
   LayoutList,
   Activity,
   CreditCard,
+  BookOpen,
 } from 'lucide-react'
 
 // Menu items with role requirements
@@ -27,6 +28,7 @@ const allNavItems = [
   { to: '/admin/hero-slides', end: false, label: 'จัดการสไลด์หน้าแรก', icon: Images, roles: ['super_admin', 'admin'] },
   { to: '/admin/homepage-sections', end: false, label: 'จัดการหน้าแรก', icon: LayoutList, roles: ['super_admin', 'admin'] },
   { to: '/admin/popular-locations', end: false, label: 'จัดการทำเลยอดฮิต', icon: MapPin, roles: ['super_admin', 'admin'] },
+  { to: '/admin/blogs', end: false, label: 'จัดการบทความ', icon: BookOpen, roles: ['super_admin', 'admin'] },
   { to: '/admin/users', end: false, label: 'จัดการสมาชิก', icon: Users, roles: ['super_admin'] },
   { to: '/admin/settings', end: false, label: 'การตั้งค่าระบบ', icon: Settings, roles: ['super_admin'] },
   { to: '/admin/leads', end: false, label: 'จัดการนัดหมาย', icon: Inbox, roles: ['super_admin', 'admin', 'member'] },

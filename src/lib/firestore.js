@@ -12,6 +12,8 @@ import {
   query,
   where,
   orderBy,
+  limit,
+  startAfter,
 } from 'firebase/firestore'
 import { ref, uploadBytes, getDownloadURL, deleteObject } from 'firebase/storage'
 import { writeBatch } from 'firebase/firestore'
@@ -779,4 +781,133 @@ export function filterPropertiesByCriteria(properties, criteria) {
     })
   }
   return list
+}
+
+// ==================== BLOG FUNCTIONS ====================
+const BLOGS = 'blogs'
+
+/**
+ * Get all blogs snapshot (for admin)
+ */
+export function getBlogsSnapshot(callback) {
+  const q = query(collection(db, BLOGS), orderBy('createdAt', 'desc'))
+  return onSnapshot(q, (snapshot) => {
+    const blogs = snapshot.docs.map((doc) => ({
+      id: doc.id,
+      ...doc.data(),
+    }))
+    callback(blogs)
+  })
+}
+
+/**
+ * Get published blogs with pagination
+ * @param {number} pageSize - Number of blogs per page
+ * @param {object} lastDoc - Last document from previous page (for pagination)
+ * @returns {Promise<{blogs: Array, lastDoc: object|null, hasMore: boolean}>}
+ */
+export async function getPublishedBlogs(pageSize = 9, lastDoc = null) {
+  let q = query(
+    collection(db, BLOGS),
+    where('published', '==', true),
+    orderBy('createdAt', 'desc'),
+    limit(pageSize)
+  )
+
+  if (lastDoc) {
+    q = query(
+      collection(db, BLOGS),
+      where('published', '==', true),
+      orderBy('createdAt', 'desc'),
+      startAfter(lastDoc),
+      limit(pageSize)
+    )
+  }
+
+  const snapshot = await getDocs(q)
+  const blogs = snapshot.docs.map((doc) => ({
+    id: doc.id,
+    ...doc.data(),
+  }))
+
+  const lastVisible = snapshot.docs[snapshot.docs.length - 1] || null
+  const hasMore = snapshot.docs.length === pageSize
+
+  return {
+    blogs,
+    lastDoc: lastVisible,
+    hasMore,
+  }
+}
+
+/**
+ * Get featured blogs (max 3)
+ */
+export async function getFeaturedBlogs() {
+  const q = query(
+    collection(db, BLOGS),
+    where('published', '==', true),
+    where('isFeatured', '==', true),
+    orderBy('createdAt', 'desc'),
+    limit(3)
+  )
+  const snapshot = await getDocs(q)
+  return snapshot.docs.map((doc) => ({
+    id: doc.id,
+    ...doc.data(),
+  }))
+}
+
+/**
+ * Get blog by ID
+ */
+export async function getBlogByIdOnce(id) {
+  const snap = await getDoc(doc(db, BLOGS, id))
+  if (!snap.exists()) return null
+  return { id: snap.id, ...snap.data() }
+}
+
+/**
+ * Create a new blog
+ */
+export async function createBlog(data) {
+  const payload = {
+    title: data.title || '',
+    content: data.content || '',
+    youtubeUrl: data.youtubeUrl || '',
+    images: data.images || [],
+    published: data.published ?? false,
+    isFeatured: data.isFeatured ?? false,
+    createdAt: serverTimestamp(),
+    updatedAt: serverTimestamp(),
+  }
+  const ref = await addDoc(collection(db, BLOGS), payload)
+  return ref.id
+}
+
+/**
+ * Update blog by ID
+ */
+export async function updateBlogById(id, data) {
+  await updateDoc(doc(db, BLOGS, id), {
+    ...data,
+    updatedAt: serverTimestamp(),
+  })
+}
+
+/**
+ * Delete blog by ID
+ */
+export async function deleteBlogById(id) {
+  await deleteDoc(doc(db, BLOGS, id))
+}
+
+/**
+ * Upload blog image to Firebase Storage
+ */
+export async function uploadBlogImage(file, onProgress) {
+  const storageRef = ref(storage, `blogs/${Date.now()}_${file.name}`)
+  await uploadBytes(storageRef, file)
+  const url = await getDownloadURL(storageRef)
+  return url
 }

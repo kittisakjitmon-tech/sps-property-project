@@ -4,7 +4,7 @@ import { CheckCircle2, Building2, Lightbulb, Handshake, TrendingUp, MapPin, MapP
 import PageLayout from '../components/PageLayout'
 import HomeSearch from '../components/HomeSearch'
 import DynamicPropertySection from '../components/DynamicPropertySection'
-import { getPropertiesSnapshot, getPopularLocationsSnapshot, getHomepageSectionsSnapshot, filterPropertiesByCriteria } from '../lib/firestore'
+import { getPropertiesSnapshot, getPopularLocationsSnapshot, getHomepageSectionsSnapshot, filterPropertiesByCriteria, getFeaturedBlogs } from '../lib/firestore'
 
 /** การ์ดทำเลยอดฮิต - placeholder น้ำเงินเป็นพื้นหลังเสมอ รูปทับด้านบนเมื่อโหลดได้ */
 const PLACEHOLDER_BG = 'bg-gradient-to-br from-blue-600 to-blue-500'
@@ -103,6 +103,7 @@ export default function Home() {
   const [properties, setProperties] = useState([])
   const [popularLocations, setPopularLocations] = useState([])
   const [homepageSections, setHomepageSections] = useState([])
+  const [featuredBlogs, setFeaturedBlogs] = useState([])
 
   useEffect(() => {
     const unsub = getPropertiesSnapshot(setProperties)
@@ -123,6 +124,18 @@ export default function Home() {
       setHomepageSections(active)
     })
     return () => unsub()
+  }, [])
+
+  useEffect(() => {
+    const loadFeaturedBlogs = async () => {
+      try {
+        const blogs = await getFeaturedBlogs()
+        setFeaturedBlogs(blogs)
+      } catch (error) {
+        console.error('Error loading featured blogs:', error)
+      }
+    }
+    loadFeaturedBlogs()
   }, [])
 
   // Resolve properties for each section (จำกัดสูงสุด 5 รายการต่อ section)
@@ -195,6 +208,97 @@ export default function Home() {
       searchAfterHeroExtra={true}
       fullHeight={true}
     >
+      {/* Featured Blogs Section */}
+      {featuredBlogs.length > 0 && (
+        <section className="py-10 sm:py-12 bg-white">
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div className="flex items-center justify-between mb-6">
+              <h2 className="text-2xl sm:text-3xl font-bold text-slate-900">บทความน่าสนใจ</h2>
+              <Link
+                to="/blogs"
+                className="text-blue-900 font-medium hover:underline flex items-center gap-1"
+              >
+                ดูทั้งหมด
+                <span>→</span>
+              </Link>
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              {featuredBlogs.map((blog) => {
+                const coverImage = blog.images?.[0]
+                const hasVideo = !!blog.youtubeUrl
+                const formatDate = (timestamp) => {
+                  if (!timestamp) return ''
+                  const date = timestamp.toDate ? timestamp.toDate() : new Date(timestamp)
+                  return date.toLocaleDateString('th-TH', {
+                    year: 'numeric',
+                    month: 'short',
+                    day: 'numeric',
+                  })
+                }
+                const extractYouTubeId = (url) => {
+                  if (!url) return null
+                  const regExp = /^.*(youtu.be\/|v\/|u\/\w\/|embed\/|watch\?v=|&v=)([^#&?]*).*/
+                  const match = url.match(regExp)
+                  return match && match[2].length === 11 ? match[2] : null
+                }
+                const getYouTubeThumbnail = (url) => {
+                  const videoId = extractYouTubeId(url)
+                  if (!videoId) return null
+                  return `https://img.youtube.com/vi/${videoId}/maxresdefault.jpg`
+                }
+                const thumbnail = coverImage || getYouTubeThumbnail(blog.youtubeUrl)
+
+                return (
+                  <Link
+                    key={blog.id}
+                    to={`/blogs/${blog.id}`}
+                    className="group bg-white rounded-lg shadow-sm border border-slate-200 overflow-hidden hover:shadow-md transition-all duration-300"
+                  >
+                    <div className="relative aspect-video bg-slate-200 overflow-hidden">
+                      {thumbnail ? (
+                        <>
+                          <img
+                            src={thumbnail}
+                            alt={blog.title}
+                            className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                          />
+                          {hasVideo && (
+                            <div className="absolute inset-0 flex items-center justify-center bg-black/30">
+                              <div className="bg-white/90 rounded-full p-3">
+                                <svg className="h-6 w-6 text-blue-900" fill="currentColor" viewBox="0 0 24 24">
+                                  <path d="M8 5v14l11-7z" />
+                                </svg>
+                              </div>
+                            </div>
+                          )}
+                        </>
+                      ) : (
+                        <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-blue-100 to-blue-200">
+                          <span className="text-blue-600 text-sm font-medium">ไม่มีรูปภาพ</span>
+                        </div>
+                      )}
+                    </div>
+                    <div className="p-5">
+                      <h3 className="text-lg font-bold text-slate-900 mb-2 line-clamp-2 group-hover:text-blue-900 transition">
+                        {blog.title}
+                      </h3>
+                      <p className="text-sm text-slate-600 mb-4 line-clamp-2">
+                        {blog.content?.substring(0, 100)}...
+                      </p>
+                      <div className="flex items-center gap-2 text-xs text-slate-500">
+                        <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                        </svg>
+                        <span>{formatDate(blog.createdAt)}</span>
+                      </div>
+                    </div>
+                  </Link>
+                )
+              })}
+            </div>
+          </div>
+        </section>
+      )}
 
       {/* Dynamic Sections from homepage_sections, or fallback to Featured */}
       {hasSections ? (
