@@ -172,6 +172,7 @@ export default function Properties() {
       const statusParam = searchParams.get('status') ?? ''
       const propertySubStatus = normalizeSubStatusFromURL(statusParam)
       const feature = searchParams.get('feature') ?? ''
+      const tag = searchParams.get('tag') ?? ''
       
       if (updateFilters) {
         updateFilters({ 
@@ -189,6 +190,7 @@ export default function Properties() {
           areaMax,
           propertySubStatus,
           feature,
+          tag,
           isRental: isRentalFilter,
         })
       }
@@ -218,7 +220,7 @@ export default function Properties() {
   }, [searchParams, navigate, typeParam])
 
   const handleSearch = () => {
-    updateURL({
+    const updates = {
       location: filters.location,
       propertyType: filters.propertyType,
       priceMin: filters.priceMin,
@@ -229,7 +231,9 @@ export default function Properties() {
       areaMax: filters.areaMax,
       q: debouncedKeyword,
       status: filters.propertySubStatus,
-    })
+    }
+    if (filters.tag) updates.tag = filters.tag
+    updateURL(updates)
   }
 
   // State Update Only: onChange ทำหน้าที่เพียงแค่อัปเดตค่า State
@@ -285,10 +289,11 @@ export default function Properties() {
   const handleClearFilters = () => {
     clearFilters()
     setSearchQuery('')
-    setDebouncedKeyword('') // Clear debouncedKeyword เพื่อล้างผลการค้นหา
+    setDebouncedKeyword('')
     const params = new URLSearchParams()
     params.delete('q')
-    params.delete('search') // Also remove 'search' parameter from tag clicks
+    params.delete('search')
+    params.delete('tag')
     if (typeParam) params.set('type', typeParam)
     navigate(`/properties?${params.toString()}`, { replace: true })
   }
@@ -323,6 +328,10 @@ export default function Properties() {
       case 'location':
         updateFilters({ location: '' })
         params.delete('location')
+        break
+      case 'tag':
+        updateFilters({ tag: '' })
+        params.delete('tag')
         break
       case 'price':
         updateFilters({ priceMin: '', priceMax: '' })
@@ -363,6 +372,7 @@ export default function Properties() {
       // Build filter object from URL params and state
       const searchFilters = {
         keyword: debouncedKeyword || '',
+        tag: filters?.tag || searchParams.get('tag') || '',
         location: filters?.location || searchParams.get('location') || '',
         type: filters?.propertyType || searchParams.get('type') || searchParams.get('propertyType') || '',
         listingType: filters?.listingType || searchParams.get('listingType') || '',
@@ -494,18 +504,19 @@ export default function Properties() {
             />
 
             <div className="flex-1">
-              {/* Active Search Criteria Bar 
+              {/* Active Search Criteria Bar */}
               <ActiveSearchCriteriaBar
                 keyword={debouncedKeyword}
                 filters={{
                   ...filters,
+                  tag: searchParams.get('tag') || filters.tag || '',
                   isRental: isRentalFilter !== null ? isRentalFilter : filters.isRental,
                   feature: searchParams.get('feature') || filters.feature || '',
                 }}
                 resultCount={safeFiltered.length}
                 onRemoveFilter={handleRemoveFilter}
                 onClearAll={handleClearFilters}
-              />*/}
+              />
 
         {/* Properties Map */}
         {safeFiltered.length > 0 && (

@@ -208,8 +208,8 @@ function PropertyCard({ property, featuredLabel = 'แนะนำ', searchQuery
         ? property.images[0] 
         : DEFAULT_IMAGE)
     
-    const loc = property.location || {}
-    const badges = getBadges(property)
+  const loc = property.location || {}
+  const badges = getBadges(property)
     
     // Logic การแสดง Badge ตามประเภททรัพย์ (ใช้โครงสร้างข้อมูลใหม่)
     const listingType = property.listingType || (property.isRental ? 'rent' : 'sale')
@@ -221,7 +221,7 @@ function PropertyCard({ property, featuredLabel = 'แนะนำ', searchQuery
     
     // ตรวจสอบว่าเป็น rental หรือไม่ (สำหรับการแสดงราคา)
     const isRental = listingType === 'rent' || property.isRental === true
-    const [favorited, setFavorited] = useState(false)
+  const [favorited, setFavorited] = useState(false)
 
   useEffect(() => {
     setFavorited(isFavorite(property.id))
@@ -290,18 +290,18 @@ function PropertyCard({ property, featuredLabel = 'แนะนำ', searchQuery
           {/* Other Badges (Hot Deal, ผ่อนตรง) */}
           <div className="flex flex-wrap gap-1.5">
             {badges.map(({ label, key }) => (
-              <span
-                key={key}
+            <span
+              key={key}
                 className={`px-2 py-0.5 rounded text-xs font-semibold hover:scale-105 transition-transform ${
-                  key === 'featured' || key === 'hotDeal'
-                    ? 'bg-yellow-400 text-blue-900'
-                    : 'bg-blue-900 text-white'
-                }`}
-              >
-                {key === 'featured' ? featuredLabel : label}
-              </span>
-            ))}
-          </div>
+                key === 'featured' || key === 'hotDeal'
+                  ? 'bg-yellow-400 text-blue-900'
+                  : 'bg-blue-900 text-white'
+              }`}
+            >
+              {key === 'featured' ? featuredLabel : label}
+            </span>
+          ))}
+        </div>
         </div>
         {/* Price - ขยับขึ้นเพื่อไม่ให้จมกับลายน้ำ */}
         <span className="absolute bottom-9 left-3 text-white font-bold text-lg drop-shadow z-20">

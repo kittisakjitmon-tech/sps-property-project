@@ -14,6 +14,7 @@ export function SearchProvider({ children }) {
     areaMax: '',
     propertySubStatus: '', // มือ 1, มือ 2
     isRental: null, // null = ทั้งหมด, false = ซื้อ, true = เช่า
+    tag: '', // จาก homepage section (targetTag)
   })
 
   const updateFilters = useCallback((next) => {
@@ -32,6 +33,7 @@ export function SearchProvider({ children }) {
       areaMax: '',
       propertySubStatus: '',
       isRental: null,
+      tag: '',
     })
   }, [])
 

@@ -878,38 +878,14 @@ export default function PropertyDetail() {
               <div className="lg:sticky lg:top-24 space-y-6">
               {/* Sticky contact - ธีม Blue 30%, White 60%, Yellow 10% */}
               <div className="bg-white rounded-xl border border-blue-100 p-6 shadow-md">
-                <h3 className="font-bold text-blue-900 mb-4">ติดต่อตัวแทน</h3>
-                <p className="text-slate-700 font-medium">{agent.name || '-'}</p>
-                <div className="mt-4 flex flex-col gap-2">
-                  {agent.lineId && (
-                    <a
-                      href={`https://line.me/ti/p/~${agent.lineId}`}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="inline-flex items-center justify-center gap-2 px-4 py-3 rounded-lg bg-green-500 text-white font-medium hover:bg-green-600 transition"
-                    >
-                      <MessageCircle className="h-5 w-5" />
-                      Line ID: {agent.lineId}
-                    </a>
-                  )}
-                  {agent.phone && (
-                    <a
-                      href={`tel:${agent.phone}`}
-                      className="inline-flex items-center justify-center gap-2 px-4 py-3 rounded-lg bg-yellow-400 text-yellow-900 font-semibold hover:bg-yellow-500 transition"
-                    >
-                      <Phone className="h-5 w-5" />
-                      โทรเลย
-                    </a>
-                  )}
-                </div>
-                <div className="mt-4 pt-4 border-t border-slate-100">
+                <div className="pt-4 border-slate-100">
                   <p className="text-sm font-medium text-slate-700 mb-2">จองเยี่ยมชม (ส่งข้อความ)</p>
                   <LeadForm
                     propertyId={property.propertyId || property.id}
                     propertyTitle={property.title}
                     propertyPrice={property.price}
                     isRental={property.isRental}
-                    onSuccess={() => {
+                    onSuccess={() => {image.png
                       setToastMessage('ส่งข้อมูลสำเร็จ เจ้าหน้าที่จะติดต่อกลับ')
                       setShowToast(true)
                       setTimeout(() => setShowToast(false), 3000)

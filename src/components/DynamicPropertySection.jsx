@@ -2,8 +2,14 @@ import { Link } from 'react-router-dom'
 import { ChevronRight } from 'lucide-react'
 import PropertySlider from './PropertySlider'
 
-export default function DynamicPropertySection({ title, subtitle, properties }) {
+export default function DynamicPropertySection({ title, subtitle, properties, targetTag }) {
   if (!properties || properties.length === 0) return null
+
+  // ใช้ targetTag ถ้ามี ถ้าไม่มีใช้ title (ชื่อหัวข้อ)
+  const tagForFilter = (targetTag && targetTag.trim()) || title || ''
+  const viewAllHref = tagForFilter
+    ? `/properties?tag=${encodeURIComponent(tagForFilter)}`
+    : '/properties'
 
   return (
     <section className="py-6 sm:py-8 bg-slate-50">
@@ -15,7 +21,7 @@ export default function DynamicPropertySection({ title, subtitle, properties }) 
             {subtitle && <p className="text-slate-600 text-sm mt-0.5">{subtitle}</p>}
           </div>
           <Link
-            to="/properties"
+            to={viewAllHref}
             className="inline-flex items-center gap-1 text-blue-900 font-medium hover:underline focus:outline-none focus:underline group shrink-0"
           >
             ดูทั้งหมด

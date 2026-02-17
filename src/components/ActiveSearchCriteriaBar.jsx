@@ -24,7 +24,17 @@ export default function ActiveSearchCriteriaBar({
     })
   }
 
-  // 2. ประเภท (ซื้อ/เช่า)
+  // 2. Tag (จาก homepage section)
+  if (filters.tag && filters.tag.trim()) {
+    activeFilters.push({
+      type: 'tag',
+      label: `🏷️ ${filters.tag}`,
+      value: filters.tag,
+      highlight: true,
+    })
+  }
+
+  // 3. ประเภท (ซื้อ/เช่า)
   if (filters.isRental === true) {
     activeFilters.push({
       type: 'isRental',
@@ -39,7 +49,7 @@ export default function ActiveSearchCriteriaBar({
     })
   }
 
-  // 3. สถานะ (มือ 1/มือ 2)
+  // 4. สถานะ (มือ 1/มือ 2)
   if (filters.propertySubStatus) {
     activeFilters.push({
       type: 'propertySubStatus',
@@ -48,7 +58,7 @@ export default function ActiveSearchCriteriaBar({
     })
   }
 
-  // 4. คุณสมบัติพิเศษ (ผ่อนตรง)
+  // 5. คุณสมบัติพิเศษ (ผ่อนตรง)
   if (filters.feature === 'directInstallment') {
     activeFilters.push({
       type: 'feature',
@@ -58,7 +68,7 @@ export default function ActiveSearchCriteriaBar({
     })
   }
 
-  // 5. ประเภททรัพย์สิน
+  // 6. ประเภททรัพย์สิน
   if (filters.propertyType) {
     activeFilters.push({
       type: 'propertyType',
@@ -67,7 +77,7 @@ export default function ActiveSearchCriteriaBar({
     })
   }
 
-  // 6. ทำเล
+  // 7. ทำเล
   if (filters.location) {
     activeFilters.push({
       type: 'location',
@@ -76,7 +86,7 @@ export default function ActiveSearchCriteriaBar({
     })
   }
 
-  // 7. ราคา
+  // 8. ราคา
   if (filters.priceMin || filters.priceMax) {
     const formatPrice = (price) => {
       if (!price) return ''

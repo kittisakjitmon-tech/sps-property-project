@@ -204,6 +204,7 @@ export default function Home() {
             title={section.title}
             subtitle={section.subtitle}
             properties={sectionPropertiesMap[section.id] || []}
+            targetTag={(section.targetTag && section.targetTag.trim()) || section.title || ''}
           />
         ))
       ) : featured.length > 0 ? (

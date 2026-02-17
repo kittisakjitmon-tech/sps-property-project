@@ -208,6 +208,7 @@ export function filterProperties(properties = [], filters = {}) {
 
     const {
       keyword = '',
+      tag = '',
       listingType = '',
       subListingType = '',
       propertyCondition = '',
@@ -234,6 +235,14 @@ export function filterProperties(properties = [], filters = {}) {
     return properties.filter((property) => {
       try {
         if (!property || typeof property !== 'object') return false
+
+        // 0. Tag Filter (exact match in customTags/tags)
+        if (tag && typeof tag === 'string' && tag.trim()) {
+          const propTags = property.customTags || property.tags || []
+          const tagVal = tag.trim()
+          const hasTag = Array.isArray(propTags) && propTags.some((t) => String(t).trim() === tagVal)
+          if (!hasTag) return false
+        }
 
         // 1. Keyword Search (Multi-word AND Logic with Smart Tokenization)
         if (normalizedKeyword) {

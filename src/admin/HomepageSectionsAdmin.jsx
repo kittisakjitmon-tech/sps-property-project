@@ -18,6 +18,8 @@ import {
   batchUpdateHomepageSectionOrders,
   getPropertiesSnapshot,
   filterPropertiesByCriteria,
+  addTagToProperty,
+  removeTagFromProperty,
 } from '../lib/firestore'
 
 const CATEGORIES = [
@@ -230,6 +232,7 @@ export default function HomepageSectionsAdmin() {
   const [form, setForm] = useState({
     title: '',
     subtitle: '',
+    targetTag: '',
     type: 'manual',
     propertyIds: [],
     criteria: {},
@@ -286,6 +289,7 @@ export default function HomepageSectionsAdmin() {
     setForm({
       title: '',
       subtitle: '',
+      targetTag: '',
       type: 'manual',
       propertyIds: [],
       criteria: {},
@@ -299,6 +303,7 @@ export default function HomepageSectionsAdmin() {
     setForm({
       title: section.title || '',
       subtitle: section.subtitle || '',
+      targetTag: section.targetTag || '',
       type: section.type || 'manual',
       propertyIds: section.propertyIds || [],
       criteria: section.criteria || {},
@@ -317,28 +322,91 @@ export default function HomepageSectionsAdmin() {
       setErrorMessage('กรุณาเลือกทรัพย์อย่างน้อย 1 รายการ')
       return
     }
+    const targetTag = (form.targetTag || form.title || '').trim() // ใช้ title เป็น fallback
+    const sectionTitle = form.title.trim() // ชื่อหัวข้อที่จะใช้เป็น tag
+    const payload = {
+      title: sectionTitle,
+      subtitle: form.subtitle.trim(),
+      targetTag: targetTag || null,
+      type: form.type,
+      propertyIds: form.type === 'manual' ? form.propertyIds : [],
+      criteria: form.type === 'query' ? form.criteria : {},
+    }
     try {
       if (editingSection) {
+        // Sync tags: compare old vs new propertyIds (manual type) - ใช้ชื่อหัวข้อเป็น tag
+        if (form.type === 'manual' && sectionTitle) {
+          const oldIds = editingSection.propertyIds || []
+          const newIds = form.propertyIds || []
+          const addedIds = newIds.filter((id) => !oldIds.includes(id))
+          const removedIds = oldIds.filter((id) => !newIds.includes(id))
+          const tagErrors = []
+          
+          // เพิ่ม tag (ชื่อหัวข้อ) ให้ทรัพย์ที่ถูกเพิ่ม
+          for (const id of addedIds) {
+            try {
+              await addTagToProperty(id, sectionTitle)
+            } catch (err) {
+              console.error('addTagToProperty failed:', id, err)
+              tagErrors.push(`เพิ่ม tag ให้ ${id}: ${err?.message || err}`)
+            }
+          }
+          
+          // ลบ tag (ชื่อหัวข้อเก่า) ออกจากทรัพย์ที่ถูกเอาออก
+          // ถ้าชื่อหัวข้อเปลี่ยน ให้ลบชื่อเก่าออกด้วย
+          const oldTitle = (editingSection.title || '').trim()
+          for (const id of removedIds) {
+            try {
+              await removeTagFromProperty(id, oldTitle)
+            } catch (err) {
+              console.error('removeTagFromProperty failed:', id, err)
+              tagErrors.push(`ลบ tag จาก ${id}: ${err?.message || err}`)
+            }
+          }
+          
+          // ถ้าชื่อหัวข้อเปลี่ยน ให้อัปเดต tag ในทรัพย์ที่ยังอยู่ใน section
+          if (oldTitle && oldTitle !== sectionTitle && newIds.length > 0) {
+            for (const id of newIds) {
+              try {
+                // ลบชื่อเก่า
+                await removeTagFromProperty(id, oldTitle)
+                // เพิ่มชื่อใหม่
+                await addTagToProperty(id, sectionTitle)
+              } catch (err) {
+                console.error('updateTag failed:', id, err)
+                tagErrors.push(`อัปเดต tag ให้ ${id}: ${err?.message || err}`)
+              }
+            }
+          }
+          
+          if (tagErrors.length > 0) {
+            setErrorMessage('Sync tag ไม่สมบูรณ์: ' + tagErrors.join('; '))
+          }
+        }
         await updateHomepageSectionById(editingSection.id, {
-          title: form.title.trim(),
-          subtitle: form.subtitle.trim(),
-          type: form.type,
-          propertyIds: form.type === 'manual' ? form.propertyIds : [],
-          criteria: form.type === 'query' ? form.criteria : {},
+          ...payload,
           isActive: editingSection.isActive ?? true,
         })
         setSuccessMessage('อัปเดตหัวข้อสำเร็จ')
       } else {
+        // Create: add tag (ชื่อหัวข้อ) to all selected properties (manual type)
+        if (form.type === 'manual' && sectionTitle) {
+          const newIds = form.propertyIds || []
+          const tagErrors = []
+          for (const id of newIds) {
+            try {
+              await addTagToProperty(id, sectionTitle)
+            } catch (err) {
+              console.error('addTagToProperty failed:', id, err)
+              tagErrors.push(`เพิ่ม tag ให้ ${id}: ${err?.message || err}`)
+            }
+          }
+          if (tagErrors.length > 0) {
+            setErrorMessage('Sync tag ไม่สมบูรณ์: ' + tagErrors.join('; '))
+          }
+        }
         const maxOrder = sections.length > 0 ? Math.max(...sections.map((s) => s.order ?? 0)) + 1 : 0
-        await createHomepageSection({
-          title: form.title.trim(),
-          subtitle: form.subtitle.trim(),
-          type: form.type,
-          propertyIds: form.type === 'manual' ? form.propertyIds : [],
-          criteria: form.type === 'query' ? form.criteria : {},
-          order: maxOrder,
-          isActive: true,
-        })
+        await createHomepageSection({ ...payload, order: maxOrder, isActive: true })
         setSuccessMessage('เพิ่มหัวข้อสำเร็จ')
       }
       resetForm()
@@ -352,6 +420,24 @@ export default function HomepageSectionsAdmin() {
     setDeletingId(id)
     setErrorMessage(null)
     try {
+      const section = sections.find((s) => s.id === id)
+      // ลบ tag (ชื่อหัวข้อ) ออกจากทรัพย์ทั้งหมดใน section นี้ (ถ้าเป็น manual type)
+      if (section && section.type === 'manual' && section.title) {
+        const sectionTitle = (section.title || '').trim()
+        const propertyIds = section.propertyIds || []
+        const tagErrors = []
+        for (const propertyId of propertyIds) {
+          try {
+            await removeTagFromProperty(propertyId, sectionTitle)
+          } catch (err) {
+            console.error('removeTagFromProperty failed:', propertyId, err)
+            tagErrors.push(`ลบ tag จาก ${propertyId}: ${err?.message || err}`)
+          }
+        }
+        if (tagErrors.length > 0) {
+          setErrorMessage('ลบหัวข้อแล้ว แต่ sync tag ไม่สมบูรณ์: ' + tagErrors.join('; '))
+        }
+      }
       await deleteHomepageSectionById(id)
       setSuccessMessage('ลบหัวข้อสำเร็จ')
     } catch (e) {
@@ -457,10 +543,13 @@ export default function HomepageSectionsAdmin() {
                     type="text"
                     value={form.title}
                     onChange={(e) => setForm((f) => ({ ...f, title: e.target.value }))}
-                    placeholder="เช่น บ้านราคาดี ต่ำกว่า 2 ล้าน"
+                    placeholder="เช่น ผ่อนตรงเจ้าของ ไม่เช็คเครดิตบูโร"
                     className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-900/20"
                     required
                   />
+                  <p className="text-xs text-slate-500 mt-1">
+                    <strong>หมายเหตุ:</strong> ชื่อหัวข้อนี้จะถูกใช้เป็น <strong>Tag</strong> อัตโนมัติสำหรับทรัพย์ที่เลือกในหัวข้อนี้
+                  </p>
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-slate-700 mb-1">คำโปรย</label>
@@ -471,6 +560,19 @@ export default function HomepageSectionsAdmin() {
                     placeholder="คำอธิบายสั้นๆ"
                     className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-900/20"
                   />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-1">Tag สำหรับ Filter (ปุ่มดูทั้งหมด) - ไม่บังคับ</label>
+                  <input
+                    type="text"
+                    value={form.targetTag}
+                    onChange={(e) => setForm((f) => ({ ...f, targetTag: e.target.value }))}
+                    placeholder="ถ้าไม่กรอกจะใช้ชื่อหัวข้อแทน"
+                    className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-900/20"
+                  />
+                  <p className="text-xs text-slate-500 mt-1">
+                    Tag สำหรับปุ่ม &quot;ดูทั้งหมด&quot; (ถ้าไม่กรอกจะใช้ชื่อหัวข้อแทน)
+                  </p>
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-slate-700 mb-2">ประเภทการดึงข้อมูล</label>
@@ -508,6 +610,12 @@ export default function HomepageSectionsAdmin() {
                       selectedIds={form.propertyIds}
                       onChange={(ids) => setForm((f) => ({ ...f, propertyIds: ids }))}
                     />
+                    <p className="text-xs text-slate-500 mt-2">
+                      <strong>💡 สิ่งที่จะเกิดขึ้นเมื่อบันทึก:</strong><br />
+                      • ทรัพย์ที่ถูกเลือก → จะเพิ่ม <strong>ชื่อหัวข้อ</strong> เข้าไปใน customTags อัตโนมัติ<br />
+                      • ทรัพย์ที่ถูกติ๊กออก → จะลบ <strong>ชื่อหัวข้อ</strong> ออกจาก customTags อัตโนมัติ<br />
+                      • เมื่อลบหัวข้อ → จะลบ <strong>ชื่อหัวข้อ</strong> ออกจาก customTags ของทรัพย์ทั้งหมดในหัวข้อนี้
+                    </p>
                   </div>
                 )}
 

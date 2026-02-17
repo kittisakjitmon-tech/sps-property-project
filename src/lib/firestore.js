@@ -129,6 +129,46 @@ export async function updatePropertyById(id, data) {
   })
 }
 
+/**
+ * Add tag to property's customTags and tags (for homepage section sync)
+ * Updates both fields for compatibility with filterPropertiesByCriteria (tags) and filterProperties (customTags)
+ */
+export async function addTagToProperty(propertyId, tag) {
+  if (!propertyId || !tag || typeof tag !== 'string' || !tag.trim()) return
+  const tagVal = tag.trim()
+  const snap = await getDoc(doc(db, PROPERTIES, propertyId))
+  if (!snap.exists()) return
+  const current = snap.data()
+  const existing = Array.isArray(current.customTags) ? current.customTags : Array.isArray(current.tags) ? current.tags : []
+  const tags = [...existing]
+  if (tags.some((t) => String(t).trim() === tagVal)) return
+  tags.push(tagVal)
+  await updateDoc(doc(db, PROPERTIES, propertyId), {
+    customTags: tags,
+    tags: tags,
+    updatedAt: serverTimestamp(),
+  })
+}
+
+/**
+ * Remove tag from property's customTags and tags (for homepage section sync)
+ */
+export async function removeTagFromProperty(propertyId, tag) {
+  if (!propertyId || !tag || typeof tag !== 'string' || !tag.trim()) return
+  const tagVal = tag.trim()
+  const snap = await getDoc(doc(db, PROPERTIES, propertyId))
+  if (!snap.exists()) return
+  const current = snap.data()
+  const existing = Array.isArray(current.customTags) ? current.customTags : Array.isArray(current.tags) ? current.tags : []
+  const filtered = existing.filter((t) => String(t).trim() !== tagVal)
+  if (filtered.length === existing.length) return
+  await updateDoc(doc(db, PROPERTIES, propertyId), {
+    customTags: filtered,
+    tags: filtered,
+    updatedAt: serverTimestamp(),
+  })
+}
+
 export async function deletePropertyById(id) {
   await deleteDoc(doc(db, PROPERTIES, id))
 }
@@ -734,7 +774,7 @@ export function filterPropertiesByCriteria(properties, criteria) {
   }
   if (tags && Array.isArray(tags) && tags.length > 0) {
     list = list.filter((p) => {
-      const pt = p?.tags || []
+      const pt = p?.customTags || p?.tags || []
       return tags.some((t) => pt.includes(t))
     })
   }
