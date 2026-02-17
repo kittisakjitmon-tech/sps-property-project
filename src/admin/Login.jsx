@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useNavigate, useLocation } from 'react-router-dom'
-import { useAuth } from '../context/AuthContext'
+import { useAdminAuth } from '../context/AdminAuthContext'
 import { LogIn } from 'lucide-react'
 
 export default function Login() {
@@ -8,7 +8,7 @@ export default function Login() {
   const [password, setPassword] = useState('')
   const [error, setError] = useState('')
   const [submitting, setSubmitting] = useState(false)
-  const { login } = useAuth()
+  const { login } = useAdminAuth()
   const navigate = useNavigate()
   const location = useLocation()
   const from = location.state?.from?.pathname ?? '/admin'

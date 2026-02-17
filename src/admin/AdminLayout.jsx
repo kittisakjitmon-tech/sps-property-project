@@ -1,5 +1,5 @@
 import { NavLink, Outlet, useNavigate } from 'react-router-dom'
-import { useAuth } from '../context/AuthContext'
+import { useAdminAuth } from '../context/AdminAuthContext'
 import {
   LayoutDashboard,
   Home,
@@ -37,7 +37,7 @@ const allNavItems = [
 ]
 
 export default function AdminLayout() {
-  const { logout, userRole, hasRole } = useAuth()
+  const { logout, userRole, hasRole } = useAdminAuth()
   const navigate = useNavigate()
 
   const handleLogout = async () => {

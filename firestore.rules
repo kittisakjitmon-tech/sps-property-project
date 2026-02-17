@@ -28,9 +28,8 @@ service cloud.firestore {
       return isAuthenticated() && request.auth.uid == userId;
     }
     
-    // users: อ่านได้เฉพาะ Admin, เขียนได้เฉพาะ Super Admin
-    // Exception: Allow self-update to super_admin for initial setup (when no super admin exists yet)
-    // Also allow reading all users if authenticated (for initial setup check)
+    // users: อนุญาตให้ผู้ใช้แก้ไขโปรไฟล์ตนเองได้
+    // โดยห้ามแก้ role/status/email ด้วยตัวเอง
     match /users/{userId} {
       // Allow read if: is admin OR reading own data OR authenticated (for initial setup)
       allow read: if isAdmin() || 
@@ -39,12 +38,16 @@ service cloud.firestore {
       allow create: if isSuperAdmin() || (isAuthenticated() && request.auth.uid == userId);
       // Allow update if: 
       // 1. is super admin, OR
-      // 2. updating own role to super_admin (for initial setup)
+      // 2. updating own role to super_admin (for initial setup), OR
+      // 3. user updating own profile (but not role/status/email)
       allow update: if isSuperAdmin() || 
                      (isAuthenticated() && 
                       request.auth.uid == userId && 
                       request.resource.data.role == 'super_admin' &&
-                      (!resource.exists || resource.data.role != 'super_admin'));
+                      (!resource.exists || resource.data.role != 'super_admin')) ||
+                     (isAuthenticated() && 
+                      request.auth.uid == userId &&
+                      !request.resource.data.diff(resource.data).changedKeys().hasAny(['role', 'status', 'email']));
       allow delete: if isSuperAdmin();
     }
     

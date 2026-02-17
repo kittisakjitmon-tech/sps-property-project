@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { useAuth } from '../context/AuthContext'
+import { useAdminAuth } from '../context/AdminAuthContext'
 import { getSystemSettingsSnapshot, updateSystemSettings } from '../lib/firestore'
 import {
   Settings as SettingsIcon,
@@ -15,7 +15,7 @@ import {
 } from 'lucide-react'
 
 export default function Settings() {
-  const { isSuperAdmin } = useAuth()
+  const { isSuperAdmin } = useAdminAuth()
   const [loading, setLoading] = useState(false)
   const [initialLoading, setInitialLoading] = useState(true)
   const [successMessage, setSuccessMessage] = useState(null)

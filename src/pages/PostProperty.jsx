@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { useAuth } from '../context/AuthContext'
+import { usePublicAuth } from '../context/PublicAuthContext'
 import { ChevronLeft, ChevronRight, Upload, X, Check, AlertCircle, Target, Zap, Shield, Phone } from 'lucide-react'
 import PageLayout from '../components/PageLayout'
 import LocationAutocomplete from '../components/LocationAutocomplete'
@@ -27,7 +27,7 @@ const SUGGESTED_TAGS = [
 
 export default function PostProperty() {
   const navigate = useNavigate()
-  const { user } = useAuth()
+  const { user } = usePublicAuth()
   const [step, setStep] = useState(1)
   const [submitting, setSubmitting] = useState(false)
   const [success, setSuccess] = useState(false)

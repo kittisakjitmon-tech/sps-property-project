@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo } from 'react'
 import { Link } from 'react-router-dom'
-import { useAuth } from '../context/AuthContext'
+import { useAdminAuth } from '../context/AdminAuthContext'
 import { getPropertiesSnapshot } from '../lib/firestore'
 import { formatPrice } from '../lib/priceFormat'
 import { FileText, Plus, Pencil, Search, Trash2, ChevronLeft, ChevronRight } from 'lucide-react'
@@ -96,7 +96,7 @@ function getStatusBadges(property) {
 
 export default function PropertyListPage() {
   // All hooks must be called unconditionally at the top level
-  const authContext = useAuth()
+  const authContext = useAdminAuth()
   const user = authContext?.user || null
   const isAdmin = authContext?.isAdmin || (() => false)
 

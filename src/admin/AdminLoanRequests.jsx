@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { useAuth } from '../context/AuthContext'
+import { useAdminAuth } from '../context/AdminAuthContext'
 import {
   getLoanRequestsSnapshot,
   updateLoanRequestStatus,
@@ -71,7 +71,7 @@ function getLineAddUrl(lineId) {
 }
 
 export default function AdminLoanRequests() {
-  const { isSuperAdmin } = useAuth()
+  const { isSuperAdmin } = useAdminAuth()
   const navigate = useNavigate()
   const [requests, setRequests] = useState([])
   const [loading, setLoading] = useState(true)

@@ -9,6 +9,7 @@ import Toast from '../components/Toast'
 import ProtectedImageContainer from '../components/ProtectedImageContainer'
 import { formatPrice } from '../lib/priceFormat'
 import { highlightText, highlightTags } from '../lib/textHighlight'
+import { usePublicAuth } from '../context/PublicAuthContext'
 
 function MortgageCalculator({ price, directInstallment }) {
   const [loanType, setLoanType] = useState(directInstallment ? 'direct' : 'bank')
@@ -175,7 +176,18 @@ function validatePhone(phone) {
 }
 
 function LeadForm({ propertyId, propertyTitle, propertyPrice, isRental, onSuccess, onError }) {
-  const [activeTab, setActiveTab] = useState('customer') // 'customer' or 'agent'
+  const { user, isAgent } = usePublicAuth()
+  // ถ้าไม่ได้ล็อกอิน ให้แสดง tab ลูกค้า, ถ้าล็อกอินแล้วให้แสดง tab Agent
+  const [activeTab, setActiveTab] = useState(user && isAgent() ? 'agent' : 'customer')
+
+  // อัปเดต activeTab เมื่อสถานะ login เปลี่ยน
+  useEffect(() => {
+    if (user && isAgent()) {
+      setActiveTab('agent')
+    } else {
+      setActiveTab('customer')
+    }
+  }, [user, isAgent])
   
   // Form fields for Customer tab
   const [customerName, setCustomerName] = useState('')
@@ -280,37 +292,30 @@ function LeadForm({ propertyId, propertyTitle, propertyPrice, isRental, onSucces
 
   return (
     <div className="space-y-4">
-      {/* Tab System */}
-      <div className="flex gap-2 border-b border-slate-200">
-        <button
-          type="button"
-          onClick={() => {
-            setActiveTab('customer')
-            setErrors({})
-          }}
-          className={`flex-1 px-4 py-2 text-sm font-medium transition-colors ${
-            activeTab === 'customer'
-              ? 'bg-blue-900 text-white rounded-t-lg'
-              : 'bg-gray-100 text-gray-600 hover:bg-gray-200 rounded-t-lg'
-          }`}
-        >
-          สำหรับลูกค้า
-        </button>
-        <button
-          type="button"
-          onClick={() => {
-            setActiveTab('agent')
-            setErrors({})
-          }}
-          className={`flex-1 px-4 py-2 text-sm font-medium transition-colors ${
-            activeTab === 'agent'
-              ? 'bg-blue-900 text-white rounded-t-lg'
-              : 'bg-gray-100 text-gray-600 hover:bg-gray-200 rounded-t-lg'
-          }`}
-        >
-          สำหรับเอเจนท์
-        </button>
-      </div>
+      {/* Tab System - แสดงตามสถานะ login */}
+      {(!user || !isAgent()) ? (
+        // ถ้าไม่ได้ล็อกอิน: แสดงเฉพาะ tab ลูกค้า
+        <div className="flex gap-2 border-b border-slate-200">
+          <button
+            type="button"
+            className="flex-1 px-4 py-2 text-sm font-medium bg-blue-900 text-white rounded-t-lg"
+            disabled
+          >
+            สำหรับลูกค้า
+          </button>
+        </div>
+      ) : (
+        // ถ้าล็อกอินแล้ว: แสดงเฉพาะ tab Agent
+        <div className="flex gap-2 border-b border-slate-200">
+          <button
+            type="button"
+            className="flex-1 px-4 py-2 text-sm font-medium bg-blue-900 text-white rounded-t-lg"
+            disabled
+          >
+            สำหรับเอเจน
+          </button>
+        </div>
+      )}
 
       <form onSubmit={handleSubmit} className="space-y-4">
         {/* Header */}
@@ -467,6 +472,7 @@ export default function PropertyDetail() {
   const { id } = useParams()
   const navigate = useNavigate()
   const [searchParams] = useSearchParams()
+  const { user, isAgent } = usePublicAuth()
   const searchQuery = searchParams.get('q') || ''
   
   const [property, setProperty] = useState(null)
@@ -715,14 +721,17 @@ export default function PropertyDetail() {
                     {/* Custom Tags with Highlight */}
                     
                   </div>
-                  <button
-                    onClick={handleShare}
-                    className="ml-4 flex items-center gap-2 px-4 py-2 rounded-lg bg-blue-900 text-white hover:bg-blue-800 transition font-medium shrink-0"
-                  >
-                    <Share2 className="h-4 w-4" />
-                    <span className="hidden sm:inline">แชร์ให้ลูกค้า</span>
-                    <span className="sm:hidden">แชร์</span>
-                  </button>
+                  {/* แสดงปุ่มแชร์เฉพาะเมื่อล็อกอินแล้ว */}
+                  {user && isAgent() && (
+                    <button
+                      onClick={handleShare}
+                      className="ml-4 flex items-center gap-2 px-4 py-2 rounded-lg bg-blue-900 text-white hover:bg-blue-800 transition font-medium shrink-0"
+                    >
+                      <Share2 className="h-4 w-4" />
+                      <span className="hidden sm:inline">แชร์ให้ลูกค้า</span>
+                      <span className="sm:hidden">แชร์</span>
+                    </button>
+                  )}
                 </div>
 
                 {/* Location & Specs */}

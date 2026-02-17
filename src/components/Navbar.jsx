@@ -13,8 +13,12 @@ import {
   CreditCard,
   Megaphone,
   BookOpen,
+  Settings,
+  LogOut,
+  LogIn,
 } from 'lucide-react'
-import { useAuth } from '../context/AuthContext'
+import { usePublicAuth } from '../context/PublicAuthContext'
+import { useNavigate } from 'react-router-dom'
 import logo from '../assets/logo.png'; // นำเข้าไฟล์โลโก้
 
 const buyHomeLinks = [
@@ -35,10 +39,13 @@ export default function Navbar() {
   const [serviceMenuOpen, setServiceMenuOpen] = useState(false)
   const [mobileBuyOpen, setMobileBuyOpen] = useState(false)
   const [mobileServiceOpen, setMobileServiceOpen] = useState(false)
+  const [userMenuOpen, setUserMenuOpen] = useState(false)
   const desktopMenuRef = useRef(null)
   const buyCloseTimerRef = useRef(null)
   const serviceCloseTimerRef = useRef(null)
-  const { user } = useAuth()
+  const userMenuCloseTimerRef = useRef(null)
+  const { user, userRole, userProfile, logout, isAgent } = usePublicAuth()
+  const navigate = useNavigate()
 
   const clearBuyCloseTimer = () => {
     if (buyCloseTimerRef.current) {
@@ -51,6 +58,13 @@ export default function Navbar() {
     if (serviceCloseTimerRef.current) {
       clearTimeout(serviceCloseTimerRef.current)
       serviceCloseTimerRef.current = null
+    }
+  }
+
+  const clearUserMenuCloseTimer = () => {
+    if (userMenuCloseTimerRef.current) {
+      clearTimeout(userMenuCloseTimerRef.current)
+      userMenuCloseTimerRef.current = null
     }
   }
 
@@ -70,11 +84,26 @@ export default function Navbar() {
     }, 100)
   }
 
+  const scheduleUserMenuClose = () => {
+    clearUserMenuCloseTimer()
+    userMenuCloseTimerRef.current = setTimeout(() => {
+      setUserMenuOpen(false)
+      userMenuCloseTimerRef.current = null
+    }, 100)
+  }
+
+  const handleLogout = async () => {
+    await logout()
+    setUserMenuOpen(false)
+    navigate('/')
+  }
+
   useEffect(() => {
     function handleClickOutside(e) {
       if (desktopMenuRef.current && !desktopMenuRef.current.contains(e.target)) {
         setBuyMenuOpen(false)
         setServiceMenuOpen(false)
+        setUserMenuOpen(false)
       }
     }
     document.addEventListener('mousedown', handleClickOutside)
@@ -85,6 +114,7 @@ export default function Navbar() {
     return () => {
       clearBuyCloseTimer()
       clearServiceCloseTimer()
+      clearUserMenuCloseTimer()
     }
   }, [])
 
@@ -228,15 +258,90 @@ export default function Navbar() {
               <Heart className="h-4 w-4" />
               รายการโปรด
             </Link>
-            {/*{user && (
+
+            {/* Login Button or User Menu */}
+            {!user ? (
               <Link
-                to="/profile"
-                className="text-slate-600 hover:text-blue-900 font-medium transition flex items-center gap-1"
+                to="/login"
+                className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-blue-900 text-white hover:bg-blue-800 transition font-medium"
               >
-                <User className="h-4 w-4" />
-                โปรไฟล์
+                <LogIn className="h-4 w-4" />
+                เข้าสู่ระบบ
               </Link>
-            )}*/}
+            ) : (
+              /* User Menu (for logged in users, especially agents) */
+              (isAgent() || userRole) && (
+              <div
+                className="relative"
+                onMouseEnter={() => {
+                  clearUserMenuCloseTimer()
+                  setUserMenuOpen(true)
+                }}
+                onMouseLeave={scheduleUserMenuClose}
+              >
+                <button
+                  type="button"
+                  onClick={() => {
+                    clearUserMenuCloseTimer()
+                    setUserMenuOpen((prev) => !prev)
+                    setBuyMenuOpen(false)
+                    setServiceMenuOpen(false)
+                  }}
+                  className="flex items-center gap-2 px-3 py-2 rounded-lg hover:bg-slate-100 transition"
+                >
+                  {(userProfile?.photoURL || user.photoURL) ? (
+                    <img
+                      src={userProfile?.photoURL || user.photoURL}
+                      alt="Profile"
+                      className="w-8 h-8 rounded-full object-cover border-2 border-slate-200"
+                    />
+                  ) : (
+                    <div className="w-8 h-8 rounded-full bg-blue-900 flex items-center justify-center">
+                      <User className="h-5 w-5 text-white" />
+                    </div>
+                  )}
+                  <span className="text-sm font-medium text-slate-700 hidden lg:inline">
+                    {userProfile?.username || user.displayName || user.email?.split('@')[0] || 'ผู้ใช้'}
+                  </span>
+                  <ChevronDown className={`h-4 w-4 text-slate-600 transition-transform ${userMenuOpen ? 'rotate-180' : ''}`} />
+                </button>
+
+                <div
+                  className={`absolute right-0 top-full mt-2 w-56 bg-white rounded-xl shadow-lg border border-slate-200 py-2 z-50 transition-all duration-200 ${
+                    userMenuOpen ? 'opacity-100 translate-y-0 pointer-events-auto' : 'opacity-0 -translate-y-1 pointer-events-none'
+                  }`}
+                >
+                  <div className="px-4 py-2 border-b border-slate-100">
+                    <p className="text-xs text-slate-500">เข้าสู่ระบบเป็น</p>
+                    <p className="text-sm font-semibold text-slate-800">
+                      {userProfile?.username || user.displayName || user.email?.split('@')[0] || 'ผู้ใช้'}
+                    </p>
+                  </div>
+                  {isAgent() && (
+                    <Link
+                      to="/profile-settings"
+                      onClick={() => {
+                        clearUserMenuCloseTimer()
+                        setUserMenuOpen(false)
+                      }}
+                      className="flex items-center gap-2 px-4 py-2.5 text-sm text-slate-700 hover:bg-slate-50 transition"
+                    >
+                      <Settings className="h-4 w-4 text-slate-500" />
+                      ตั้งค่าโปรไฟล์
+                    </Link>
+                  )}
+                  <button
+                    type="button"
+                    onClick={handleLogout}
+                    className="w-full flex items-center gap-2 px-4 py-2.5 text-sm text-red-600 hover:bg-red-50 transition"
+                  >
+                    <LogOut className="h-4 w-4" />
+                    ออกจากระบบ
+                  </button>
+                </div>
+              </div>
+              )
+            )}
           
             <Link
               to="/post"
@@ -357,15 +462,38 @@ export default function Navbar() {
                 <Heart className="h-4 w-4" />
                 รายการโปรด
               </Link>
-              {user && (
+              {!user ? (
                 <Link
-                  to="/profile"
+                  to="/login"
                   onClick={() => setMobileOpen(false)}
-                  className="px-4 py-3 rounded-lg text-slate-700 hover:bg-slate-50 font-medium flex items-center gap-2"
+                  className="px-4 py-3 rounded-lg text-blue-900 hover:bg-blue-50 font-medium flex items-center gap-2"
                 >
-                  <User className="h-4 w-4" />
-                  โปรไฟล์
+                  <LogIn className="h-4 w-4" />
+                  เข้าสู่ระบบ
                 </Link>
+              ) : (
+                <>
+                  {isAgent() && (
+                    <Link
+                      to="/profile-settings"
+                      onClick={() => setMobileOpen(false)}
+                      className="px-4 py-3 rounded-lg text-slate-700 hover:bg-slate-50 font-medium flex items-center gap-2"
+                    >
+                      <Settings className="h-4 w-4" />
+                      ตั้งค่าโปรไฟล์
+                    </Link>
+                  )}
+                  <button
+                    onClick={() => {
+                      handleLogout()
+                      setMobileOpen(false)
+                    }}
+                    className="w-full px-4 py-3 rounded-lg text-red-600 hover:bg-red-50 font-medium flex items-center gap-2 text-left"
+                  >
+                    <LogOut className="h-4 w-4" />
+                    ออกจากระบบ
+                  </button>
+                </>
               )}
               <a
                 href="tel:0955520801"

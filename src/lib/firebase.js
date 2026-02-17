@@ -12,8 +12,27 @@ const firebaseConfig = {
   appId: import.meta.env.VITE_FIREBASE_APP_ID,
 }
 
-const app = initializeApp(firebaseConfig)
-export const db = getFirestore(app)
-export const storage = getStorage(app)
-export const auth = getAuth(app)
-export default app
+// Separate Firebase apps for public and admin.
+// Each side must use its own app so Auth session does not collide.
+export const publicApp = initializeApp(firebaseConfig, 'publicApp')
+export const publicAuth = getAuth(publicApp)
+export const publicDb = getFirestore(publicApp)
+export const publicStorage = getStorage(publicApp)
+
+export const adminApp = initializeApp(firebaseConfig, 'adminApp')
+export const adminAuth = getAuth(adminApp)
+export const adminDb = getFirestore(adminApp)
+export const adminStorage = getStorage(adminApp)
+
+function isAdminPath() {
+  if (typeof window === 'undefined') return false
+  return window.location.pathname.startsWith('/admin')
+}
+
+// Keep legacy exports for existing imports.
+// They now resolve to the correct app based on current route.
+export const db = isAdminPath() ? adminDb : publicDb
+export const storage = isAdminPath() ? adminStorage : publicStorage
+
+export const auth = publicAuth
+export default publicApp

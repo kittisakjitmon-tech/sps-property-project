@@ -1,27 +1,36 @@
 import { createContext, useContext, useState, useEffect } from 'react'
 import { signInWithEmailAndPassword, signOut, onAuthStateChanged } from 'firebase/auth'
 import { doc, getDoc, setDoc, serverTimestamp } from 'firebase/firestore'
-import { auth, db } from '../lib/firebase'
+import { adminAuth, adminDb } from '../lib/firebase'
 
-const AuthContext = createContext(null)
+const AdminAuthContext = createContext(null)
 
-export function AuthProvider({ children }) {
+export function AdminAuthProvider({ children }) {
   const [user, setUser] = useState(null)
   const [userRole, setUserRole] = useState(null)
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    const unsub = onAuthStateChanged(auth, async (u) => {
+    const unsub = onAuthStateChanged(adminAuth, async (u) => {
       if (u) {
         // ดึง role จาก Firestore users collection
         try {
-          const userDoc = await getDoc(doc(db, 'users', u.uid))
+          const userDoc = await getDoc(doc(adminDb, 'users', u.uid))
           if (userDoc.exists()) {
             const userData = userDoc.data()
-            setUserRole(userData.role || 'member')
+            const role = userData.role || 'member'
+            // Block agent from admin access
+            if (role === 'agent') {
+              await signOut(adminAuth)
+              setUser(null)
+              setUserRole(null)
+              setLoading(false)
+              return
+            }
+            setUserRole(role)
           } else {
             // ถ้ายังไม่มีข้อมูลใน users collection ให้สร้างใหม่
-            await setDoc(doc(db, 'users', u.uid), {
+            await setDoc(doc(adminDb, 'users', u.uid), {
               email: u.email,
               role: 'member',
               createdAt: serverTimestamp(),
@@ -42,11 +51,11 @@ export function AuthProvider({ children }) {
   }, [])
 
   const login = async (email, password) => {
-    await signInWithEmailAndPassword(auth, email, password)
+    await signInWithEmailAndPassword(adminAuth, email, password)
   }
 
   const logout = async () => {
-    await signOut(auth)
+    await signOut(adminAuth)
     setUserRole(null)
   }
 
@@ -61,10 +70,9 @@ export function AuthProvider({ children }) {
   const isSuperAdmin = () => userRole === 'super_admin'
   const isAdmin = () => userRole === 'admin' || userRole === 'super_admin'
   const isMember = () => userRole === 'member'
-  const isAgent = () => userRole === 'agent'
 
   return (
-    <AuthContext.Provider
+    <AdminAuthContext.Provider
       value={{
         user,
         userRole,
@@ -75,16 +83,15 @@ export function AuthProvider({ children }) {
         isSuperAdmin,
         isAdmin,
         isMember,
-        isAgent,
       }}
     >
       {children}
-    </AuthContext.Provider>
+    </AdminAuthContext.Provider>
   )
 }
 
-export function useAuth() {
-  const ctx = useContext(AuthContext)
-  if (!ctx) throw new Error('useAuth must be used within AuthProvider')
+export function useAdminAuth() {
+  const ctx = useContext(AdminAuthContext)
+  if (!ctx) throw new Error('useAdminAuth must be used within AdminAuthProvider')
   return ctx
 }

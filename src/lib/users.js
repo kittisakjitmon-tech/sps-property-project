@@ -122,11 +122,15 @@ export async function createUserWithPassword({
     const cred = await createUserWithEmailAndPassword(tempAuth, normalized, pass)
     createdUid = cred.user.uid
 
+    // สร้าง username จาก email (ส่วนหน้า @)
+    const emailUsername = normalized.split('@')[0] || normalized.replace(/[^a-zA-Z0-9]/g, '')
+    
     // เขียน users/{uid} ด้วย token ของ user ที่เพิ่งสร้าง
     await setDoc(doc(tempDb, USERS, createdUid), {
       email: normalized,
       role,
       status,
+      username: emailUsername,
       createdAt: serverTimestamp(),
       updatedAt: serverTimestamp(),
     })

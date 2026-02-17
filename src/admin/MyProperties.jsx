@@ -1,12 +1,12 @@
 import { useState, useEffect } from 'react'
 import { Link } from 'react-router-dom'
-import { useAuth } from '../context/AuthContext'
+import { useAdminAuth } from '../context/AdminAuthContext'
 import { getPropertiesSnapshot } from '../lib/firestore'
 import PropertyCard from '../components/PropertyCard'
 import { FileText, Plus } from 'lucide-react'
 
 export default function MyProperties() {
-  const { user, isMember } = useAuth()
+  const { user, isMember } = useAdminAuth()
   const [properties, setProperties] = useState([])
   const [loading, setLoading] = useState(true)
 

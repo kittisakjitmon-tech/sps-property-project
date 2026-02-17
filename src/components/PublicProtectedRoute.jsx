@@ -1,8 +1,8 @@
 import { Navigate, useLocation } from 'react-router-dom'
-import { useAuth } from '../context/AuthContext'
+import { usePublicAuth } from '../context/PublicAuthContext'
 
-export default function ProtectedRoute({ children, requiredRoles }) {
-  const { user, userRole, loading, hasRole } = useAuth()
+export default function PublicProtectedRoute({ children, requiredRoles }) {
+  const { user, userRole, loading, hasRole } = usePublicAuth()
   const location = useLocation()
 
   if (loading) {
@@ -14,19 +14,7 @@ export default function ProtectedRoute({ children, requiredRoles }) {
   }
 
   if (!user) {
-    return <Navigate to="/admin/login" state={{ from: location }} replace />
-  }
-
-  // Block agent from accessing /admin routes
-  if (location.pathname.startsWith('/admin') && userRole === 'agent') {
-    return (
-      <div className="min-h-screen bg-slate-50 flex items-center justify-center">
-        <div className="text-center">
-          <p className="text-red-600 font-semibold mb-2">ไม่มีสิทธิ์เข้าถึงหน้านี้</p>
-          <p className="text-slate-600 text-sm">Agent ไม่สามารถเข้าถึงระบบหลังบ้านได้</p>
-        </div>
-      </div>
-    )
+    return <Navigate to="/login" state={{ from: location }} replace />
   }
 
   // Check role if requiredRoles is specified

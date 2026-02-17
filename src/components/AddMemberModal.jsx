@@ -6,6 +6,7 @@ const ROLE_OPTIONS = [
   { value: 'super_admin', label: 'Super Admin' },
   { value: 'admin', label: 'Admin' },
   { value: 'member', label: 'สมาชิก' },
+  { value: 'agent', label: 'Agent' },
 ]
 
 function isValidEmail(email) {

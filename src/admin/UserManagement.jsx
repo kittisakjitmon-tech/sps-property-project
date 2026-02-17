@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from 'react'
-import { useAuth } from '../context/AuthContext'
+import { useAdminAuth } from '../context/AdminAuthContext'
 import { getUsersSnapshot, updateUserRole, deleteUser, suspendUser, unsuspendUser } from '../lib/users'
 import { createAuditLog } from '../lib/firestore'
 import AddMemberModal from '../components/AddMemberModal'
@@ -23,12 +23,14 @@ const ROLE_LABELS = {
   super_admin: 'Super Admin',
   admin: 'Admin',
   member: 'สมาชิก',
+  agent: 'Agent',
 }
 
 const ROLE_COLORS = {
   super_admin: 'bg-purple-100 text-purple-900 border-purple-300',
   admin: 'bg-blue-100 text-blue-900 border-blue-300',
   member: 'bg-slate-100 text-slate-900 border-slate-300',
+  agent: 'bg-emerald-100 text-emerald-900 border-emerald-300',
 }
 
 const STATUS_COLORS = {
@@ -74,7 +76,7 @@ function ConfirmModal({ isOpen, onClose, onConfirm, title, message, confirmText 
 }
 
 export default function UserManagement() {
-  const { user, userRole, isSuperAdmin } = useAuth()
+  const { user, userRole, isSuperAdmin } = useAdminAuth()
   const [users, setUsers] = useState([])
   const [loading, setLoading] = useState(true)
   const [successMessage, setSuccessMessage] = useState(null)
@@ -492,6 +494,17 @@ export default function UserManagement() {
         </div>
         <div className="bg-white rounded-xl border border-slate-200 p-4 shadow-sm">
           <div className="flex items-center gap-3">
+            <div className="w-12 h-12 rounded-lg bg-emerald-100 flex items-center justify-center">
+              <User className="h-6 w-6 text-emerald-900" />
+            </div>
+            <div>
+              <p className="text-sm text-slate-600">Agent</p>
+              <p className="text-2xl font-bold text-emerald-900">{users.filter((u) => u.role === 'agent').length}</p>
+            </div>
+          </div>
+        </div>
+        <div className="bg-white rounded-xl border border-slate-200 p-4 shadow-sm">
+          <div className="flex items-center gap-3">
             <div className="w-12 h-12 rounded-lg bg-red-100 flex items-center justify-center">
               <Ban className="h-6 w-6 text-red-900" />
             </div>
@@ -530,6 +543,7 @@ export default function UserManagement() {
               <option value="super_admin">Super Admin</option>
               <option value="admin">Admin</option>
               <option value="member">สมาชิก</option>
+              <option value="agent">Agent</option>
             </select>
           </div>
 
@@ -592,6 +606,7 @@ export default function UserManagement() {
                         <option value="member">สมาชิก</option>
                         <option value="admin">Admin</option>
                         <option value="super_admin">Super Admin</option>
+                        <option value="agent">Agent</option>
                       </select>
                       {changingRole === u.id && (
                         <span className="ml-2 text-xs text-slate-500">กำลังอัปเดต...</span>

@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
-import { useAuth } from '../context/AuthContext'
+import { useAdminAuth } from '../context/AdminAuthContext'
 import LocationAutocomplete from '../components/LocationAutocomplete'
 import MapPicker from '../components/MapPicker'
 import ModernProgressLoader from '../components/ModernProgressLoader'
@@ -106,7 +106,7 @@ const defaultForm = {
 export default function PropertyForm() {
   const { id } = useParams()
   const navigate = useNavigate()
-  const { user, userRole } = useAuth()
+  const { user, userRole } = useAdminAuth()
   const isEdit = Boolean(id)
   const [form, setForm] = useState(defaultForm)
   const [loading, setLoading] = useState(isEdit)

@@ -1,8 +1,8 @@
 import { Navigate, useLocation } from 'react-router-dom'
-import { useAuth } from '../context/AuthContext'
+import { useAdminAuth } from '../context/AdminAuthContext'
 
-export default function ProtectedRoute({ children, requiredRoles }) {
-  const { user, userRole, loading, hasRole } = useAuth()
+export default function AdminProtectedRoute({ children, requiredRoles }) {
+  const { user, userRole, loading, hasRole } = useAdminAuth()
   const location = useLocation()
 
   if (loading) {
@@ -18,7 +18,7 @@ export default function ProtectedRoute({ children, requiredRoles }) {
   }
 
   // Block agent from accessing /admin routes
-  if (location.pathname.startsWith('/admin') && userRole === 'agent') {
+  if (userRole === 'agent') {
     return (
       <div className="min-h-screen bg-slate-50 flex items-center justify-center">
         <div className="text-center">
