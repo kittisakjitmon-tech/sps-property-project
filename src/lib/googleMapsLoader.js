@@ -13,10 +13,9 @@ function buildScriptUrl(libraries = []) {
   const libs = Array.from(new Set(libraries.filter(Boolean)))
   const params = new URLSearchParams({
     key,
-    loading: 'async',
   })
   if (libs.length > 0) params.set('libraries', libs.join(','))
-  return `https://maps.googleapis.com/maps/api/js?${params.toString()}`
+  return `https://maps.googleapis.com/maps/api/js?${params.toString()}&loading=async&libraries=marker"`
 }
 
 export function loadGoogleMapsApi({ libraries = [] } = {}) {

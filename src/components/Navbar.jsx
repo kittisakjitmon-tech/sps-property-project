@@ -120,20 +120,20 @@ export default function Navbar() {
 
   return (
     <header className="sticky top-0 z-[100] w-full bg-white/95 backdrop-blur-md border-b border-slate-200/80 shadow-sm">
-      <nav className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+      <nav className="max-w-7xl mx-auto px-3 sm:px-5 lg:px-8">
         <div className="flex items-center justify-between h-16">
         
-          <Link to="/" className="flex items-center gap-2 shrink-0">
+          <Link to="/" className="flex items-center gap-2 shrink-0 min-w-0">
           <div className="flex items-center gap-3">
             {/* ส่วนของรูปภาพโลโก้ */}
             <img src={logo} alt="SPS Logo" className="h-10 w-auto" />
 
             {/* ส่วนของข้อความที่จัดเรียงใหม่ */}
-            <div className="flex flex-col leading-tight">
-              <span className="text-lg md:text-xl font-bold text-slate-800">
+            <div className="flex flex-col leading-tight min-w-0">
+              <span className="text-base lg:text-lg xl:text-xl font-bold text-slate-800 whitespace-nowrap">
                 SPS Property Solution
               </span>
-              <span className="text-xs md:text-sm text-slate-500 font-medium">
+              <span className="hidden xl:block text-xs text-slate-500 font-medium whitespace-nowrap">
                 บ้านคอนโดสวย อมตะซิตี้ ชลบุรี
               </span>
             </div>
@@ -141,8 +141,8 @@ export default function Navbar() {
           </Link>
 
           {/* Desktop */}
-          <div ref={desktopMenuRef} className="hidden md:flex items-center gap-4">
-            <Link to="/" className="text-slate-600 hover:text-blue-900 font-medium transition text-sm">
+          <div ref={desktopMenuRef} className="hidden lg:flex items-center gap-2 xl:gap-4">
+            <Link to="/" className="text-slate-600 hover:text-blue-900 font-medium transition text-sm whitespace-nowrap">
               หน้าหลัก
             </Link>
 
@@ -162,7 +162,7 @@ export default function Navbar() {
                   setBuyMenuOpen((prev) => !prev)
                   setServiceMenuOpen(false)
                 }}
-                className="inline-flex items-center gap-1 text-slate-600 hover:text-blue-900 font-medium transition text-sm"
+                className="inline-flex items-center gap-1 text-slate-600 hover:text-blue-900 font-medium transition text-sm whitespace-nowrap"
               >
                 ซื้อบ้าน
                 <ChevronDown className={`h-4 w-4 transition-transform ${buyMenuOpen ? 'rotate-180' : ''}`} />
@@ -194,11 +194,11 @@ export default function Navbar() {
               </div>
             </div>
 
-            <Link to="/properties?listingType=rent&subListingType=rent_only" className="text-slate-600 hover:text-blue-900 font-medium transition text-sm">
+            <Link to="/properties?listingType=rent&subListingType=rent_only" className="text-slate-600 hover:text-blue-900 font-medium transition text-sm whitespace-nowrap">
               เช่า
             </Link>
 
-            <Link to="/blogs" className="text-slate-600 hover:text-blue-900 font-medium transition text-sm flex items-center gap-1">
+            <Link to="/blogs" className="text-slate-600 hover:text-blue-900 font-medium transition text-sm flex items-center gap-1 whitespace-nowrap">
               <BookOpen className="h-4 w-4" />
               บทความ
             </Link>
@@ -219,7 +219,7 @@ export default function Navbar() {
                   setServiceMenuOpen((prev) => !prev)
                   setBuyMenuOpen(false)
                 }}
-                className="inline-flex items-center gap-1 text-slate-600 hover:text-blue-900 font-medium transition text-sm"
+                className="inline-flex items-center gap-1 text-slate-600 hover:text-blue-900 font-medium transition text-sm whitespace-nowrap"
               >
                 บริการของเรา
                 <ChevronDown className={`h-4 w-4 transition-transform ${serviceMenuOpen ? 'rotate-180' : ''}`} />
@@ -247,13 +247,13 @@ export default function Navbar() {
               </div>
             </div>
 
-            <Link to="/contact" className="text-slate-600 hover:text-blue-900 font-medium transition text-sm">
+            <Link to="/contact" className="text-slate-600 hover:text-blue-900 font-medium transition text-sm whitespace-nowrap">
               ติดต่อเรา
             </Link>
 
             <Link
               to="/favorites"
-              className="text-slate-600 hover:text-red-500 font-medium transition flex items-center gap-1"
+              className="text-slate-600 hover:text-red-500 font-medium transition flex items-center gap-1 whitespace-nowrap"
             >
               <Heart className="h-4 w-4" />
               รายการโปรด
@@ -263,7 +263,7 @@ export default function Navbar() {
             {!user ? (
               <Link
                 to="/login"
-                className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-blue-900 text-white hover:bg-blue-800 transition font-medium"
+                className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-blue-900 text-white hover:bg-blue-800 transition font-medium whitespace-nowrap"
               >
                 <LogIn className="h-4 w-4" />
                 เข้าสู่ระบบ
@@ -345,7 +345,7 @@ export default function Navbar() {
           
             <Link
               to="/post"
-              className="inline-flex items-center px-4 py-2 rounded-xl bg-gradient-to-r from-blue-900 to-blue-700 text-white font-semibold hover:shadow-md hover:-translate-y-0.5 transition-all duration-300"
+              className="inline-flex items-center px-4 py-2 rounded-xl bg-gradient-to-r from-blue-900 to-blue-700 text-white font-semibold whitespace-nowrap hover:shadow-md hover:-translate-y-0.5 transition-all duration-300"
             >
               ลงประกาศฟรี
             </Link>
@@ -355,7 +355,7 @@ export default function Navbar() {
           <button
             type="button"
             onClick={() => setMobileOpen((o) => !o)}
-            className="md:hidden p-2 rounded-lg text-slate-600 hover:bg-slate-100"
+            className="lg:hidden p-2 rounded-lg text-slate-600 hover:bg-slate-100"
             aria-label={mobileOpen ? 'ปิดเมนู' : 'เปิดเมนู'}
           >
             {mobileOpen ? <X className="h-6 w-6" /> : <Menu className="h-6 w-6" />}
@@ -364,7 +364,7 @@ export default function Navbar() {
 
         {/* Mobile menu */}
         {mobileOpen && (
-          <div className="md:hidden py-4 border-t border-slate-100">
+          <div className="lg:hidden py-4 border-t border-slate-100">
             <div className="flex flex-col gap-2">
               <Link
                 to="/"

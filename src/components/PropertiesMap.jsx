@@ -78,12 +78,13 @@ export default function PropertiesMap({ properties, className = '' }) {
           glyphColor: '#ffffff',
         })
 
-        // Create marker
+        // Create marker (PinElement extends HTMLElement, pass directly as content)
         const marker = new AdvancedMarkerElement({
           position,
           map,
           title: property.title || 'ทรัพย์สิน',
-          content: pin.element,
+          content: pin,
+          gmpClickable: true,
         })
 
         // Create info window content
@@ -118,8 +119,8 @@ export default function PropertiesMap({ properties, className = '' }) {
           content: infoContent,
         })
 
-        // Add click listener to marker
-        marker.addListener('click', () => {
+        // Add click listener to marker (use gmp-click with addEventListener)
+        marker.addEventListener('gmp-click', () => {
           // Close all other info windows
           infoWindowsRef.current.forEach((iw) => iw.close())
           // Open this info window
