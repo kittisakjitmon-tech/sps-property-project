@@ -5,6 +5,8 @@ import { MapPin } from 'lucide-react'
 import { formatPrice } from '../lib/priceFormat'
 import { loadGoogleMapsApi } from '../lib/googleMapsLoader'
 
+const DEFAULT_MAP_ID = import.meta.env.VITE_GOOGLE_MAP_ID || 'DEMO_MAP_ID'
+
 export default function PropertiesMap({ properties, className = '' }) {
   const mapRef = useRef(null)
   const mapInstanceRef = useRef(null)
@@ -39,51 +41,59 @@ export default function PropertiesMap({ properties, className = '' }) {
 
   useEffect(() => {
     if (!isMapReady || !mapRef.current || propertiesWithCoords.length === 0) return
+    let disposed = false
 
-    // Initialize map centered on Thailand
-    const map = new window.google.maps.Map(mapRef.current, {
-      center: { lat: 13.7563, lng: 100.5018 }, // Bangkok default
-      zoom: 6,
-      mapTypeControl: true,
-      streetViewControl: true,
-      fullscreenControl: true,
-    })
-
-    mapInstanceRef.current = map
-
-    // Clear existing markers and info windows
-    markersRef.current.forEach((marker) => marker.setMap(null))
-    infoWindowsRef.current.forEach((iw) => iw.close())
-    markersRef.current = []
-    infoWindowsRef.current = []
-
-    // Create bounds to fit all markers
-    const bounds = new window.google.maps.LatLngBounds()
-
-    // Create markers for each property
-    const markers = propertiesWithCoords.map((property) => {
-      const position = { lat: Number(property.lat), lng: Number(property.lng) }
-      bounds.extend(position)
-
-      // Create marker
-      const marker = new window.google.maps.Marker({
-        position,
-        map,
-        title: property.title || 'ทรัพย์สิน',
-        icon: {
-          url: 'https://maps.google.com/mapfiles/ms/icons/red-dot.png',
-          scaledSize: new window.google.maps.Size(32, 32),
-        },
+    const initMap = async () => {
+      const { AdvancedMarkerElement, PinElement } = await window.google.maps.importLibrary('marker')
+      if (disposed) return
+      // Initialize map centered on Thailand
+      const map = new window.google.maps.Map(mapRef.current, {
+        center: { lat: 13.7563, lng: 100.5018 }, // Bangkok default
+        zoom: 6,
+        mapTypeControl: true,
+        streetViewControl: true,
+        fullscreenControl: true,
+        mapId: DEFAULT_MAP_ID,
       })
 
-      // Create info window content
-      const priceText = formatPrice(property.price, property.isRental, property.showPrice)
+      mapInstanceRef.current = map
 
-      const locationText = property.location
-        ? `${property.location.district || ''}, ${property.location.province || ''}`.trim()
-        : ''
+      // Clear existing markers and info windows
+      markersRef.current.forEach((marker) => { marker.map = null })
+      infoWindowsRef.current.forEach((iw) => iw.close())
+      markersRef.current = []
+      infoWindowsRef.current = []
 
-      const infoContent = `
+      // Create bounds to fit all markers
+      const bounds = new window.google.maps.LatLngBounds()
+
+      // Create markers for each property
+      const markers = propertiesWithCoords.map((property) => {
+        const position = { lat: Number(property.lat), lng: Number(property.lng) }
+        bounds.extend(position)
+
+        const pin = new PinElement({
+          background: '#ef4444',
+          borderColor: '#ffffff',
+          glyphColor: '#ffffff',
+        })
+
+        // Create marker
+        const marker = new AdvancedMarkerElement({
+          position,
+          map,
+          title: property.title || 'ทรัพย์สิน',
+          content: pin.element,
+        })
+
+        // Create info window content
+        const priceText = formatPrice(property.price, property.isRental, property.showPrice)
+
+        const locationText = property.location
+          ? `${property.location.district || ''}, ${property.location.province || ''}`.trim()
+          : ''
+
+        const infoContent = `
         <div style="min-width: 200px; padding: 8px;">
           <h3 style="margin: 0 0 8px 0; font-size: 16px; font-weight: bold; color: #1e3a8a;">
             ${property.title || 'ทรัพย์สิน'}
@@ -104,49 +114,59 @@ export default function PropertiesMap({ properties, className = '' }) {
         </div>
       `
 
-      const infoWindow = new window.google.maps.InfoWindow({
-        content: infoContent,
+        const infoWindow = new window.google.maps.InfoWindow({
+          content: infoContent,
+        })
+
+        // Add click listener to marker
+        marker.addListener('click', () => {
+          // Close all other info windows
+          infoWindowsRef.current.forEach((iw) => iw.close())
+          // Open this info window
+          infoWindow.open({
+            map,
+            anchor: marker,
+          })
+        })
+
+        infoWindowsRef.current.push(infoWindow)
+        return marker
       })
 
-      // Add click listener to marker
-      marker.addListener('click', () => {
-        // Close all other info windows
-        infoWindowsRef.current.forEach((iw) => iw.close())
-        // Open this info window
-        infoWindow.open(map, marker)
-      })
+      markersRef.current = markers
 
-      infoWindowsRef.current.push(infoWindow)
-      return marker
+      // Create marker clusterer
+      if (window.google && window.google.maps && MarkerClusterer) {
+        if (clustererRef.current) {
+          clustererRef.current.clearMarkers()
+        }
+        clustererRef.current = new MarkerClusterer({ map, markers })
+      }
+
+      // Fit bounds to show all markers
+      if (propertiesWithCoords.length > 0) {
+        map.fitBounds(bounds)
+        // Set minimum zoom level to prevent zooming too far out
+        map.addListener('bounds_changed', () => {
+          if (map.getZoom() > 15) {
+            map.setZoom(15)
+          }
+        })
+      } else {
+        // If no properties with coordinates, center on Thailand
+        map.setCenter({ lat: 13.7563, lng: 100.5018 })
+        map.setZoom(6)
+      }
+    }
+
+    initMap().catch((error) => {
+      console.error('PropertiesMap: failed to initialize map', error)
+      setMapLoadError('ไม่สามารถเริ่มต้น Google Maps ได้')
     })
 
-    markersRef.current = markers
-
-    // Create marker clusterer
-    if (window.google && window.google.maps && MarkerClusterer) {
-      if (clustererRef.current) {
-        clustererRef.current.clearMarkers()
-      }
-      clustererRef.current = new MarkerClusterer({ map, markers })
-    }
-
-    // Fit bounds to show all markers
-    if (propertiesWithCoords.length > 0) {
-      map.fitBounds(bounds)
-      // Set minimum zoom level to prevent zooming too far out
-      map.addListener('bounds_changed', () => {
-        if (map.getZoom() > 15) {
-          map.setZoom(15)
-        }
-      })
-    } else {
-      // If no properties with coordinates, center on Thailand
-      map.setCenter({ lat: 13.7563, lng: 100.5018 })
-      map.setZoom(6)
-    }
-
     return () => {
-      markersRef.current.forEach((marker) => marker.setMap(null))
+      disposed = true
+      markersRef.current.forEach((marker) => { marker.map = null })
       infoWindowsRef.current.forEach((iw) => iw.close())
       if (clustererRef.current) {
         clustererRef.current.clearMarkers()
