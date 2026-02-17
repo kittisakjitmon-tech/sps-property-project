@@ -6,29 +6,54 @@ import {
   Bed,
   Bath,
   Maximize2,
-  ExternalLink,
   Copy,
   Check,
   ShieldAlert,
+  ChevronLeft,
+  ChevronRight,
 } from 'lucide-react'
-import { getPropertyByIdOnce } from '../lib/firestore'
+import { getPropertyByIdOnce, getShareLinkByToken, isShareLinkExpired } from '../lib/firestore'
 import NeighborhoodData from '../components/NeighborhoodData'
 import ProtectedImageContainer from '../components/ProtectedImageContainer'
 import { formatPrice } from '../lib/priceFormat'
 
 export default function SharePage() {
-  const { id } = useParams()
+  const { id: token } = useParams()
   const [property, setProperty] = useState(null)
   const [loading, setLoading] = useState(true)
   const [copied, setCopied] = useState(false)
+  const [expired, setExpired] = useState(false)
+  const [galleryIndex, setGalleryIndex] = useState(0)
 
   useEffect(() => {
     let cancelled = false
-    getPropertyByIdOnce(id).then((p) => {
-      if (!cancelled) setProperty(p)
-    }).finally(() => { if (!cancelled) setLoading(false) })
+    async function loadSharedProperty() {
+      try {
+        const shareLink = await getShareLinkByToken(token)
+        if (shareLink) {
+          if (isShareLinkExpired(shareLink)) {
+            if (!cancelled) {
+              setExpired(true)
+              setProperty(null)
+            }
+            return
+          }
+          const p = await getPropertyByIdOnce(shareLink.propertyId)
+          if (!cancelled) setProperty(p)
+          return
+        }
+
+        // Backward compatibility: old direct /share/:propertyId links
+        const fallback = await getPropertyByIdOnce(token)
+        if (!cancelled) setProperty(fallback)
+      } finally {
+        if (!cancelled) setLoading(false)
+      }
+    }
+
+    loadSharedProperty()
     return () => { cancelled = true }
-  }, [id])
+  }, [token])
 
   if (loading) {
     return (
@@ -42,7 +67,7 @@ export default function SharePage() {
     return (
       <div className="min-h-screen bg-white flex items-center justify-center p-4">
         <div className="text-center">
-          <p className="text-slate-600 mb-4">ไม่พบรายการนี้</p>
+          <p className="text-slate-600 mb-4">{expired ? 'ลิงก์นี้หมดอายุแล้ว กรุณาให้เอเจนต์แชร์ลิงก์ใหม่' : 'ไม่พบรายการนี้'}</p>
           <Link to="/" className="text-blue-900 font-medium hover:underline">กลับหน้าแรก</Link>
         </div>
       </div>
@@ -51,7 +76,6 @@ export default function SharePage() {
 
   const loc = property.location || {}
   const imgs = property.images && property.images.length > 0 ? property.images : ['https://images.unsplash.com/photo-1564013799919-ab600027ffc6?w=800']
-  const mainImage = imgs[0]
   const category = property?.category || (property?.isRental ? 'rent' : 'buy')
   const condition = property?.condition || property?.subStatus
   const availability = property?.availability
@@ -124,15 +148,51 @@ export default function SharePage() {
           {/* Card - White 60% background */}
           <div className="bg-white rounded-2xl shadow-xl border border-blue-100 overflow-hidden">
             {/* Main Image */}
-            <ProtectedImageContainer propertyId={property.propertyId} className="aspect-video relative bg-slate-100">
+            <ProtectedImageContainer propertyId={property.propertyId} className="aspect-video relative bg-slate-100 select-none">
               <img
-                src={mainImage}
+                src={imgs[galleryIndex]}
                 alt={property.title}
                 className="w-full h-full object-cover share-protected-image protected-image"
                 draggable={false}
               />
               <div className="absolute inset-0 pointer-events-none share-image-watermark" aria-hidden />
+              {imgs.length > 1 && (
+                <>
+                  <button
+                    type="button"
+                    onClick={() => setGalleryIndex((prev) => (prev === 0 ? imgs.length - 1 : prev - 1))}
+                    className="absolute left-3 top-1/2 -translate-y-1/2 w-9 h-9 rounded-full bg-black/50 text-white flex items-center justify-center hover:bg-black/70 transition"
+                    aria-label="รูปก่อนหน้า"
+                  >
+                    <ChevronLeft className="h-5 w-5" />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setGalleryIndex((prev) => (prev === imgs.length - 1 ? 0 : prev + 1))}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 w-9 h-9 rounded-full bg-black/50 text-white flex items-center justify-center hover:bg-black/70 transition"
+                    aria-label="รูปถัดไป"
+                  >
+                    <ChevronRight className="h-5 w-5" />
+                  </button>
+                </>
+              )}
             </ProtectedImageContainer>
+            {imgs.length > 1 && (
+              <div className="px-4 py-3 border-b border-slate-100 bg-white" onContextMenu={handleContextMenu}>
+                <div className="flex gap-2 overflow-x-auto scrollbar-hide">
+                  {imgs.map((img, i) => (
+                    <button
+                      key={`${img}-${i}`}
+                      type="button"
+                      onClick={() => setGalleryIndex(i)}
+                      className={`shrink-0 w-20 h-14 rounded-lg overflow-hidden border-2 transition ${i === galleryIndex ? 'border-blue-900' : 'border-transparent'}`}
+                    >
+                      <img src={img} alt="" className="w-full h-full object-cover protected-image" draggable={false} />
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
 
             {/* Content - Blue accents */}
             <div className="p-5 sm:p-8">
@@ -243,16 +303,6 @@ export default function SharePage() {
                 )}
               </div>
 
-              {/* CTA - Blue 30% */}
-              <div className="mt-6 flex flex-col sm:flex-row gap-3">
-                <Link
-                  to={`/properties/${property.id}`}
-                  className="flex-1 inline-flex items-center justify-center gap-2 px-6 py-3 rounded-xl bg-blue-900 text-white font-bold hover:bg-blue-800 transition text-base"
-                >
-                  ดูรายละเอียดเพิ่มเติม
-                  <ExternalLink className="h-4 w-4" />
-                </Link>
-              </div>
             </div>
           </div>
 

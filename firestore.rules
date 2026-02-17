@@ -64,6 +64,21 @@ service cloud.firestore {
       );
     }
 
+    // share_links: ลิงก์แชร์ชั่วคราว (หมดอายุได้)
+    match /share_links/{token} {
+      // ใครที่มี token อ่านได้จนกว่าจะหมดอายุ หรือ admin อ่านได้
+      allow get: if resource.data.expiresAt > request.time || isAdmin();
+      // list จำกัดให้เฉพาะผู้ที่ login (ใช้สำหรับหา link เดิมฝั่ง agent)
+      allow list: if isAuthenticated();
+      // สร้าง/แก้ไข/ลบได้เฉพาะเจ้าของลิงก์ หรือ admin
+      allow create: if isAdmin() ||
+        (isAuthenticated() && request.resource.data.createdBy == request.auth.uid);
+      allow update: if isAdmin() ||
+        (isAuthenticated() && resource.data.createdBy == request.auth.uid);
+      allow delete: if isAdmin() ||
+        (isAuthenticated() && resource.data.createdBy == request.auth.uid);
+    }
+
     // loan_requests: ข้อมูลการเงิน (PDPA) - สร้างได้ทุกคน (ฟอร์มส่ง), อ่าน/เขียนได้เฉพาะ Super Admin
     match /loan_requests/{id} {
       allow create: if true;

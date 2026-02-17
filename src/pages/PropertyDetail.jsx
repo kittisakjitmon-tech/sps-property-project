@@ -3,7 +3,7 @@ import { useParams, Link, useSearchParams, useNavigate } from 'react-router-dom'
 import { Helmet } from 'react-helmet-async'
 import { MapPin, Bed, Bath, Maximize2, Phone, MessageCircle, Share2, CheckCircle2, Copy } from 'lucide-react'
 import NeighborhoodData from '../components/NeighborhoodData'
-import { getPropertyByIdOnce, createAppointment } from '../lib/firestore'
+import { getPropertyByIdOnce, createAppointment, createOrReuseShareLink } from '../lib/firestore'
 import PageLayout from '../components/PageLayout'
 import Toast from '../components/Toast'
 import ProtectedImageContainer from '../components/ProtectedImageContainer'
@@ -555,9 +555,22 @@ export default function PropertyDetail() {
   const mapEmbedUrl = getMapEmbedUrl(property.mapUrl)
   const isShortMapLink = property.mapUrl && (property.mapUrl.includes('maps.app.goo.gl') || property.mapUrl.includes('goo.gl/maps'))
 
-  const handleShare = () => {
-    const shareUrl = `${window.location.origin}/share/${property.id}`
-    window.open(shareUrl, '_blank', 'noopener,noreferrer')
+  const handleShare = async () => {
+    if (!user || !property?.id) return
+    try {
+      const link = await createOrReuseShareLink({
+        propertyId: property.id,
+        createdBy: user.uid,
+        ttlHours: 24,
+      })
+      const shareUrl = `${window.location.origin}/share/${link.id}`
+      window.open(shareUrl, '_blank', 'noopener,noreferrer')
+    } catch (error) {
+      console.error('Error creating share link:', error)
+      setToastMessage('ไม่สามารถสร้างลิงก์แชร์ได้ กรุณาลองใหม่')
+      setShowToast(true)
+      setTimeout(() => setShowToast(false), 2500)
+    }
   }
 
   return (

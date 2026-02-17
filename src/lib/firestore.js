@@ -21,6 +21,7 @@ import { db, storage } from './firebase'
 
 const PROPERTIES = 'properties'
 const LEADS = 'leads'
+const SHARE_LINKS = 'share_links'
 const CLOUDINARY_CLOUD_NAME = import.meta.env.VITE_CLOUDINARY_CLOUD_NAME
 const CLOUDINARY_UPLOAD_PRESET = import.meta.env.VITE_CLOUDINARY_UPLOAD_PRESET
 const CLOUDINARY_ENHANCE_TRANSFORM = 'e_improve:outdoor,a_auto,q_auto,f_auto'
@@ -80,6 +81,23 @@ function uploadImageToCloudinaryWithProgress(file, onProgress) {
   })
 }
 
+function toMillis(value) {
+  if (!value) return 0
+  if (typeof value?.toMillis === 'function') return value.toMillis()
+  if (value instanceof Date) return value.getTime()
+  if (typeof value === 'number') return value
+  return 0
+}
+
+function generateShareToken(length = 20) {
+  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789'
+  let token = ''
+  for (let i = 0; i < length; i += 1) {
+    token += chars[Math.floor(Math.random() * chars.length)]
+  }
+  return token
+}
+
 /** Properties - real-time list. Sorts by createdAt if present. */
 export function getPropertiesSnapshot(callback) {
   const q = collection(db, PROPERTIES)
@@ -111,6 +129,55 @@ export async function getPropertyByIdOnce(id) {
   const d = await getDoc(doc(db, PROPERTIES, id))
   if (!d.exists()) return null
   return { id: d.id, ...d.data() }
+}
+
+/**
+ * Share links (expire in 24 hours by default)
+ * Reuse existing unexpired link for same property+agent.
+ */
+export async function createOrReuseShareLink({ propertyId, createdBy, ttlHours = 24 }) {
+  if (!propertyId || !createdBy) {
+    throw new Error('propertyId and createdBy are required')
+  }
+
+  const nowMs = Date.now()
+  const q = query(
+    collection(db, SHARE_LINKS),
+    where('propertyId', '==', propertyId),
+    where('createdBy', '==', createdBy),
+    limit(10)
+  )
+  const snap = await getDocs(q)
+  const candidates = snap.docs
+    .map((d) => ({ id: d.id, ...d.data() }))
+    .sort((a, b) => toMillis(b.createdAt) - toMillis(a.createdAt))
+
+  const reusable = candidates.find((item) => toMillis(item.expiresAt) > nowMs)
+  if (reusable) return reusable
+
+  const expiresAt = new Date(nowMs + ttlHours * 60 * 60 * 1000)
+  const payload = {
+    propertyId,
+    createdBy,
+    createdAt: serverTimestamp(),
+    expiresAt,
+  }
+  const token = generateShareToken()
+  await setDoc(doc(db, SHARE_LINKS, token), payload)
+  return { id: token, ...payload }
+}
+
+export async function getShareLinkByToken(token) {
+  if (!token) return null
+  const snap = await getDoc(doc(db, SHARE_LINKS, token))
+  if (!snap.exists()) return null
+  return { id: snap.id, ...snap.data() }
+}
+
+export function isShareLinkExpired(shareLink) {
+  const expiresAtMs = toMillis(shareLink?.expiresAt)
+  if (!expiresAtMs) return true
+  return expiresAtMs <= Date.now()
 }
 
 export async function createProperty(data) {
