@@ -1159,41 +1159,7 @@ export default function PropertyForm() {
           )}
         </div>
 
-        {/* Agent */}
-        <div className="bg-white rounded-xl border border-slate-200 p-6 space-y-4">
-          <h3 className="font-medium text-blue-900">ข้อมูลตัวแทน</h3>
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-            <div className="sm:col-span-2">
-              <label className="block text-sm font-medium text-slate-700 mb-1">ชื่อตัวแทน</label>
-              <input
-                type="text"
-                value={form.agentContact.name}
-                onChange={(e) => update({ agentContact: { ...form.agentContact, name: e.target.value } })}
-                className="w-full px-4 py-3 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-900/20"
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-slate-700 mb-1">Line ID</label>
-              <input
-                type="text"
-                value={form.agentContact.lineId}
-                onChange={(e) => update({ agentContact: { ...form.agentContact, lineId: e.target.value } })}
-                className="w-full px-4 py-3 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-900/20"
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-slate-700 mb-1">เบอร์โทร</label>
-              <input
-                type="tel"
-                value={form.agentContact.phone}
-                onChange={(e) => update({ agentContact: { ...form.agentContact, phone: e.target.value } })}
-                className="w-full px-4 py-3 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-900/20"
-              />
-            </div>
-          </div>
-
-          
-        </div>
+        
 
         <div className="flex gap-3">
           <button

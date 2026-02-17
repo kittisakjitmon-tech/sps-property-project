@@ -233,6 +233,9 @@ export default function HomepageSectionsAdmin() {
     title: '',
     subtitle: '',
     targetTag: '',
+    titleColor: 'text-blue-900',
+    isHighlighted: false,
+    isBlinking: false,
     type: 'manual',
     propertyIds: [],
     criteria: {},
@@ -290,6 +293,9 @@ export default function HomepageSectionsAdmin() {
       title: '',
       subtitle: '',
       targetTag: '',
+      titleColor: 'text-blue-900',
+      isHighlighted: false,
+      isBlinking: false,
       type: 'manual',
       propertyIds: [],
       criteria: {},
@@ -304,6 +310,9 @@ export default function HomepageSectionsAdmin() {
       title: section.title || '',
       subtitle: section.subtitle || '',
       targetTag: section.targetTag || '',
+      titleColor: section.titleColor || 'text-blue-900',
+      isHighlighted: section.isHighlighted || false,
+      isBlinking: section.isBlinking || false,
       type: section.type || 'manual',
       propertyIds: section.propertyIds || [],
       criteria: section.criteria || {},
@@ -328,6 +337,9 @@ export default function HomepageSectionsAdmin() {
       title: sectionTitle,
       subtitle: form.subtitle.trim(),
       targetTag: targetTag || null,
+      titleColor: form.titleColor || 'text-blue-900',
+      isHighlighted: form.isHighlighted || false,
+      isBlinking: form.isBlinking || false,
       type: form.type,
       propertyIds: form.type === 'manual' ? form.propertyIds : [],
       criteria: form.type === 'query' ? form.criteria : {},
@@ -574,6 +586,78 @@ export default function HomepageSectionsAdmin() {
                     Tag สำหรับปุ่ม &quot;ดูทั้งหมด&quot; (ถ้าไม่กรอกจะใช้ชื่อหัวข้อแทน)
                   </p>
                 </div>
+                
+                {/* Style Customization */}
+                <div className="border-t border-slate-200 pt-4">
+                  <label className="block text-sm font-medium text-slate-700 mb-3">ปรับแต่งสไตล์ชื่อหัวข้อ</label>
+                  
+                  {/* Color Picker */}
+                  <div className="mb-4">
+                    <label className="block text-xs font-medium text-slate-600 mb-2">สีของชื่อหัวข้อ</label>
+                    <div className="flex flex-wrap gap-2">
+                      {[
+                        { label: 'น้ำเงิน (มาตรฐาน)', value: 'text-blue-900', bg: 'bg-blue-900' },
+                        { label: 'แดง (Hot Deal)', value: 'text-red-600', bg: 'bg-red-600' },
+                        { label: 'ทอง (Premium)', value: 'text-yellow-600', bg: 'bg-yellow-600' },
+                        { label: 'เขียว (New)', value: 'text-emerald-600', bg: 'bg-emerald-600' },
+                        { label: 'ม่วง (Special)', value: 'text-purple-600', bg: 'bg-purple-600' },
+                        { label: 'ส้ม (Featured)', value: 'text-orange-600', bg: 'bg-orange-600' },
+                      ].map((opt) => (
+                        <button
+                          key={opt.value}
+                          type="button"
+                          onClick={() => setForm((f) => ({ ...f, titleColor: opt.value }))}
+                          className={`relative w-10 h-10 rounded-full border-2 transition-all ${
+                            opt.bg
+                          } ${
+                            form.titleColor === opt.value
+                              ? 'border-slate-900 scale-110 shadow-lg ring-2 ring-slate-300'
+                              : 'border-transparent hover:scale-105 hover:shadow-md'
+                          }`}
+                          title={opt.label}
+                        >
+                          {form.titleColor === opt.value && (
+                            <Check className="absolute inset-0 m-auto h-5 w-5 text-white drop-shadow-md" />
+                          )}
+                        </button>
+                      ))}
+                    </div>
+                    <p className="text-xs text-slate-500 mt-2">เลือกสีที่ต้องการสำหรับชื่อหัวข้อ</p>
+                  </div>
+
+                  {/* Highlight Toggle */}
+                  <div className="flex items-center gap-3">
+                    <label className="flex items-center gap-2 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={form.isHighlighted}
+                        onChange={(e) => setForm((f) => ({ ...f, isHighlighted: e.target.checked }))}
+                        className="w-5 h-5 text-blue-900 border-slate-300 rounded focus:ring-blue-900/20"
+                      />
+                      <span className="text-sm font-medium text-slate-700">ทำให้หัวข้อเด่นเป็นพิเศษ</span>
+                    </label>
+                  </div>
+                  <p className="text-xs text-slate-500 mt-1">
+                    เมื่อเปิดใช้งาน จะแสดงเอฟเฟกต์พิเศษ เช่น Gradient หรือเส้นใต้หนาๆ
+                  </p>
+
+                  {/* Blinking Toggle */}
+                  <div className="flex items-center gap-3 mt-3">
+                    <label className="flex items-center gap-2 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={form.isBlinking}
+                        onChange={(e) => setForm((f) => ({ ...f, isBlinking: e.target.checked }))}
+                        className="w-5 h-5 text-blue-900 border-slate-300 rounded focus:ring-blue-900/20"
+                      />
+                      <span className="text-sm font-medium text-slate-700">ทำให้หัวข้อกระพริบ (Pulse)</span>
+                    </label>
+                  </div>
+                  <p className="text-xs text-slate-500 mt-1">
+                    เมื่อเปิดใช้งาน ชื่อหัวข้อจะกระพริบอย่างนุ่มนวลเพื่อดึงดูดความสนใจ
+                  </p>
+                </div>
+
                 <div>
                   <label className="block text-sm font-medium text-slate-700 mb-2">ประเภทการดึงข้อมูล</label>
                   <div className="flex gap-4">

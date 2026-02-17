@@ -205,6 +205,9 @@ export default function Home() {
             subtitle={section.subtitle}
             properties={sectionPropertiesMap[section.id] || []}
             targetTag={(section.targetTag && section.targetTag.trim()) || section.title || ''}
+            titleColor={section.titleColor || 'text-blue-900'}
+            isHighlighted={section.isHighlighted || false}
+            isBlinking={section.isBlinking || false}
           />
         ))
       ) : featured.length > 0 ? (

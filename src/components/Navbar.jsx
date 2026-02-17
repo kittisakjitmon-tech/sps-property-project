@@ -58,7 +58,7 @@ export default function Navbar() {
     buyCloseTimerRef.current = setTimeout(() => {
       setBuyMenuOpen(false)
       buyCloseTimerRef.current = null
-    }, 2000)
+    }, 100)
   }
 
   const scheduleServiceClose = () => {
@@ -66,7 +66,7 @@ export default function Navbar() {
     serviceCloseTimerRef.current = setTimeout(() => {
       setServiceMenuOpen(false)
       serviceCloseTimerRef.current = null
-    }, 2000)
+    }, 100)
   }
 
   useEffect(() => {
@@ -231,12 +231,7 @@ export default function Navbar() {
                 โปรไฟล์
               </Link>
             )}*/}
-            <a
-              href="tel:0955520801"
-              className="inline-flex items-center px-4 py-2 rounded-xl bg-yellow-400 text-blue-900 font-semibold hover:bg-yellow-300 hover:shadow-md transition-all duration-300"
-            >
-              โทรหาเรา: 095 552 0801
-            </a>
+          
             <Link
               to="/post"
               className="inline-flex items-center px-4 py-2 rounded-xl bg-gradient-to-r from-blue-900 to-blue-700 text-white font-semibold hover:shadow-md hover:-translate-y-0.5 transition-all duration-300"
