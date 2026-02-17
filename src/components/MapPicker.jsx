@@ -1,24 +1,30 @@
 import { useEffect, useRef, useState } from 'react'
 import { MapPin } from 'lucide-react'
+import { loadGoogleMapsApi } from '../lib/googleMapsLoader'
 
 export default function MapPicker({ lat, lng, onLocationSelect, className = '' }) {
   const mapRef = useRef(null)
   const mapInstanceRef = useRef(null)
   const markerRef = useRef(null)
   const [isMapReady, setIsMapReady] = useState(false)
+  const [mapLoadError, setMapLoadError] = useState('')
 
   useEffect(() => {
-    if (!window.google || !window.google.maps) {
-      // Wait for Google Maps to load
-      const checkInterval = setInterval(() => {
-        if (window.google && window.google.maps) {
-          clearInterval(checkInterval)
-          setIsMapReady(true)
-        }
-      }, 100)
-      return () => clearInterval(checkInterval)
+    let mounted = true
+    loadGoogleMapsApi()
+      .then(() => {
+        if (!mounted) return
+        setMapLoadError('')
+        setIsMapReady(true)
+      })
+      .catch((error) => {
+        if (!mounted) return
+        console.error('MapPicker: failed to load Google Maps API', error)
+        setMapLoadError('ไม่สามารถโหลด Google Maps ได้')
+      })
+    return () => {
+      mounted = false
     }
-    setIsMapReady(true)
   }, [])
 
   useEffect(() => {
@@ -119,6 +125,17 @@ export default function MapPicker({ lat, lng, onLocationSelect, className = '' }
       mapInstanceRef.current.setCenter(newPosition)
     }
   }, [lat, lng, isMapReady])
+
+  if (mapLoadError) {
+    return (
+      <div className={`bg-slate-100 rounded-lg flex items-center justify-center ${className}`} style={{ minHeight: '400px' }}>
+        <div className="text-center px-4">
+          <MapPin className="h-8 w-8 text-slate-400 mx-auto mb-2" />
+          <p className="text-slate-700">{mapLoadError}</p>
+        </div>
+      </div>
+    )
+  }
 
   if (!isMapReady) {
     return (

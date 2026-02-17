@@ -3,6 +3,7 @@ import { MarkerClusterer } from '@googlemaps/markerclusterer'
 import { Link } from 'react-router-dom'
 import { MapPin } from 'lucide-react'
 import { formatPrice } from '../lib/priceFormat'
+import { loadGoogleMapsApi } from '../lib/googleMapsLoader'
 
 export default function PropertiesMap({ properties, className = '' }) {
   const mapRef = useRef(null)
@@ -11,6 +12,7 @@ export default function PropertiesMap({ properties, className = '' }) {
   const infoWindowsRef = useRef([])
   const clustererRef = useRef(null)
   const [isMapReady, setIsMapReady] = useState(false)
+  const [mapLoadError, setMapLoadError] = useState('')
 
   // Filter properties that have coordinates
   const propertiesWithCoords = properties.filter(
@@ -18,16 +20,21 @@ export default function PropertiesMap({ properties, className = '' }) {
   )
 
   useEffect(() => {
-    if (!window.google || !window.google.maps) {
-      const checkInterval = setInterval(() => {
-        if (window.google && window.google.maps) {
-          clearInterval(checkInterval)
-          setIsMapReady(true)
-        }
-      }, 100)
-      return () => clearInterval(checkInterval)
+    let mounted = true
+    loadGoogleMapsApi()
+      .then(() => {
+        if (!mounted) return
+        setMapLoadError('')
+        setIsMapReady(true)
+      })
+      .catch((error) => {
+        if (!mounted) return
+        console.error('PropertiesMap: failed to load Google Maps API', error)
+        setMapLoadError('ไม่สามารถโหลด Google Maps ได้')
+      })
+    return () => {
+      mounted = false
     }
-    setIsMapReady(true)
   }, [])
 
   useEffect(() => {
@@ -146,6 +153,17 @@ export default function PropertiesMap({ properties, className = '' }) {
       }
     }
   }, [isMapReady, propertiesWithCoords])
+
+  if (mapLoadError) {
+    return (
+      <div className={`bg-slate-100 rounded-lg flex items-center justify-center ${className}`} style={{ minHeight: '500px' }}>
+        <div className="text-center px-4">
+          <MapPin className="h-8 w-8 text-slate-400 mx-auto mb-2" />
+          <p className="text-slate-700">{mapLoadError}</p>
+        </div>
+      </div>
+    )
+  }
 
   if (!isMapReady) {
     return (

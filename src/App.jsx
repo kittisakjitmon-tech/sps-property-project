@@ -1,3 +1,4 @@
+import { Suspense, lazy } from 'react'
 import { Routes, Route, Navigate } from 'react-router-dom'
 import { HelmetProvider } from 'react-helmet-async'
 import { SearchProvider } from './context/SearchContext'
@@ -5,42 +6,52 @@ import { PublicAuthProvider } from './context/PublicAuthContext'
 import { AdminAuthProvider } from './context/AdminAuthContext'
 import AdminProtectedRoute from './components/AdminProtectedRoute'
 import PublicProtectedRoute from './components/PublicProtectedRoute'
-import PageLayout from './components/PageLayout'
-import Home from './pages/Home'
-import Properties from './pages/Properties'
-import PropertyDetail from './pages/PropertyDetail'
-import SharePage from './pages/SharePage'
-import AdminLayout from './admin/AdminLayout'
-import Dashboard from './admin/Dashboard'
-import PropertyForm from './admin/PropertyForm'
-import LeadsInbox from './admin/LeadsInbox'
-import HeroSlidesAdmin from './admin/HeroSlidesAdmin'
-import HomepageSectionsAdmin from './admin/HomepageSectionsAdmin'
-import PopularLocationsAdmin from './admin/PopularLocationsAdmin'
-import PendingProperties from './admin/PendingProperties'
-import UserManagement from './admin/UserManagement'
-import PropertyListPage from './admin/PropertyListPage'
-import AdminLoanRequests from './admin/AdminLoanRequests'
-import MyProperties from './admin/MyProperties'
-import Settings from './admin/Settings'
-import ActivityLogsPage from './admin/ActivityLogsPage'
-import Login from './admin/Login'
-import PublicLogin from './pages/PublicLogin'
-import Contact from './pages/Contact'
-import LoanService from './pages/LoanService'
-import PostProperty from './pages/PostProperty'
-import Favorites from './pages/Favorites'
-import Profile from './pages/Profile'
-import ProfileSettings from './pages/ProfileSettings'
-import Blogs from './pages/Blogs'
-import BlogDetail from './pages/BlogDetail'
-import AdminBlogs from './admin/AdminBlogs'
+
+const Home = lazy(() => import('./pages/Home'))
+const Properties = lazy(() => import('./pages/Properties'))
+const PropertyDetail = lazy(() => import('./pages/PropertyDetail'))
+const SharePage = lazy(() => import('./pages/SharePage'))
+const Contact = lazy(() => import('./pages/Contact'))
+const LoanService = lazy(() => import('./pages/LoanService'))
+const PostProperty = lazy(() => import('./pages/PostProperty'))
+const Favorites = lazy(() => import('./pages/Favorites'))
+const Profile = lazy(() => import('./pages/Profile'))
+const ProfileSettings = lazy(() => import('./pages/ProfileSettings'))
+const PublicLogin = lazy(() => import('./pages/PublicLogin'))
+const Blogs = lazy(() => import('./pages/Blogs'))
+const BlogDetail = lazy(() => import('./pages/BlogDetail'))
+
+const AdminLayout = lazy(() => import('./admin/AdminLayout'))
+const Dashboard = lazy(() => import('./admin/Dashboard'))
+const PropertyForm = lazy(() => import('./admin/PropertyForm'))
+const LeadsInbox = lazy(() => import('./admin/LeadsInbox'))
+const HeroSlidesAdmin = lazy(() => import('./admin/HeroSlidesAdmin'))
+const HomepageSectionsAdmin = lazy(() => import('./admin/HomepageSectionsAdmin'))
+const PopularLocationsAdmin = lazy(() => import('./admin/PopularLocationsAdmin'))
+const PendingProperties = lazy(() => import('./admin/PendingProperties'))
+const UserManagement = lazy(() => import('./admin/UserManagement'))
+const PropertyListPage = lazy(() => import('./admin/PropertyListPage'))
+const AdminLoanRequests = lazy(() => import('./admin/AdminLoanRequests'))
+const MyProperties = lazy(() => import('./admin/MyProperties'))
+const Settings = lazy(() => import('./admin/Settings'))
+const ActivityLogsPage = lazy(() => import('./admin/ActivityLogsPage'))
+const Login = lazy(() => import('./admin/Login'))
+const AdminBlogs = lazy(() => import('./admin/AdminBlogs'))
+
+function RouteLoading() {
+  return (
+    <div className="min-h-screen bg-slate-50 flex items-center justify-center">
+      <p className="text-slate-600">กำลังโหลด...</p>
+    </div>
+  )
+}
 
 export default function App() {
   return (
     <HelmetProvider>
       <SearchProvider>
-        <Routes>
+        <Suspense fallback={<RouteLoading />}>
+          <Routes>
           {/* Admin routes with AdminAuthProvider */}
           <Route
             path="/admin/*"
@@ -119,6 +130,7 @@ export default function App() {
             }
           />
         </Routes>
+        </Suspense>
       </SearchProvider>
     </HelmetProvider>
   )

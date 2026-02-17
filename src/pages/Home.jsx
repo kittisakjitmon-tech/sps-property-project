@@ -1,42 +1,20 @@
-import { useState, useEffect, useMemo, useRef } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { Link } from 'react-router-dom'
 import { CheckCircle2, Building2, Lightbulb, Handshake, TrendingUp, MapPin, MapPinned } from 'lucide-react'
 import PageLayout from '../components/PageLayout'
 import HomeSearch from '../components/HomeSearch'
 import DynamicPropertySection from '../components/DynamicPropertySection'
-import { getPropertiesSnapshot, getPopularLocationsSnapshot, getHomepageSectionsSnapshot, filterPropertiesByCriteria, getFeaturedBlogs } from '../lib/firestore'
+import { getPropertiesOnce, getPopularLocationsOnce, getHomepageSectionsOnce, filterPropertiesByCriteria, getFeaturedBlogs } from '../lib/firestore'
 
 /** การ์ดทำเลยอดฮิต - placeholder น้ำเงินเป็นพื้นหลังเสมอ รูปทับด้านบนเมื่อโหลดได้ */
 const PLACEHOLDER_BG = 'bg-gradient-to-br from-blue-600 to-blue-500'
 
-function PopularLocationCard({ loc, buildLocationPath }) {
+function PopularLocationCard({ loc, buildLocationPath, highPriority = false }) {
   const displayName = loc.displayName || loc.district || loc.province
   const rawUrl = loc.imageUrl || loc.image_url || ''
   const imageUrl = typeof rawUrl === 'string' && rawUrl.trim() ? rawUrl.trim() : null
-  const [imageLoaded, setImageLoaded] = useState(false)
-  const [imageFailed, setImageFailed] = useState(false)
-  const imgRef = useRef(null)
-  const showImage = imageUrl && !imageFailed
-  const imageVisible = showImage && imageLoaded
-
-  // รีเซ็ตเมื่อ URL เปลี่ยน
-  useEffect(() => {
-    if (!imageUrl) return
-    setImageLoaded(false)
-    setImageFailed(false)
-  }, [imageUrl])
-
-  // จับกรณีรูปโหลดจาก cache แล้ว (onLoad อาจไม่ firing)
-  useEffect(() => {
-    if (!showImage || !imgRef.current) return
-    const img = imgRef.current
-    const checkComplete = () => {
-      if (img.complete && img.naturalWidth > 0) setImageLoaded(true)
-    }
-    checkComplete()
-    img.addEventListener('load', checkComplete)
-    return () => img.removeEventListener('load', checkComplete)
-  }, [showImage, imageUrl])
+  const [failedImageUrl, setFailedImageUrl] = useState(null)
+  const showImage = imageUrl && failedImageUrl !== imageUrl
 
   return (
     <Link
@@ -51,15 +29,14 @@ function PopularLocationCard({ loc, buildLocationPath }) {
       {showImage && (
         <div className="absolute inset-0 z-[1] overflow-hidden" onContextMenu={(e) => e.preventDefault()}>
           <img
-            ref={imgRef}
+            key={imageUrl}
             src={imageUrl}
             alt={displayName}
-            className={`w-full h-full object-cover group-hover:scale-105 transition-transform duration-300 select-none ${imageVisible ? 'opacity-100' : 'opacity-0'}`}
-            loading="eager"
+            className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300 select-none"
+            loading={highPriority ? 'eager' : 'lazy'}
             draggable={false}
-            fetchPriority="high"
-            onLoad={() => setImageLoaded(true)}
-            onError={() => setImageFailed(true)}
+            fetchPriority={highPriority ? 'high' : 'auto'}
+            onError={() => setFailedImageUrl(imageUrl)}
           />
         </div>
       )}
@@ -106,36 +83,28 @@ export default function Home() {
   const [featuredBlogs, setFeaturedBlogs] = useState([])
 
   useEffect(() => {
-    const unsub = getPropertiesSnapshot(setProperties)
-    return () => unsub()
-  }, [])
-
-  useEffect(() => {
-    const unsub = getPopularLocationsSnapshot((locations) => {
-      const active = locations.filter((loc) => loc.isActive === true)
-      setPopularLocations(active)
-    })
-    return () => unsub()
-  }, [])
-
-  useEffect(() => {
-    const unsub = getHomepageSectionsSnapshot((sections) => {
-      const active = sections.filter((s) => s.isActive === true)
-      setHomepageSections(active)
-    })
-    return () => unsub()
-  }, [])
-
-  useEffect(() => {
-    const loadFeaturedBlogs = async () => {
+    let mounted = true
+    const loadHomeData = async () => {
       try {
-        const blogs = await getFeaturedBlogs()
-        setFeaturedBlogs(blogs)
+        const [allProperties, locations, sections, blogs] = await Promise.all([
+          getPropertiesOnce(false),
+          getPopularLocationsOnce(),
+          getHomepageSectionsOnce(),
+          getFeaturedBlogs(),
+        ])
+        if (!mounted) return
+        setProperties(allProperties)
+        setPopularLocations((locations || []).filter((loc) => loc.isActive === true))
+        setHomepageSections((sections || []).filter((s) => s.isActive === true))
+        setFeaturedBlogs(blogs || [])
       } catch (error) {
-        console.error('Error loading featured blogs:', error)
+        console.error('Error loading home data:', error)
       }
     }
-    loadFeaturedBlogs()
+    loadHomeData()
+    return () => {
+      mounted = false
+    }
   }, [])
 
   // Resolve properties for each section (จำกัดสูงสุด 5 รายการต่อ section)
@@ -187,17 +156,20 @@ export default function Home() {
       heroExtra={
         <div className="max-w-5xl mx-auto w-full space-y-6">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3 sm:gap-4">
-            {serviceHighlights.map(({ icon: Icon, title, iconClassName }) => (
+            {serviceHighlights.map((item) => {
+              const IconComponent = item.icon
+              return (
               <div
-                key={title}
+                key={item.title}
                 className="flex items-start gap-3 p-3 sm:p-4 rounded-xl bg-white/10 backdrop-blur-md border border-white/20 shadow-md"
               >
                 <div className="w-8 h-8 rounded-full bg-white/15 flex items-center justify-center shrink-0">
-                  <Icon className={`h-4.5 w-4.5 ${iconClassName}`} />
+                  <IconComponent className={`h-4.5 w-4.5 ${item.iconClassName}`} />
                 </div>
-                <p className="text-white text-base sm:text-lg leading-relaxed font-medium">{title}</p>
+                <p className="text-white text-base sm:text-lg leading-relaxed font-medium">{item.title}</p>
               </div>
-            ))}
+              )
+            })}
           </div>
           <div className="flex items-center justify-center gap-2 text-gray-300 text-sm">
             <MapPin className="h-4 w-4" />
@@ -329,11 +301,12 @@ export default function Home() {
             </div>
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4 sm:gap-5">
-              {popularLocations.map((loc) => (
+              {popularLocations.map((loc, index) => (
                 <PopularLocationCard
                   key={loc.id}
                   loc={loc}
                   buildLocationPath={buildLocationPath}
+                  highPriority={index === 0}
                 />
               ))}
             </div>
