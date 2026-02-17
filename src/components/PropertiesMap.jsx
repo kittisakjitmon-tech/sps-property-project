@@ -71,7 +71,7 @@ export default function PropertiesMap({ properties, className = '' }) {
         map,
         title: property.title || 'ทรัพย์สิน',
         icon: {
-          url: 'http://maps.google.com/mapfiles/ms/icons/red-dot.png',
+          url: 'https://maps.google.com/mapfiles/ms/icons/red-dot.png',
           scaledSize: new window.google.maps.Size(32, 32),
         },
       })
