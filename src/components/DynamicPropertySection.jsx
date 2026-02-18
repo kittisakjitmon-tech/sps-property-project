@@ -10,6 +10,7 @@ export default function DynamicPropertySection({
   titleColor = 'text-blue-900',
   isHighlighted = false,
   isBlinking = false,
+  sectionIndex = 0,
 }) {
   if (!properties || properties.length === 0) return null
 
@@ -70,26 +71,32 @@ export default function DynamicPropertySection({
 
   const titleStyle = getTitleStyle()
 
+  const bgClass = sectionIndex % 2 === 0 ? 'bg-slate-50' : 'bg-white'
+
   return (
-    <section className="py-6 sm:py-8 bg-slate-50">
+    <section className={`py-10 sm:py-12 ${bgClass}`}>
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         {/* Header: Title + View All */}
-        <div className="flex flex-wrap items-center justify-between gap-3 mb-5">
+        <div className="flex flex-wrap items-center justify-between gap-3 mb-6">
           <div className="relative">
-            <h2 className={titleStyle.className}>
-              {title}
-            </h2>
+            {/* Accent bar */}
+            <div className="flex items-center gap-3">
+              <span className="w-1 h-7 bg-yellow-400 rounded-full shrink-0" />
+              <h2 className={titleStyle.className}>
+                {title}
+              </h2>
+            </div>
             {isHighlighted && (
               <span className="absolute bottom-0 left-0 right-0 h-0.5 bg-gradient-to-r from-transparent via-current to-transparent opacity-30" />
             )}
-            {subtitle && <p className="text-slate-600 text-sm mt-0.5">{subtitle}</p>}
+            {subtitle && <p className="text-slate-500 text-sm mt-1.5 ml-4">{subtitle}</p>}
           </div>
           <Link
             to={viewAllHref}
-            className="inline-flex items-center gap-1 text-blue-900 font-medium hover:underline focus:outline-none focus:underline group shrink-0"
+            className="inline-flex items-center gap-1 text-sm font-semibold text-blue-900 border border-blue-200 bg-blue-50 hover:bg-blue-900 hover:text-white px-4 py-1.5 rounded-full transition-all duration-200 shrink-0"
           >
             ดูทั้งหมด
-            <ChevronRight className="h-5 w-5 transition-transform group-hover:translate-x-0.5" />
+            <ChevronRight className="h-4 w-4 transition-transform group-hover:translate-x-0.5" />
           </Link>
         </div>
 

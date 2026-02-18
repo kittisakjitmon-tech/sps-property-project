@@ -39,9 +39,9 @@ export default function HeroSlider({ children, className = '' }) {
 
   if (loading) {
     return (
-      <section className={`relative flex items-center justify-center bg-slate-800 bg-cover bg-center min-h-[70vh] ${className}`}>
-        <div className="absolute inset-0 bg-gradient-to-b from-black/50 via-black/40 to-black/60" />
-        <div className="relative z-10 w-full flex flex-col items-center justify-center min-h-[70vh] py-12 md:py-16 px-4">
+      <section className={`relative flex items-center justify-center bg-slate-900 bg-cover bg-center min-h-[85vh] ${className}`}>
+        <div className="absolute inset-0 bg-gradient-to-b from-black/65 via-black/50 to-black/75" />
+        <div className="relative z-10 w-full flex flex-col items-center justify-center min-h-[85vh] py-16 md:py-20 px-4">
           {children}
         </div>
       </section>
@@ -49,7 +49,7 @@ export default function HeroSlider({ children, className = '' }) {
   }
 
   return (
-    <section className={`relative min-h-[70vh] flex items-center justify-center ${className}`} style={{ minHeight: '70vh' }}>
+    <section className={`relative min-h-[85vh] flex items-center justify-center ${className}`} style={{ minHeight: '85vh' }}>
       <Swiper
         modules={[Autoplay, EffectFade, Pagination]}
         effect="fade"
@@ -64,17 +64,17 @@ export default function HeroSlider({ children, className = '' }) {
         }}
         loop={slides.length > 1}
         className="!absolute !inset-0 !w-full !h-full"
-        style={{ height: '100%', minHeight: '70vh' }}
+        style={{ height: '100%', minHeight: '85vh' }}
       >
         {slides.map((slide) => {
           const imageUrl = getSlideImageUrl(slide)
           return (
-            <SwiperSlide key={slide.id} style={{ height: '100%', minHeight: '70vh' }}>
+            <SwiperSlide key={slide.id} style={{ height: '100%', minHeight: '85vh' }}>
               <div
                 className="w-full h-full bg-cover bg-center bg-no-repeat"
                 style={{
                   backgroundImage: `url("${imageUrl}")`,
-                  minHeight: '70vh',
+                  minHeight: '85vh',
                   height: '100%',
                   width: '100%',
                 }}
@@ -83,10 +83,10 @@ export default function HeroSlider({ children, className = '' }) {
           )
         })}
       </Swiper>
-      {/* Overlay สำหรับเพิ่มความทึบแสง */}
-      <div className="absolute inset-0 bg-gradient-to-b from-black/50 via-black/40 to-black/60 z-[1]" />
-      {/* Content Container - จัดกึ่งกลางทั้งแนวตั้งและแนวนอน */}
-      <div className="relative z-[2] w-full flex flex-col items-center justify-center min-h-[70vh] py-12 md:py-16 px-4">
+      {/* Overlay: stronger gradient for better text contrast */}
+      <div className="absolute inset-0 bg-gradient-to-b from-black/65 via-black/50 to-black/75 z-[1]" />
+      {/* Content Container */}
+      <div className="relative z-[2] w-full flex flex-col items-center justify-center min-h-[85vh] py-16 md:py-20 px-4">
         {children}
       </div>
     </section>
