@@ -78,42 +78,37 @@ export default function HomeSearch() {
   }
 
   return (
-    <div className="w-full flex flex-col items-center gap-4 px-4">
+    <div className="w-full">
       {/* Single Smart Input Box - Google/Airbnb Style */}
-      <div className="w-[90%] max-w-3xl">
-        <div className="relative bg-white rounded-full shadow-2xl flex items-center gap-2 p-2 border border-slate-100">
-          {/* Search Icon (Left) */}
-          <div className="pl-4 flex-shrink-0">
-            <Search className="h-6 w-6 text-slate-400" />
-          </div>
-          
-          {/* Input Field */}
-          <input
-            ref={inputRef}
-            type="text"
-            value={searchQuery}
-            onChange={(e) => {
-              setSearchQuery(e.target.value)
-              // Clear active chip when user types manually
-              if (activeChipId) {
-                setActiveChipId(null)
-              }
-            }}
-            onKeyDown={handleKeyDown}
-            placeholder="ค้นหาทำเล, ชื่อโครงการ หรือเงื่อนไขที่คุณต้องการ..."
-            className="flex-1 text-lg md:text-xl py-3 md:py-4 px-2 border-none bg-transparent text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-0"
-          />
-          
-          {/* Search Button (Right) */}
-          <button
-            type="button"
-            onClick={handleSearch}
-            className="flex-shrink-0 bg-blue-600 hover:bg-blue-700 text-white rounded-full p-3 md:p-4 transition-all duration-200 shadow-md hover:shadow-lg flex items-center justify-center"
-            aria-label="ค้นหา"
-          >
-            <Search className="h-5 w-5 md:h-6 md:w-6" />
-          </button>
+      <div className="relative bg-white rounded-full shadow-xl flex items-center p-1.5 sm:p-2 border border-slate-100 overflow-hidden">
+        {/* Search Icon (Left) */}
+        <div className="pl-3 sm:pl-4 flex-shrink-0">
+          <Search className="h-5 w-5 sm:h-6 sm:w-6 text-slate-400" />
         </div>
+
+        {/* Input Field */}
+        <input
+          ref={inputRef}
+          type="text"
+          value={searchQuery}
+          onChange={(e) => {
+            setSearchQuery(e.target.value)
+            if (activeChipId) setActiveChipId(null)
+          }}
+          onKeyDown={handleKeyDown}
+          placeholder="ค้นหาทำเล, ชื่อโครงการ..."
+          className="flex-1 min-w-0 text-sm sm:text-base md:text-lg py-2.5 sm:py-3 md:py-4 px-2 sm:px-3 border-none bg-transparent text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-0"
+        />
+
+        {/* Search Button (Right) */}
+        <button
+          type="button"
+          onClick={handleSearch}
+          className="flex-shrink-0 bg-blue-600 hover:bg-blue-700 text-white rounded-full p-2.5 sm:p-3 md:p-4 transition-all duration-200 shadow-md hover:shadow-lg flex items-center justify-center"
+          aria-label="ค้นหา"
+        >
+          <Search className="h-4 w-4 sm:h-5 sm:w-5 md:h-6 md:w-6" />
+        </button>
       </div>
 
       {/* Quick Filter Chips 

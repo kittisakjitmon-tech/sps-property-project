@@ -58,7 +58,7 @@ export default function PageLayout({
               {/* Search Component - Glassmorphism */}
               {searchComponent && (
                 <div className="mb-8">
-                  <div className="bg-white/70 backdrop-blur-md border border-white/20 shadow-lg rounded-2xl p-4 sm:p-6 max-w-3xl mx-auto">
+                  <div className="bg-white/70 backdrop-blur-md border border-white/20 shadow-lg rounded-2xl p-3 sm:p-5 max-w-3xl mx-auto">
                     {searchComponent}
                   </div>
                 </div>
