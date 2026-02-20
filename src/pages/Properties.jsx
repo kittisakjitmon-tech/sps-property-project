@@ -39,6 +39,7 @@ export default function Properties() {
   const [searchQuery, setSearchQuery] = useState(initialKeyword) // ค่าจริงที่ผู้ใช้พิมพ์ (State Update Only)
   const [debouncedKeyword, setDebouncedKeyword] = useState(initialKeyword) // ค่าที่ใช้สำหรับ Filter (อัปเดตเมื่อกดปุ่มค้นหาเท่านั้น)
   const [isSearchFocused, setIsSearchFocused] = useState(false)
+  const [displayLimit, setDisplayLimit] = useState(12)
 
   // Typing animation สำหรับ placeholder (Decoupled จาก searchQuery)
   const TYPING_PHRASES = [
@@ -410,6 +411,14 @@ export default function Properties() {
   // Safety check: Ensure filtered is always an array
   const safeFiltered = Array.isArray(filtered) ? filtered : []
 
+  // Reset display limit when filter results change
+  useEffect(() => {
+    setDisplayLimit(12)
+  }, [safeFiltered.length])
+
+  // Get only the paginated subset for the grid
+  const paginatedProperties = safeFiltered.slice(0, displayLimit)
+
   // Debug logging removed for production
 
   return (
@@ -526,9 +535,9 @@ export default function Properties() {
                 </div>
               )}
 
-              {/* Properties Grid */}
+              {/* Properties Grid (Paginated) */}
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-                {safeFiltered.map((p) => {
+                {paginatedProperties.map((p) => {
                   if (!p || !p.id) return null
                   try {
                     return <PropertyCard key={p.id} property={p} searchQuery={debouncedKeyword} />
@@ -540,6 +549,18 @@ export default function Properties() {
                   }
                 })}
               </div>
+
+              {/* Load More Button */}
+              {safeFiltered.length > displayLimit && (
+                <div className="mt-10 flex justify-center">
+                  <button
+                    onClick={() => setDisplayLimit((prev) => prev + 12)}
+                    className="px-6 py-3 bg-white border border-slate-200 text-slate-700 rounded-xl hover:bg-slate-50 hover:border-blue-300 hover:text-blue-700 hover:shadow-sm transition-all font-medium inline-flex items-center gap-2"
+                  >
+                    โหลดเพิ่มเติม (Load More)
+                  </button>
+                </div>
+              )}
 
               {/* Empty State */}
               {safeFiltered.length === 0 && (
