@@ -7,7 +7,7 @@ import PropertyCard from '../components/PropertyCard'
 import PropertiesMap from '../components/PropertiesMap'
 import FilterSidebar from '../components/FilterSidebar'
 import ActiveSearchCriteriaBar from '../components/ActiveSearchCriteriaBar'
-import { SlidersHorizontal, Search, X } from 'lucide-react'
+import { SlidersHorizontal, Search, X, Wallet, Landmark, SearchX } from 'lucide-react'
 import { searchProperties } from '../lib/smartSearch'
 import { filterProperties } from '../lib/globalSearch'
 import { useTypingPlaceholder } from '../components/TypingPlaceholder'
@@ -15,31 +15,31 @@ import { useTypingPlaceholder } from '../components/TypingPlaceholder'
 export default function Properties() {
   const [searchParams, setSearchParams] = useSearchParams()
   const navigate = useNavigate()
-  
+
   // Safety check for useSearch context
   let filters, updateFilters, clearFilters
   try {
     const searchContext = useSearch()
     filters = searchContext?.filters || {}
-    updateFilters = searchContext?.updateFilters || (() => {})
-    clearFilters = searchContext?.clearFilters || (() => {})
+    updateFilters = searchContext?.updateFilters || (() => { })
+    clearFilters = searchContext?.clearFilters || (() => { })
   } catch (error) {
     console.error('SearchContext error:', error)
     filters = {}
-    updateFilters = () => {}
-    clearFilters = () => {}
+    updateFilters = () => { }
+    clearFilters = () => { }
   }
-  
+
   const [properties, setProperties] = useState([])
   const [filterSidebarOpen, setFilterSidebarOpen] = useState(false)
-  
+
   // State Separation: แยกตัวแปรออกเป็น 2 ตัว
   // Priority: 'search' parameter (from tag clicks) > 'q' parameter (from manual search)
   const initialKeyword = searchParams.get('search') || searchParams.get('q') || ''
   const [searchQuery, setSearchQuery] = useState(initialKeyword) // ค่าจริงที่ผู้ใช้พิมพ์ (State Update Only)
   const [debouncedKeyword, setDebouncedKeyword] = useState(initialKeyword) // ค่าที่ใช้สำหรับ Filter (อัปเดตเมื่อกดปุ่มค้นหาเท่านั้น)
   const [isSearchFocused, setIsSearchFocused] = useState(false)
-  
+
   // Typing animation สำหรับ placeholder (Decoupled จาก searchQuery)
   const TYPING_PHRASES = [
     'บ้านมือสอง',
@@ -54,7 +54,7 @@ export default function Properties() {
     50,
     2000
   )
-  
+
   // Auto-open filter sidebar on desktop
   useEffect(() => {
     const handleResize = () => {
@@ -70,11 +70,11 @@ export default function Properties() {
   useEffect(() => {
     try {
       const unsub = getPropertiesSnapshot((props) => {
-      if (Array.isArray(props)) {
-        setProperties(props)
-      } else {
-        setProperties([])
-      }
+        if (Array.isArray(props)) {
+          setProperties(props)
+        } else {
+          setProperties([])
+        }
       })
       return () => {
         try {
@@ -102,19 +102,19 @@ export default function Properties() {
     const currentParams = searchParams.toString()
     const urlKeyword = searchParams.get('q') || ''
     const urlSearch = searchParams.get('search') || '' // Check for 'search' parameter from tag clicks
-    
+
     // ตรวจสอบว่า URL เปลี่ยนจากภายนอกจริงๆ (ไม่ใช่จากการกดปุ่มค้นหา)
     const isExternalChange = prevSearchParamsRef.current !== currentParams
-    
+
     if (isExternalChange) {
       // Priority: 'search' parameter (from tag clicks) > 'q' parameter (from manual search)
       const keywordToUse = urlSearch || urlKeyword
-      
+
       if (keywordToUse) {
         // Sync เฉพาะเมื่อ URL เปลี่ยนจากภายนอก (เช่น จาก navigation หรือ share link หรือ tag click)
         setDebouncedKeyword(keywordToUse)
         setSearchQuery(keywordToUse) // Sync searchQuery ด้วย
-        
+
         // If 'search' parameter exists, also update 'q' parameter for consistency
         if (urlSearch && !urlKeyword) {
           const params = new URLSearchParams(searchParams)
@@ -128,7 +128,7 @@ export default function Properties() {
         setSearchQuery('')
       }
     }
-    
+
     prevSearchParamsRef.current = currentParams
   }, [searchParams, navigate])
 
@@ -173,16 +173,16 @@ export default function Properties() {
       const propertySubStatus = normalizeSubStatusFromURL(statusParam)
       const feature = searchParams.get('feature') ?? ''
       const tag = searchParams.get('tag') ?? ''
-      
+
       if (updateFilters) {
-        updateFilters({ 
-          location, 
+        updateFilters({
+          location,
           propertyType,
           listingType,
           subListingType,
           propertyCondition,
           availability,
-          priceMin, 
+          priceMin,
           priceMax,
           bedrooms,
           bathrooms,
@@ -203,10 +203,10 @@ export default function Properties() {
   // AI Recommendation: URL State Synchronization
   const updateURL = useCallback((updates) => {
     const params = new URLSearchParams(searchParams)
-    
+
     // Preserve type (buy/rent) if exists
     if (typeParam) params.set('type', typeParam)
-    
+
     // Update params from updates object
     Object.entries(updates).forEach(([key, value]) => {
       if (value && value !== '') {
@@ -215,7 +215,7 @@ export default function Properties() {
         params.delete(key)
       }
     })
-    
+
     navigate(`/properties?${params.toString()}`, { replace: true })
   }, [searchParams, navigate, typeParam])
 
@@ -245,7 +245,7 @@ export default function Properties() {
   const handleSearchButton = useCallback(() => {
     const trimmedQuery = searchQuery.trim()
     setDebouncedKeyword(trimmedQuery) // อัปเดต debouncedKeyword เพื่อ trigger การค้นหา
-    
+
     // Update URL Parameters
     const params = new URLSearchParams(searchParams)
     if (trimmedQuery) {
@@ -254,10 +254,10 @@ export default function Properties() {
       //params.delete('q')
     }
     if (typeParam) params.set('type', typeParam)
-    
+
     // อัปเดต prevSearchParamsRef ก่อน navigate เพื่อป้องกัน useEffect sync กลับ
     prevSearchParamsRef.current = params.toString()
-    
+
     navigate(`/properties?${params.toString()}`, { replace: false })
   }, [searchQuery, searchParams, navigate, typeParam])
 
@@ -301,7 +301,7 @@ export default function Properties() {
   // Handle Remove Individual Filter
   const handleRemoveFilter = useCallback((filter) => {
     const params = new URLSearchParams(searchParams)
-    
+
     switch (filter.type) {
       case 'keyword':
         setSearchQuery('')
@@ -354,10 +354,10 @@ export default function Properties() {
       default:
         break
     }
-    
+
     // Preserve type if exists
     if (typeParam) params.set('type', typeParam)
-    
+
     navigate(`/properties?${params.toString()}`, { replace: true })
   }, [searchParams, navigate, typeParam, updateFilters])
 
@@ -368,7 +368,7 @@ export default function Properties() {
       if (!Array.isArray(properties)) {
         return []
       }
-      
+
       // Build filter object from URL params and state
       const searchFilters = {
         keyword: debouncedKeyword || '',
@@ -389,12 +389,12 @@ export default function Properties() {
 
       // Use Unified Global Search
       const result = filterProperties(properties, searchFilters)
-      
+
       // Ensure result is an array
       if (!Array.isArray(result)) {
         return []
       }
-      
+
       return result
     } catch (error) {
       console.error('Search error:', error)
@@ -413,29 +413,30 @@ export default function Properties() {
   // Debug logging removed for production
 
   return (
-    <PageLayout 
+    <PageLayout
       heroTitle={heroTitle}
       heroSubtitle={heroSubtitle}
       searchComponent={null}
     >
       <div className="min-h-screen bg-slate-50 py-8">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          {/* Header: Title + result count + mobile filter */}
           <div className="flex items-center justify-between mb-6">
-            <h1 className="text-2xl sm:text-3xl font-bold text-blue-900">{pageTitle}</h1>
-            <div className="flex items-center gap-4">
+            <div>
+              <h1 className="text-2xl sm:text-3xl font-bold text-blue-900 tracking-tight">{pageTitle}</h1>
               {safeFiltered.length > 0 && (
-                <p className="text-slate-600 text-sm">
+                <p className="text-slate-500 text-sm mt-1">
                   พบ <span className="font-semibold text-blue-900">{safeFiltered.length}</span> รายการ
                 </p>
               )}
-              <button
-                onClick={() => setFilterSidebarOpen(true)}
-                className="lg:hidden flex items-center gap-2 px-4 py-2 bg-white border border-slate-300 rounded-lg hover:bg-slate-50 transition"
-              >
-                <SlidersHorizontal className="h-4 w-4 text-slate-600" />
-                <span className="text-sm font-medium text-slate-700">กรอง</span>
-              </button>
             </div>
+            <button
+              onClick={() => setFilterSidebarOpen(true)}
+              className="lg:hidden inline-flex items-center gap-2 px-4 py-2.5 bg-white border border-slate-200 text-slate-700 rounded-xl hover:bg-slate-50 hover:border-blue-300 transition-all shadow-sm font-medium text-sm"
+            >
+              <SlidersHorizontal className="h-4 w-4" />
+              กรอง
+            </button>
           </div>
 
           {/* Global Keyword Search with Button Trigger */}
@@ -491,7 +492,7 @@ export default function Properties() {
               </p>
             )}
           </div>
-        
+
           <div className="flex gap-6">
             {/* Filter Sidebar */}
             <FilterSidebar
@@ -503,7 +504,7 @@ export default function Properties() {
               onClose={() => setFilterSidebarOpen(false)}
             />
 
-            <div className="flex-1">
+            <div className="flex-1 min-w-0">
               {/* Active Search Criteria Bar */}
               <ActiveSearchCriteriaBar
                 keyword={debouncedKeyword}
@@ -518,68 +519,73 @@ export default function Properties() {
                 onClearAll={handleClearFilters}
               />
 
-        {/* Properties Map */}
-        {safeFiltered.length > 0 && (
-          <div className="mb-8">
-            <PropertiesMap properties={safeFiltered} />
-          </div>
-        )}
+              {/* Properties Map */}
+              {safeFiltered.length > 0 && (
+                <div className="mb-8">
+                  <PropertiesMap properties={safeFiltered} />
+                </div>
+              )}
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-          {safeFiltered.map((p) => {
-            if (!p || !p.id) {
-              return null
-            }
-            try {
-              return <PropertyCard key={p.id} property={p} searchQuery={debouncedKeyword} />
-            } catch (error) {
-              // Keep error logging for critical errors
-              if (process.env.NODE_ENV === 'development') {
-                console.error('Error rendering PropertyCard:', error, p)
-              }
-              return null
-            }
-          })}
-        </div>
-        {safeFiltered.length === 0 && (
-          <div className="text-center py-12">
-            <p className="text-slate-500 mb-6">ไม่พบรายการที่ตรงกับเงื่อนไข</p>
-            {/* AI Recommendation: Empty State with Services */}
-            <div className="bg-gradient-to-br from-blue-50 to-slate-50 rounded-2xl p-8 max-w-2xl mx-auto">
-              <h3 className="text-xl font-bold text-blue-900 mb-4">บริการแนะนำ</h3>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <Link
-                  to="/loan-services"
-                  className="bg-white rounded-xl p-6 shadow-sm hover:shadow-md transition border border-blue-100"
-                >
-                  <div className="flex items-center gap-3 mb-2">
-                    <div className="w-12 h-12 rounded-lg bg-blue-100 flex items-center justify-center">
-                      <span className="text-2xl">💰</span>
-                    </div>
-                    <h4 className="font-semibold text-blue-900">ปิดหนี้ / รวมหนี้</h4>
-                  </div>
-                  <p className="text-sm text-slate-600">บริการปิดหนี้ รวมหนี้ ผ่อนทางเดียว</p>
-                </Link>
-                <Link
-                  to="/loan-services"
-                  className="bg-white rounded-xl p-6 shadow-sm hover:shadow-md transition border border-blue-100"
-                >
-                  <div className="flex items-center gap-3 mb-2">
-                    <div className="w-12 h-12 rounded-lg bg-green-100 flex items-center justify-center">
-                      <span className="text-2xl">🏦</span>
-                    </div>
-                    <h4 className="font-semibold text-blue-900">สินเชื่อครบวงจร</h4>
-                  </div>
-                  <p className="text-sm text-slate-600">บริการสินเชื่อครบวงจรทุกขั้นตอน</p>
-                </Link>
+              {/* Properties Grid */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+                {safeFiltered.map((p) => {
+                  if (!p || !p.id) return null
+                  try {
+                    return <PropertyCard key={p.id} property={p} searchQuery={debouncedKeyword} />
+                  } catch (error) {
+                    if (process.env.NODE_ENV === 'development') {
+                      console.error('Error rendering PropertyCard:', error, p)
+                    }
+                    return null
+                  }
+                })}
               </div>
-            </div>
-          </div>
-        )}
+
+              {/* Empty State */}
+              {safeFiltered.length === 0 && (
+                <div className="text-center py-16">
+                  <div className="inline-flex w-16 h-16 rounded-2xl bg-slate-100 items-center justify-center mb-4">
+                    <SearchX className="h-8 w-8 text-slate-400" />
+                  </div>
+                  <h2 className="text-lg font-bold text-slate-800 mb-1">ไม่พบรายการที่ตรงกับเงื่อนไข</h2>
+                  <p className="text-slate-500 text-sm mb-8">ลองเปลี่ยนคำค้นหาหรือปรับตัวกรองใหม่</p>
+
+                  {/* Recommended Services */}
+                  <div className="bg-gradient-to-br from-blue-50 to-slate-50 rounded-2xl p-8 max-w-2xl mx-auto border border-blue-100">
+                    <h3 className="text-base font-bold text-blue-900 mb-4">บริการแนะนำจาก SPS</h3>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                      <Link
+                        to="/loan-services"
+                        className="group flex items-center gap-4 bg-white rounded-xl p-5 shadow-sm hover:shadow-md hover:-translate-y-0.5 transition-all border border-slate-100"
+                      >
+                        <div className="w-11 h-11 rounded-xl bg-blue-100 text-blue-700 flex items-center justify-center shrink-0 group-hover:bg-blue-200 transition-colors">
+                          <Wallet className="h-5 w-5" />
+                        </div>
+                        <div className="text-left">
+                          <h4 className="font-semibold text-slate-900 text-sm">ปิดหนี้ / รวมหนี้</h4>
+                          <p className="text-xs text-slate-500 mt-0.5">บริการปิดหนี้ รวมหนี้ ผ่อนทางเดียว</p>
+                        </div>
+                      </Link>
+                      <Link
+                        to="/loan-services"
+                        className="group flex items-center gap-4 bg-white rounded-xl p-5 shadow-sm hover:shadow-md hover:-translate-y-0.5 transition-all border border-slate-100"
+                      >
+                        <div className="w-11 h-11 rounded-xl bg-emerald-100 text-emerald-700 flex items-center justify-center shrink-0 group-hover:bg-emerald-200 transition-colors">
+                          <Landmark className="h-5 w-5" />
+                        </div>
+                        <div className="text-left">
+                          <h4 className="font-semibold text-slate-900 text-sm">สินเชื่อครบวงจร</h4>
+                          <p className="text-xs text-slate-500 mt-0.5">บริการสินเชื่อครบวงจรทุกขั้นตอน</p>
+                        </div>
+                      </Link>
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
           </div>
         </div>
       </div>
-    </PageLayout>
+    </PageLayout >
   )
 }

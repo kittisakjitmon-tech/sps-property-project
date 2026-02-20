@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom'
 import {
   CheckCircle2, Building2, Lightbulb, Handshake, TrendingUp,
   MapPin, MapPinned, Phone, MessageCircle, Users, Star, Award, Clock,
+  Home as HomeIcon, Wallet, BadgeCheck, Zap, Trophy, CalendarDays, Play,
 } from 'lucide-react'
 import PageLayout from '../components/PageLayout'
 import HomeSearch from '../components/HomeSearch'
@@ -11,6 +12,29 @@ import { getPropertiesOnce, getPopularLocationsOnce, getHomepageSectionsOnce, fi
 
 /** การ์ดทำเลยอดฮิต - placeholder น้ำเงินเป็นพื้นหลังเสมอ รูปทับด้านบนเมื่อโหลดได้ */
 const PLACEHOLDER_BG = 'bg-gradient-to-br from-blue-600 to-blue-500'
+
+/** Blog helper functions (module-level เพื่อป้องกัน re-creation ในทุก render) */
+function formatBlogDate(timestamp) {
+  if (!timestamp) return ''
+  const date = timestamp.toDate ? timestamp.toDate() : new Date(timestamp)
+  return date.toLocaleDateString('th-TH', {
+    year: 'numeric',
+    month: 'short',
+    day: 'numeric',
+  })
+}
+
+function extractYouTubeId(url) {
+  if (!url) return null
+  const regExp = /^.*(youtu.be\/|v\/|u\/\w\/|embed\/|watch\?v=|&v=)([^#&?]*).*/
+  const match = url.match(regExp)
+  return match && match[2].length === 11 ? match[2] : null
+}
+
+function getYouTubeThumbnail(url) {
+  const videoId = extractYouTubeId(url)
+  return videoId ? `https://img.youtube.com/vi/${videoId}/maxresdefault.jpg` : null
+}
 
 function PopularLocationCard({ loc, buildLocationPath, highPriority = false }) {
   const displayName = loc.displayName || loc.district || loc.province
@@ -45,7 +69,7 @@ function PopularLocationCard({ loc, buildLocationPath, highPriority = false }) {
       )}
       <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/20 to-transparent z-10" />
       <span className="absolute bottom-4 left-4 right-4 text-white text-xl font-bold drop-shadow-lg z-20">
-        {displayName} 
+        {displayName}
       </span>
     </Link>
   )
@@ -84,6 +108,7 @@ export default function Home() {
   const [popularLocations, setPopularLocations] = useState([])
   const [homepageSections, setHomepageSections] = useState([])
   const [featuredBlogs, setFeaturedBlogs] = useState([])
+  const [isLoading, setIsLoading] = useState(true)
 
   useEffect(() => {
     let mounted = true
@@ -102,6 +127,8 @@ export default function Home() {
         setFeaturedBlogs(blogs || [])
       } catch (error) {
         console.error('Error loading home data:', error)
+      } finally {
+        if (mounted) setIsLoading(false)
       }
     }
     loadHomeData()
@@ -194,9 +221,9 @@ export default function Home() {
           <div className="grid grid-cols-2 md:grid-cols-4 gap-6 text-center">
             {[
               { icon: Building2, value: '500+', label: 'ทรัพย์สินทั้งหมด' },
-              { icon: Award,     value: '12+',  label: 'ปีประสบการณ์' },
-              { icon: Users,     value: '1,200+', label: 'ลูกค้าที่ไว้วางใจ' },
-              { icon: Clock,     value: '24/7', label: 'บริการตลอดเวลา' },
+              { icon: Award, value: '12+', label: 'ปีประสบการณ์' },
+              { icon: Users, value: '1,200+', label: 'ลูกค้าที่ไว้วางใจ' },
+              { icon: Clock, value: '24/7', label: 'บริการตลอดเวลา' },
             ].map((stat) => {
               const Icon = stat.icon
               return (
@@ -233,70 +260,46 @@ export default function Home() {
               {featuredBlogs.map((blog) => {
                 const coverImage = blog.images?.[0]
                 const hasVideo = !!blog.youtubeUrl
-                const formatDate = (timestamp) => {
-                  if (!timestamp) return ''
-                  const date = timestamp.toDate ? timestamp.toDate() : new Date(timestamp)
-                  return date.toLocaleDateString('th-TH', {
-                    year: 'numeric',
-                    month: 'short',
-                    day: 'numeric',
-                  })
-                }
-                const extractYouTubeId = (url) => {
-                  if (!url) return null
-                  const regExp = /^.*(youtu.be\/|v\/|u\/\w\/|embed\/|watch\?v=|&v=)([^#&?]*).*/
-                  const match = url.match(regExp)
-                  return match && match[2].length === 11 ? match[2] : null
-                }
-                const getYouTubeThumbnail = (url) => {
-                  const videoId = extractYouTubeId(url)
-                  if (!videoId) return null
-                  return `https://img.youtube.com/vi/${videoId}/maxresdefault.jpg`
-                }
                 const thumbnail = coverImage || getYouTubeThumbnail(blog.youtubeUrl)
 
                 return (
                   <Link
                     key={blog.id}
                     to={`/blogs/${blog.id}`}
-                    className="group bg-white rounded-lg shadow-sm border border-slate-200 overflow-hidden hover:shadow-md transition-all duration-300"
+                    className="group bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden hover:shadow-lg hover:-translate-y-1 transition-all duration-300"
                   >
-                    <div className="relative aspect-video bg-slate-200 overflow-hidden">
+                    <div className="relative aspect-video bg-slate-100 overflow-hidden">
                       {thumbnail ? (
                         <>
                           <img
                             src={thumbnail}
                             alt={blog.title}
-                            className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                            className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
                           />
                           {hasVideo && (
                             <div className="absolute inset-0 flex items-center justify-center bg-black/30">
-                              <div className="bg-white/90 rounded-full p-3">
-                                <svg className="h-6 w-6 text-blue-900" fill="currentColor" viewBox="0 0 24 24">
-                                  <path d="M8 5v14l11-7z" />
-                                </svg>
+                              <div className="bg-white/90 rounded-full p-3 shadow-lg group-hover:scale-110 transition-transform duration-300">
+                                <Play className="h-6 w-6 text-blue-900 fill-blue-900" />
                               </div>
                             </div>
                           )}
                         </>
                       ) : (
-                        <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-blue-100 to-blue-200">
-                          <span className="text-blue-600 text-sm font-medium">ไม่มีรูปภาพ</span>
+                        <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-blue-50 to-blue-100">
+                          <span className="text-blue-400 text-sm font-medium">ไม่มีรูปภาพ</span>
                         </div>
                       )}
                     </div>
                     <div className="p-5">
-                      <h3 className="text-lg font-bold text-slate-900 mb-2 line-clamp-2 group-hover:text-blue-900 transition">
+                      <h3 className="text-base font-bold text-slate-900 mb-2 line-clamp-2 group-hover:text-blue-900 transition-colors">
                         {blog.title}
                       </h3>
-                      <p className="text-sm text-slate-600 mb-4 line-clamp-2">
+                      <p className="text-sm text-slate-500 mb-4 line-clamp-2 leading-relaxed">
                         {blog.content?.substring(0, 100)}...
                       </p>
-                      <div className="flex items-center gap-2 text-xs text-slate-500">
-                        <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                        </svg>
-                        <span>{formatDate(blog.createdAt)}</span>
+                      <div className="flex items-center gap-2 text-xs text-slate-400">
+                        <CalendarDays className="h-3.5 w-3.5" />
+                        <span>{formatBlogDate(blog.createdAt)}</span>
                       </div>
                     </div>
                   </Link>
@@ -396,45 +399,51 @@ export default function Home() {
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5 sm:gap-6">
             {[
               {
-                icon: '🏠',
+                Icon: HomeIcon,
                 title: 'ทรัพย์ครบทุกประเภท',
                 desc: 'บ้านเดี่ยว ทาวน์โฮม คอนโด ทั้งขาย เช่า และผ่อนตรง ในพื้นที่อมตะซิตี้และชลบุรี',
+                color: 'bg-blue-50 text-blue-700 group-hover:bg-blue-100',
               },
               {
-                icon: '💰',
+                Icon: Wallet,
                 title: 'รับปิดหนี้ รวมหนี้',
                 desc: 'บริการปรึกษาและจัดการภาระหนี้ ผ่อนบ้านทางเดียว ง่าย สบาย ไม่ยุ่งยาก',
+                color: 'bg-emerald-50 text-emerald-700 group-hover:bg-emerald-100',
               },
               {
-                icon: '🤝',
+                Icon: BadgeCheck,
                 title: 'บริการครบวงจร',
                 desc: 'ดูแลตั้งแต่ต้นจนจบ ทำสัญญา โอนกรรมสิทธิ์ ประสานงานสินเชื่อ',
+                color: 'bg-purple-50 text-purple-700 group-hover:bg-purple-100',
               },
               {
-                icon: '📍',
+                Icon: MapPin,
                 title: 'รู้จักทำเลดี',
                 desc: 'ทีมงานชำนาญพื้นที่ ชลบุรี ฉะเชิงเทรา ระยอง ปทุมธานี และ กทม.',
+                color: 'bg-amber-50 text-amber-700 group-hover:bg-amber-100',
               },
               {
-                icon: '⚡',
+                Icon: Zap,
                 title: 'ตอบสนองรวดเร็ว',
                 desc: 'ทีมงานพร้อมให้คำปรึกษา 24/7 ผ่านโทรศัพท์และ Facebook',
+                color: 'bg-cyan-50 text-cyan-700 group-hover:bg-cyan-100',
               },
               {
-                icon: '🏆',
+                Icon: Trophy,
                 title: 'ประสบการณ์กว่า 12 ปี',
                 desc: 'ไว้วางใจโดยลูกค้ากว่า 1,200 ราย ด้วยความซื่อสัตย์และโปร่งใส',
+                color: 'bg-rose-50 text-rose-700 group-hover:bg-rose-100',
               },
-            ].map((item) => (
+            ].map(({ Icon, title, desc, color }) => (
               <div
-                key={item.title}
+                key={title}
                 className="flex flex-col items-center text-center px-6 py-8 rounded-2xl hover:bg-white hover:shadow-md transition-all duration-300 group"
               >
-                <div className="w-16 h-16 rounded-2xl bg-blue-50 group-hover:bg-blue-100 flex items-center justify-center mb-5 transition-colors duration-300 text-4xl">
-                  {item.icon}
+                <div className={`w-16 h-16 rounded-2xl flex items-center justify-center mb-5 transition-colors duration-300 ${color}`}>
+                  <Icon className="h-7 w-7" />
                 </div>
-                <h3 className="text-base font-bold text-slate-900 mb-2">{item.title}</h3>
-                <p className="text-sm text-slate-500 leading-relaxed">{item.desc}</p>
+                <h3 className="text-base font-bold text-slate-900 mb-2">{title}</h3>
+                <p className="text-sm text-slate-500 leading-relaxed">{desc}</p>
               </div>
             ))}
           </div>
