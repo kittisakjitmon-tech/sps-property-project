@@ -1,20 +1,12 @@
 import { useState } from 'react'
 import { X, Filter, Search } from 'lucide-react'
 import LocationAutocomplete from './LocationAutocomplete'
-
-const propertyTypes = [
-  { value: '', label: 'ทุกประเภท' },
-  { value: 'คอนโดมิเนียม', label: 'คอนโดมิเนียม' },
-  { value: 'บ้านเดี่ยว', label: 'บ้านเดี่ยว' },
-  { value: 'ทาวน์โฮม', label: 'ทาวน์โฮม' },
-  { value: 'วิลล่า', label: 'วิลล่า' },
-  { value: 'บ้านเช่า', label: 'บ้านเช่า' },
-]
+import { PROPERTY_TYPES } from '../constants/propertyTypes'
 
 export default function AdvanceSearch({ filters, onUpdateFilters, onSearch, onClear }) {
   const [isOpen, setIsOpen] = useState(false)
 
-  const hasActiveFilters = 
+  const hasActiveFilters =
     filters.location ||
     filters.propertyType ||
     filters.priceMin ||
@@ -32,11 +24,10 @@ export default function AdvanceSearch({ filters, onUpdateFilters, onSearch, onCl
         <button
           type="button"
           onClick={() => setIsOpen(!isOpen)}
-          className={`inline-flex items-center gap-2 px-4 py-2 rounded-xl transition-all duration-300 ${
-            isOpen || hasActiveFilters
+          className={`inline-flex items-center gap-2 px-4 py-2 rounded-xl transition-all duration-300 ${isOpen || hasActiveFilters
               ? 'bg-gradient-to-r from-blue-900 to-blue-700 text-white shadow-sm'
               : 'bg-gray-100 text-slate-700 hover:bg-gray-200'
-          }`}
+            }`}
         >
           <Filter className="h-5 w-5" />
           ค้นหาขั้นสูง
@@ -83,8 +74,9 @@ export default function AdvanceSearch({ filters, onUpdateFilters, onSearch, onCl
                 onChange={(e) => onUpdateFilters({ propertyType: e.target.value })}
                 className="w-full px-4 py-2 rounded-xl bg-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-200 focus:bg-white transition-all border-0"
               >
-                {propertyTypes.map((opt) => (
-                  <option key={opt.value} value={opt.value}>{opt.label}</option>
+                <option value="">ทุกประเภท</option>
+                {PROPERTY_TYPES.map((opt) => (
+                  <option key={opt.id} value={opt.id}>{opt.label}</option>
                 ))}
               </select>
             </div>

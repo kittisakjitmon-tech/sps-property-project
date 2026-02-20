@@ -20,12 +20,12 @@ const NEW_PROPERTY_MS = NEW_PROPERTY_DAYS * 24 * 60 * 60 * 1000
 function hasDirectInstallment(property) {
   try {
     if (!property || typeof property !== 'object') return false
-    
+
     // ตรวจสอบจากฟิลด์ directInstallment (Boolean) ก่อน
     if (property.directInstallment === true) {
       return true
     }
-    
+
     // ตรวจสอบจาก tags array (ถ้ามี)
     const tags = property.tags || property.customTags || []
     if (Array.isArray(tags) && tags.length > 0) {
@@ -38,7 +38,7 @@ function hasDirectInstallment(property) {
         return true
       }
     }
-    
+
     // Fallback: ตรวจสอบจาก description ด้วย Negative Lookbehind Logic
     // เฉพาะกรณีที่ข้อมูลยังไม่ได้แยก Field ชัดเจน
     const description = String(property.description || '').toLowerCase()
@@ -51,17 +51,17 @@ function hasDirectInstallment(property) {
         /ไม่มี\s*ผ่อนตรง/,
         /ไม่สามารถ\s*ผ่อนตรง/,
       ]
-      
+
       // ตรวจสอบว่ามี negative patterns หรือไม่
       const hasNegative = negativePatterns.some((pattern) => pattern.test(description))
       if (hasNegative) {
         return false // ถ้ามี negative pattern ให้ return false
       }
-      
+
       // ถ้าไม่มี negative pattern และเจอคำว่า 'ผ่อนตรง' ให้ return true
       return true
     }
-    
+
     return false
   } catch {
     return false
@@ -73,7 +73,7 @@ function getBadges(property) {
   // Badge 'แนะนำ' และ 'Hot Deal' - คงไว้ตามเดิม
   if (property.featured) badges.push({ label: 'แนะนำ', key: 'featured' })
   if (property.hotDeal) badges.push({ label: 'Hot Deal', key: 'hotDeal' })
-  
+
   // Badge 'New' - คงไว้ตามเดิม
   const createdAt = property.createdAt
   if (createdAt) {
@@ -82,17 +82,17 @@ function getBadges(property) {
       badges.push({ label: 'New', key: 'new' })
     }
   }
-  
+
   // ไม่ต้องแสดง Badge 'ผ่อนตรง' ที่นี่แล้ว เพราะจะแสดงใน Transaction Type Badge เมื่อ subListingType === 'installment_only'
   // แต่ถ้าเป็นข้อมูลเก่าที่มี directInstallment แต่ไม่มี subListingType ให้แสดง Badge 'ผ่อนตรง' ที่นี่
   const listingType = property.listingType || (property.isRental ? 'rent' : 'sale')
   const subListingType = property.subListingType
-  
+
   // แสดง Badge 'ผ่อนตรง' เฉพาะกรณีข้อมูลเก่าที่ไม่มี subListingType แต่มี directInstallment
   if (listingType === 'rent' && !subListingType && hasDirectInstallment(property)) {
     badges.push({ label: 'ผ่อนตรง', key: 'directInstallment' })
   }
-  
+
   return badges
 }
 
@@ -103,7 +103,7 @@ function getBadges(property) {
 function getTransactionTypeBadge(property) {
   // ตรวจสอบ listingType ใหม่ก่อน
   const listingType = property.listingType || (property.isRental ? 'rent' : 'sale')
-  
+
   if (listingType === 'sale') {
     return { label: 'ขาย', color: 'bg-blue-700 text-white' }
   } else if (listingType === 'rent') {
@@ -121,19 +121,19 @@ function getTransactionTypeBadge(property) {
     // Default สำหรับ rent: แสดง 'เช่า'
     return { label: 'เช่า', color: 'bg-emerald-700 text-white' }
   }
-  
+
   // Backward compatibility: ใช้ isRental ถ้าไม่มี listingType
   if (property.isRental === true) {
     return { label: 'เช่า', color: 'bg-emerald-700 text-white' }
   } else if (property.isRental === false) {
     return { label: 'ขาย', color: 'bg-blue-700 text-white' }
   }
-  
+
   // Fallback: ตรวจสอบจาก type
   if (property.type === 'บ้านเช่า') {
     return { label: 'เช่า', color: 'bg-emerald-700 text-white' }
   }
-  
+
   return { label: 'ขาย', color: 'bg-blue-700 text-white' }
 }
 
@@ -144,9 +144,9 @@ function getTransactionTypeBadge(property) {
 function getAvailabilityBadge(property) {
   // ตรวจสอบ availability ใหม่ก่อน
   const availability = property.availability || property.status
-  
+
   if (!availability || availability === 'pending') return null
-  
+
   switch (availability) {
     case 'available':
     case 'ว่าง':
@@ -174,7 +174,7 @@ function getPropertyConditionBadge(property) {
   // ตรวจสอบ listingType ก่อน
   const listingType = property.listingType || (property.isRental ? 'rent' : 'sale')
   if (listingType !== 'sale') return null
-  
+
   // ตรวจสอบ propertyCondition ใหม่ก่อน
   const condition = property.propertyCondition || property.propertySubStatus
   if (condition === 'มือ 1') {
@@ -203,146 +203,152 @@ function PropertyCard({ property, featuredLabel = 'แนะนำ', searchQuery
 
   try {
     // Image Selection Logic: ใช้ coverImageUrl ถ้ามี หรือ images[0] ถ้าไม่มี
-    const coverImage = property.coverImageUrl || 
-      (property.images && Array.isArray(property.images) && property.images.length > 0 
-        ? property.images[0] 
+    const coverImage = property.coverImageUrl ||
+      (property.images && Array.isArray(property.images) && property.images.length > 0
+        ? property.images[0]
         : DEFAULT_IMAGE)
-    
-  const loc = property.location || {}
-  const badges = getBadges(property)
-    
+
+    const loc = property.location || {}
+    const badges = getBadges(property)
+
     // Logic การแสดง Badge ตามประเภททรัพย์ (ใช้โครงสร้างข้อมูลใหม่)
     const listingType = property.listingType || (property.isRental ? 'rent' : 'sale')
     const transactionTypeBadge = getTransactionTypeBadge(property) // ประเภทรายการ (ขาย/เช่า/ผ่อนตรง)
     const availabilityBadge = getAvailabilityBadge(property) // สถานะ (ว่าง/ติดจอง/ขายแล้ว)
     const propertyConditionBadge = listingType === 'sale' ? getPropertyConditionBadge(property) : null // สภาพ (มือ 1/มือ 2) - เฉพาะ sale
-    
+
     const isSold = isSoldOrRented(property)
-    
+
     // ตรวจสอบว่าเป็น rental หรือไม่ (สำหรับการแสดงราคา)
     const isRental = listingType === 'rent' || property.isRental === true
-  const [favorited, setFavorited] = useState(false)
+    const [favorited, setFavorited] = useState(false)
 
-  useEffect(() => {
-    setFavorited(isFavorite(property.id))
-  }, [property.id])
+    useEffect(() => {
+      setFavorited(isFavorite(property.id))
+    }, [property.id])
 
-  const handleFavoriteClick = (e) => {
-    e.preventDefault()
-    e.stopPropagation()
-    const newState = toggleFavorite(property.id)
-    setFavorited(newState)
-  }
+    const handleFavoriteClick = (e) => {
+      e.preventDefault()
+      e.stopPropagation()
+      const newState = toggleFavorite(property.id)
+      setFavorited(newState)
+    }
 
-  return (
-    <Link
-      to={`/properties/${property.id}`}
-      className="group block bg-white rounded-2xl overflow-hidden shadow-sm hover:shadow-2xl hover:-translate-y-2 transition-all duration-300 ease-in-out"
-    >
-      <div 
-        className="relative overflow-hidden rounded-t-2xl"
-        style={isSold ? { filter: 'grayscale(60%)' } : {}}
+    return (
+      <Link
+        to={`/properties/${property.id}`}
+        className="group block bg-white rounded-2xl overflow-hidden shadow-sm hover:shadow-2xl hover:-translate-y-2 transition-all duration-300 ease-in-out"
       >
-        {/* Dark overlay for sold/rented properties */}
-        {isSold && (
-          <div className="absolute inset-0 bg-black/25 z-[15] pointer-events-none rounded-t-2xl" />
-        )}
-        {/* Single Cover Image - Disable Slideshow */}
-        <div className="relative aspect-[4/3] overflow-hidden rounded-t-2xl">
-          <ProtectedImageContainer className="absolute inset-0 w-full h-full" propertyId={property.propertyId}>
-            <img
-              src={coverImage}
-              alt={property.title || 'Property image'}
-              className="w-full h-full object-cover protected-image transition-transform duration-700 ease-in-out group-hover:scale-110"
-              loading="lazy"
-              decoding="async"
-              draggable={false}
-              onContextMenu={(e) => e.preventDefault()}
-              onDragStart={(e) => e.preventDefault()}
-            />
-          </ProtectedImageContainer>
-        </div>
-        {/* Top Left Section - Transaction Type Badge + Favorite Button + Other Badges */}
-        <div className="absolute top-3 left-3 z-30 flex items-start gap-2">
-          
-          {/* Favorite Button */}
-          <button
-            onClick={handleFavoriteClick}
-            className="p-2 bg-white/80 backdrop-blur-md rounded-full shadow-sm hover:bg-white/90 transition"
-            title={favorited ? 'ลบออกจากรายการโปรด' : 'บันทึกเป็นรายการโปรด'}
-          >
-            
-            <Heart
-              className={`h-5 w-5 transition ${
-                favorited ? 'fill-red-500 text-red-500' : 'text-slate-600'
-              }`}
-            />
-          </button>
-          
-          {/* Transaction Type Badge - ลำดับแรกสุด (มุมซ้ายบน) */}
-          {transactionTypeBadge && (
-            <span
-              className={`px-2.5 py-1 rounded-md text-xs font-semibold text-white shadow-lg hover:scale-105 transition-transform ${transactionTypeBadge.color}`}
-            >
-              {transactionTypeBadge.label}
-            </span>
+        <div
+          className="relative overflow-hidden rounded-t-2xl"
+          style={isSold ? { filter: 'grayscale(60%)' } : {}}
+        >
+          {/* Dark overlay for sold/rented properties */}
+          {isSold && (
+            <div className="absolute inset-0 bg-black/25 z-[15] pointer-events-none rounded-t-2xl" />
           )}
-          {/* Other Badges (Hot Deal, ผ่อนตรง) */}
-          <div className="flex flex-wrap gap-1.5">
-            {badges.map(({ label, key }) => (
-            <span
-              key={key}
-                className={`px-2 py-0.5 rounded text-xs font-semibold hover:scale-105 transition-transform ${
-                key === 'featured' || key === 'hotDeal'
-                  ? 'bg-yellow-400 text-blue-900'
-                  : 'bg-blue-900 text-white'
-              }`}
+          {/* Single Cover Image - Disable Slideshow */}
+          <div className="relative aspect-[4/3] overflow-hidden rounded-t-2xl">
+            <ProtectedImageContainer className="absolute inset-0 w-full h-full" propertyId={property.propertyId}>
+              <img
+                src={coverImage}
+                alt={property.title || 'Property image'}
+                className="w-full h-full object-cover protected-image transition-transform duration-700 ease-in-out group-hover:scale-110"
+                loading="lazy"
+                decoding="async"
+                draggable={false}
+                onContextMenu={(e) => e.preventDefault()}
+                onDragStart={(e) => e.preventDefault()}
+              />
+            </ProtectedImageContainer>
+          </div>
+          {/* Top Left Section - Transaction Type Badge + Favorite Button + Other Badges */}
+          <div className="absolute top-3 left-3 z-30 flex items-start gap-2">
+
+            {/* Favorite Button */}
+            <button
+              onClick={handleFavoriteClick}
+              className="p-2 bg-white/80 backdrop-blur-md rounded-full shadow-sm hover:bg-white/90 transition"
+              title={favorited ? 'ลบออกจากรายการโปรด' : 'บันทึกเป็นรายการโปรด'}
             >
-              {key === 'featured' ? featuredLabel : label}
-            </span>
-          ))}
+
+              <Heart
+                className={`h-5 w-5 transition ${favorited ? 'fill-red-500 text-red-500' : 'text-slate-600'
+                  }`}
+              />
+            </button>
+
+            {/* Transaction Type Badge - ลำดับแรกสุด (มุมซ้ายบน) */}
+            {transactionTypeBadge && (
+              <span
+                className={`px-2.5 py-1 rounded-md text-xs font-semibold text-white shadow-lg hover:scale-105 transition-transform ${transactionTypeBadge.color}`}
+              >
+                {transactionTypeBadge.label}
+              </span>
+            )}
+            {/* Other Badges (Hot Deal, ผ่อนตรง) */}
+            <div className="flex flex-wrap gap-1.5">
+              {badges.map(({ label, key }) => (
+                <span
+                  key={key}
+                  className={`px-2 py-0.5 rounded text-xs font-semibold hover:scale-105 transition-transform ${key === 'featured' || key === 'hotDeal'
+                    ? 'bg-yellow-400 text-blue-900'
+                    : 'bg-blue-900 text-white'
+                    }`}
+                >
+                  {key === 'featured' ? featuredLabel : label}
+                </span>
+              ))}
+            </div>
+          </div>
+          {/* Price - ขยับขึ้นเพื่อไม่ให้จมกับลายน้ำ */}
+          <span className="absolute bottom-9 left-3 text-white font-bold text-lg drop-shadow z-20">
+            {formatPrice(property.price, isRental, property.showPrice)}
+          </span>
+          {/* Status Badges - มุมขวาล่าง */}
+          <div className="absolute bottom-9 right-3 z-20 flex flex-col items-end gap-1.5 ">
+            {/* Badge สถานะ (availability) - แสดงทุกประเภท */}
+            {availabilityBadge && (
+              <span
+                className={`px-2.5 py-1 rounded-md text-xs font-medium shadow-md backdrop-blur-sm hover:scale-105 transition-transform ${availabilityBadge.color}`}
+              >
+                {availabilityBadge.label}
+              </span>
+            )}
+            {/* Badge สภาพ (propertyCondition - มือ 1/มือ 2) - แสดงเฉพาะ listingType === 'sale' */}
+            {propertyConditionBadge && (
+              <span
+                className={`px-2.5 py-1 rounded-md text-xs font-medium shadow-md backdrop-blur-sm hover:scale-105 transition-transform ${propertyConditionBadge.color}`}
+              >
+                {propertyConditionBadge.label}
+              </span>
+            )}
+            {/* Display ID */}
+            {property.displayId && (
+              <span className="text-[10px] text-white drop-shadow-md font-medium mt-0.5 text-right bg-black/40 px-2 py-0.5 rounded-md backdrop-blur-sm">
+                ID: {property.displayId}
+              </span>
+            )}
+          </div>
         </div>
+        <div className="p-4 rounded-b-2xl">
+          <h3 className="font-semibold text-blue-900 line-clamp-2 group-hover:underline">
+            {searchQuery ? highlightText(property.title, searchQuery) : property.title}
+          </h3>
+          <p className="flex items-center gap-1 text-slate-600 text-sm mt-1">
+            <MapPin className="h-4 w-4 shrink-0" />
+            {loc.district}, {loc.province}
+          </p>
+
+          <div className="flex justify-between items-end mt-2">
+            <div className="flex gap-3 text-slate-500 text-sm">
+              <span className="flex items-center gap-1"><Bed className="h-4 w-4" /> {property.bedrooms ?? '-'}</span>
+              <span className="flex items-center gap-1"><Bath className="h-4 w-4" /> {property.bathrooms ?? '-'}</span>
+            </div>
+          </div>
         </div>
-        {/* Price - ขยับขึ้นเพื่อไม่ให้จมกับลายน้ำ */}
-        <span className="absolute bottom-9 left-3 text-white font-bold text-lg drop-shadow z-20">
-          {formatPrice(property.price, isRental, property.showPrice)}
-        </span>
-        {/* Status Badges - มุมขวาล่าง */}
-        <div className="absolute bottom-9 right-3 z-20 flex flex-col items-end gap-1.5">
-          {/* Badge สถานะ (availability) - แสดงทุกประเภท */}
-          {availabilityBadge && (
-            <span
-              className={`px-2.5 py-1 rounded-md text-xs font-medium shadow-md backdrop-blur-sm hover:scale-105 transition-transform ${availabilityBadge.color}`}
-            >
-              {availabilityBadge.label}
-            </span>
-          )}
-          {/* Badge สภาพ (propertyCondition - มือ 1/มือ 2) - แสดงเฉพาะ listingType === 'sale' */}
-          {propertyConditionBadge && (
-            <span
-              className={`px-2.5 py-1 rounded-md text-xs font-medium shadow-md backdrop-blur-sm hover:scale-105 transition-transform ${propertyConditionBadge.color}`}
-            >
-              {propertyConditionBadge.label}
-            </span>
-          )}
-        </div>
-      </div>
-      <div className="p-4 rounded-b-2xl">
-        <h3 className="font-semibold text-blue-900 line-clamp-2 group-hover:underline">
-          {searchQuery ? highlightText(property.title, searchQuery) : property.title}
-        </h3>
-        <p className="flex items-center gap-1 text-slate-600 text-sm mt-1">
-          <MapPin className="h-4 w-4 shrink-0" />
-          {loc.district}, {loc.province}
-        </p>
-        
-        <div className="flex gap-3 mt-2 text-slate-500 text-sm">
-          <span className="flex items-center gap-1"><Bed className="h-4 w-4" /> {property.bedrooms ?? '-'}</span>
-          <span className="flex items-center gap-1"><Bath className="h-4 w-4" /> {property.bathrooms ?? '-'}</span>
-        </div>
-      </div>
-    </Link>
-  )
+      </Link>
+    )
   } catch (error) {
     // Keep error logging for critical errors
     if (process.env.NODE_ENV === 'development') {

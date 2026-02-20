@@ -45,7 +45,7 @@ export default function PropertiesMap({ properties, className = '' }) {
 
     const initMap = async () => {
       const { AdvancedMarkerElement, PinElement } = await window.google.maps.importLibrary('marker')
-      if (disposed) return
+      if (disposed || !mapRef.current) return
       // Initialize map centered on Thailand
       const map = new window.google.maps.Map(mapRef.current, {
         center: { lat: 13.7563, lng: 100.5018 }, // Bangkok default

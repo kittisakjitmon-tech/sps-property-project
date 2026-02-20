@@ -8,6 +8,8 @@ import {
   ChevronRight,
   Phone,
   Activity,
+  DatabaseZap,
+  Loader2,
 } from 'lucide-react'
 import {
   AreaChart,
@@ -25,6 +27,10 @@ import {
 import { useDashboardData } from '../hooks/useDashboardData'
 import { getActivityBadgeClass, getUsernameFromEmail, formatRoleDisplay } from '../data/activityLogsMock'
 import { getActionDisplay, getActionCategory } from '../data/activityActionMap'
+import { useState } from 'react'
+import { getPropertiesOnce, db, writeBatch } from '../lib/firestore'
+import { PROPERTY_TYPES } from '../constants/propertyTypes'
+import { doc, serverTimestamp } from 'firebase/firestore'
 
 // ─── Stat Card Component ────────────────────────────────────────────────────
 function StatCard({ title, value, icon: Icon, iconBg, href }) {
@@ -153,6 +159,107 @@ export default function Dashboard() {
     pendingProperties,
   } = useDashboardData()
 
+  const [migrating, setMigrating] = useState(false)
+  const [migrationDone, setMigrationDone] = useState(false)
+
+  const handleMigration = async () => {
+    if (!window.confirm('คุณต้องการรันสคริปต์ปรับปรุงระบบ ID (PropertyTypes & DisplayId) หรือไม่?')) return
+    setMigrating(true)
+    try {
+      const allProps = await getPropertiesOnce()
+      if (!allProps || allProps.length === 0) {
+        alert('ไม่มีข้อมูลอสังหาริมทรัพย์')
+        return
+      }
+
+      // Reverse map helper
+      const getPropertyIdByLabel = (label) => {
+        const found = PROPERTY_TYPES.find(pt => pt.label === label)
+        return found ? found.id : null
+      }
+
+      // Prefix extractor helper logic matching the new propertyId.js
+      const getPrefixForTypeLocal = (type) => {
+        if (type && type.endsWith('-ID')) return type.slice(0, -2)
+        const found = PROPERTY_TYPES.find((pt) => pt.label === type)
+        if (found && found.id.endsWith('-ID')) return found.id.slice(0, -2)
+        return 'SPS-X-'
+      }
+
+      let count = 0
+      const batch = writeBatch(db)
+
+      // Find global max sequence among all properties
+      let globalMaxSequence = 0
+      allProps.forEach((p) => {
+        const idToCheck = p.displayId || p.propertyId || ''
+        const match = idToCheck.match(/\d+$/)
+        if (match) {
+          const num = parseInt(match[0], 10)
+          if (num > globalMaxSequence) {
+            globalMaxSequence = num
+          }
+        }
+      })
+
+      allProps.forEach((property, index) => {
+        const docRef = doc(db, 'properties', property.id)
+        let needsUpdate = false
+        const updateData = {}
+
+        // 1. Resolve type string mapping if needed
+        let resolvedType = property.type
+        const typeId = getPropertyIdByLabel(property.type)
+        if (typeId && property.type !== typeId) {
+          resolvedType = typeId
+          updateData.type = typeId
+          needsUpdate = true
+        }
+
+        // 2. Generate displayId with sequence matching
+        const prefix = getPrefixForTypeLocal(resolvedType)
+        const existingIdStr = property.displayId || property.propertyId || ''
+        const match = existingIdStr.match(/\d+$/)
+
+        let sequenceNum = 0
+        if (match) {
+          sequenceNum = parseInt(match[0], 10)
+        } else {
+          globalMaxSequence++
+          sequenceNum = globalMaxSequence
+        }
+
+        const newDisplayId = `${prefix}${String(sequenceNum).padStart(3, '0')}`
+
+        // Only update if displayId does not exactly match the new structure
+        if (property.displayId !== newDisplayId) {
+          updateData.displayId = newDisplayId
+          needsUpdate = true
+        }
+
+        if (needsUpdate) {
+          updateData.updatedAt = serverTimestamp()
+          batch.update(docRef, updateData)
+          count++
+        }
+      })
+
+      if (count > 0) {
+        await batch.commit()
+        alert(`ปรับปรุงข้อมูลสำเร็จ ${count} รายการ`)
+        setMigrationDone(true)
+      } else {
+        alert('ไม่มีข้อมูลที่ต้องปรับปรุง')
+        setMigrationDone(true)
+      }
+    } catch (e) {
+      console.error(e)
+      alert('เกิดข้อผิดพลาดในการปรับปรุงข้อมูล: ' + e.message)
+    } finally {
+      setMigrating(false)
+    }
+  }
+
   const pendingCount = pendingProperties.length
 
   if (loading) {
@@ -166,13 +273,25 @@ export default function Dashboard() {
         <h1 className="text-2xl sm:text-3xl font-bold text-blue-900 tracking-tight">
           แดชบอร์ด
         </h1>
-        <Link
-          to="/admin/properties/new"
-          className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-yellow-400 text-yellow-900 font-semibold hover:bg-yellow-500 transition-colors shadow-sm"
-        >
-          <Plus className="h-4 w-4" />
-          เพิ่มทรัพย์
-        </Link>
+        <div className="flex items-center gap-3">
+          {!migrationDone && (
+            <button
+              onClick={handleMigration}
+              disabled={migrating}
+              className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-slate-800 text-white font-semibold hover:bg-slate-700 transition-colors shadow-sm disabled:opacity-50"
+            >
+              {migrating ? <Loader2 className="h-4 w-4 animate-spin" /> : <DatabaseZap className="h-4 w-4" />}
+              เริ่มการปรับปรุงระบบ ID (Migration)
+            </button>
+          )}
+          <Link
+            to="/admin/properties/new"
+            className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-yellow-400 text-yellow-900 font-semibold hover:bg-yellow-500 transition-colors shadow-sm"
+          >
+            <Plus className="h-4 w-4" />
+            เพิ่มทรัพย์
+          </Link>
+        </div>
       </div>
 
       {/* Row 1: Executive Stats Cards */}
@@ -337,9 +456,8 @@ export default function Dashboard() {
                       <td className="px-6 py-4 text-slate-600 text-sm line-clamp-2">{lead.property}</td>
                       <td className="px-6 py-4">
                         <span
-                          className={`inline-flex px-2.5 py-1 rounded-lg text-xs font-medium ${
-                            lead.status === 'ติดต่อแล้ว' ? 'bg-green-100 text-green-800' : 'bg-amber-100 text-amber-800'
-                          }`}
+                          className={`inline-flex px-2.5 py-1 rounded-lg text-xs font-medium ${lead.status === 'ติดต่อแล้ว' ? 'bg-green-100 text-green-800' : 'bg-amber-100 text-amber-800'
+                            }`}
                         >
                           {lead.status}
                         </span>
@@ -387,9 +505,8 @@ export default function Dashboard() {
                     className="flex gap-3 p-3 rounded-lg bg-slate-50/80 hover:bg-slate-100/80 transition-colors"
                   >
                     <div
-                      className={`flex-shrink-0 w-2 h-2 mt-2 rounded-full ${
-                        category === 'critical' ? 'bg-red-500' : category === 'operation' ? 'bg-blue-400' : 'bg-slate-400'
-                      }`}
+                      className={`flex-shrink-0 w-2 h-2 mt-2 rounded-full ${category === 'critical' ? 'bg-red-500' : category === 'operation' ? 'bg-blue-400' : 'bg-slate-400'
+                        }`}
                     />
                     <div className="min-w-0 flex-1">
                       <p className="text-sm text-slate-700 leading-snug" title={item.user?.email}>

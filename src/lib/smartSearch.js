@@ -4,6 +4,7 @@
  * - Smart Price Detection
  * - Normalization & Fuzzy Matching
  */
+import { getPropertyLabel } from '../constants/propertyTypes'
 
 /** คำค้นหาที่มีน้ำหนักพิเศษ (ปิดหนี้, รวมหนี้, บริการสินเชื่อ) */
 export const PRIORITY_KEYWORDS = [
@@ -166,7 +167,8 @@ function getSortScore(property, query) {
 
   // 5. Type ตรงกัน (50)
   const type = normalizeText(property.type || '')
-  if (type && partialMatch(q, type)) {
+  const typeLabel = normalizeText(getPropertyLabel(property.type) || '')
+  if ((type && partialMatch(q, type)) || (typeLabel && partialMatch(q, typeLabel))) {
     score += 50
   }
 
@@ -181,9 +183,9 @@ function getSortScore(property, query) {
   // Status bonus (ว่าง/มือ 1)
   const availability = property.availability || property.condition || property.subStatus || ''
   const status = property.status || ''
-  const isAvailable = String(availability).includes('ว่าง') || 
-                      String(availability).includes('มือ 1') ||
-                      status === 'available'
+  const isAvailable = String(availability).includes('ว่าง') ||
+    String(availability).includes('มือ 1') ||
+    status === 'available'
   if (isAvailable) score += 50
 
   return score
@@ -197,9 +199,9 @@ function extractStatusKeywords(query) {
     if (!query || typeof query !== 'string') return []
     const normalized = normalizeText(query)
     if (!normalized) return []
-    
+
     const statusKeywords = []
-    
+
     // Pattern: มือ 1, มือ 2, มือ1, มือ2
     const statusPatterns = [
       /มือ\s*1/g,
@@ -207,7 +209,7 @@ function extractStatusKeywords(query) {
       /มือ1/g,
       /มือ2/g,
     ]
-    
+
     statusPatterns.forEach((pattern) => {
       try {
         const matches = normalized.match(pattern)
@@ -225,7 +227,7 @@ function extractStatusKeywords(query) {
         // Ignore pattern errors
       }
     })
-    
+
     return statusKeywords
   } catch (e) {
     console.error('extractStatusKeywords error:', e)
@@ -241,7 +243,7 @@ function removeStatusKeywords(query, statusKeywords) {
     if (!query || typeof query !== 'string') return ''
     let cleaned = normalizeText(query)
     if (!cleaned) return ''
-    
+
     if (Array.isArray(statusKeywords) && statusKeywords.length > 0) {
       statusKeywords.forEach((status) => {
         if (status && typeof status === 'string') {
@@ -264,7 +266,7 @@ function removeStatusKeywords(query, statusKeywords) {
 function matchesQuery(property, query) {
   try {
     if (!property || typeof property !== 'object') return false
-    
+
     const q = normalizeText(query || '')
     if (q.length < 1) return false
 
@@ -279,7 +281,7 @@ function matchesQuery(property, query) {
     // Extract status keywords (มือ 1, มือ 2) from query
     const statusKeywords = extractStatusKeywords(q)
     const remainingQuery = removeStatusKeywords(q, statusKeywords)
-    
+
     // Split remaining query into tokens (แยกคำด้วยช่องว่าง)
     let queryTokens = []
     try {
@@ -289,7 +291,7 @@ function matchesQuery(property, query) {
       console.error('tokenize error:', e)
       queryTokens = []
     }
-    
+
     // ถ้ามี status keywords ให้ตรวจสอบ propertySubStatus ก่อน (Exact Match)
     if (statusKeywords.length > 0) {
       try {
@@ -322,6 +324,7 @@ function matchesQuery(property, query) {
           property.description || '',
           getTagText(property),
           property.type || '',
+          getPropertyLabel(property.type) || '',
           property.location?.province || '',
           property.location?.district || '',
           property.location?.subDistrict || '',
@@ -331,14 +334,14 @@ function matchesQuery(property, query) {
         // ตรวจสอบว่าทุก token match กับ searchable text (AND Logic)
         const allTokensMatch = queryTokens.every((token) => {
           if (!token || token.length < 1) return true
-          
+
           try {
             // Exact match สำหรับ property ID
             const propId = toStr(property.propertyId)
             if (propId && (propId.includes(token) || token.includes(propId))) {
               return true
             }
-            
+
             // Partial match สำหรับ fields อื่นๆ
             return searchableText.includes(token)
           } catch {
@@ -390,7 +393,7 @@ export function searchProperties(properties, keyword = '', filters = {}) {
       console.warn('searchProperties: properties is not an array')
       return []
     }
-    
+
     const q = normalizeText(keyword || '')
     const available = properties.filter((p) => {
       try {
@@ -434,135 +437,135 @@ export function searchProperties(properties, keyword = '', filters = {}) {
       }
     }
 
-  // Apply Filters (AND Logic)
-  const toSearchStr = (val) => normalizeText(String(val ?? ''))
+    // Apply Filters (AND Logic)
+    const toSearchStr = (val) => normalizeText(String(val ?? ''))
 
-  // Location filter
-  const location = toSearchStr(filters.location)
-  if (location.length > 0) {
-    results = results.filter((p) => {
-      const province = toSearchStr(p?.location?.province)
-      const district = toSearchStr(p?.location?.district)
-      return province.includes(location) || district.includes(location)
-    })
-  }
+    // Location filter
+    const location = toSearchStr(filters.location)
+    if (location.length > 0) {
+      results = results.filter((p) => {
+        const province = toSearchStr(p?.location?.province)
+        const district = toSearchStr(p?.location?.district)
+        return province.includes(location) || district.includes(location)
+      })
+    }
 
-  // Property Type filter
-  const propertyType = toSearchStr(filters.propertyType)
-  if (propertyType.length > 0) {
-    results = results.filter((p) => {
-      const type = toSearchStr(p?.type)
-      return type === propertyType
-    })
-  }
+    // Property Type filter
+    const propertyType = toSearchStr(filters.propertyType)
+    if (propertyType.length > 0) {
+      results = results.filter((p) => {
+        const type = toSearchStr(p?.type)
+        return type === propertyType
+      })
+    }
 
-  // Price Range filter
-  const priceMin = Number(filters.priceMin) || 0
-  const priceMax = Number(filters.priceMax) > 0 ? Number(filters.priceMax) : Infinity
-  if (priceMin > 0 || priceMax < Infinity) {
-    results = results.filter((p) => {
-      const price = Number(p?.price) || 0
-      return price >= priceMin && price <= priceMax
-    })
-  }
+    // Price Range filter
+    const priceMin = Number(filters.priceMin) || 0
+    const priceMax = Number(filters.priceMax) > 0 ? Number(filters.priceMax) : Infinity
+    if (priceMin > 0 || priceMax < Infinity) {
+      results = results.filter((p) => {
+        const price = Number(p?.price) || 0
+        return price >= priceMin && price <= priceMax
+      })
+    }
 
-  // Bedrooms filter
-  const bedrooms = filters.bedrooms ? Number(filters.bedrooms) : null
-  if (bedrooms !== null) {
-    results = results.filter((p) => {
-      const pBedrooms = Number(p?.bedrooms) || 0
-      if (bedrooms === 5) return pBedrooms >= 5
-      return pBedrooms === bedrooms
-    })
-  }
+    // Bedrooms filter
+    const bedrooms = filters.bedrooms ? Number(filters.bedrooms) : null
+    if (bedrooms !== null) {
+      results = results.filter((p) => {
+        const pBedrooms = Number(p?.bedrooms) || 0
+        if (bedrooms === 5) return pBedrooms >= 5
+        return pBedrooms === bedrooms
+      })
+    }
 
-  // Bathrooms filter
-  const bathrooms = filters.bathrooms ? Number(filters.bathrooms) : null
-  if (bathrooms !== null) {
-    results = results.filter((p) => {
-      const pBathrooms = Number(p?.bathrooms) || 0
-      if (bathrooms === 4) return pBathrooms >= 4
-      return pBathrooms === bathrooms
-    })
-  }
+    // Bathrooms filter
+    const bathrooms = filters.bathrooms ? Number(filters.bathrooms) : null
+    if (bathrooms !== null) {
+      results = results.filter((p) => {
+        const pBathrooms = Number(p?.bathrooms) || 0
+        if (bathrooms === 4) return pBathrooms >= 4
+        return pBathrooms === bathrooms
+      })
+    }
 
-  // Area Range filter
-  const areaMin = Number(filters.areaMin) || 0
-  const areaMax = Number(filters.areaMax) > 0 ? Number(filters.areaMax) : Infinity
-  if (areaMin > 0 || areaMax < Infinity) {
-    results = results.filter((p) => {
-      const area = Number(p?.area) || 0
-      return area >= areaMin && area <= areaMax
-    })
-  }
+    // Area Range filter
+    const areaMin = Number(filters.areaMin) || 0
+    const areaMax = Number(filters.areaMax) > 0 ? Number(filters.areaMax) : Infinity
+    if (areaMin > 0 || areaMax < Infinity) {
+      results = results.filter((p) => {
+        const area = Number(p?.area) || 0
+        return area >= areaMin && area <= areaMax
+      })
+    }
 
-  // Buy/Rent filter
-  if (filters.isRental !== null && filters.isRental !== undefined) {
-    results = results.filter((p) => Boolean(p.isRental) === filters.isRental)
-  }
+    // Buy/Rent filter
+    if (filters.isRental !== null && filters.isRental !== undefined) {
+      results = results.filter((p) => Boolean(p.isRental) === filters.isRental)
+    }
 
-  // Property Sub-status filter (มือ 1/มือ 2)
-  // ใช้ normalizeSubStatus เพื่อรองรับทั้งแบบมีและไม่มีเว้นวรรค
-  const subStatus = normalizeSubStatus(filters.propertySubStatus)
-  if (subStatus.length > 0) {
-    results = results.filter((p) => {
-      const pSubStatus = normalizeSubStatus(p?.propertySubStatus)
-      return pSubStatus === subStatus
-    })
-  }
+    // Property Sub-status filter (มือ 1/มือ 2)
+    // ใช้ normalizeSubStatus เพื่อรองรับทั้งแบบมีและไม่มีเว้นวรรค
+    const subStatus = normalizeSubStatus(filters.propertySubStatus)
+    if (subStatus.length > 0) {
+      results = results.filter((p) => {
+        const pSubStatus = normalizeSubStatus(p?.propertySubStatus)
+        return pSubStatus === subStatus
+      })
+    }
 
-  // Direct Installment filter (ผ่อนตรง)
-  // Strict Boolean/Tag Check: ตรวจสอบจากฟิลด์เฉพาะเท่านั้น
-  if (filters.feature === 'directInstallment' || filters.directInstallment === true) {
-    results = results.filter((p) => {
-      try {
-        // ตรวจสอบจากฟิลด์ directInstallment (Boolean) ก่อน
-        if (p?.directInstallment === true) {
-          return true
-        }
-        
-        // ตรวจสอบจาก tags array (ถ้ามี)
-        const tags = p?.tags || p?.customTags || []
-        if (Array.isArray(tags) && tags.length > 0) {
-          const tagText = tags.map((t) => {
-            if (typeof t === 'string') return normalizeText(t)
-            if (t && typeof t === 'object') return normalizeText(t.label || t.name || t.value || '')
-            return ''
-          }).join(' ')
-          if (tagText.includes('ผ่อนตรง')) {
+    // Direct Installment filter (ผ่อนตรง)
+    // Strict Boolean/Tag Check: ตรวจสอบจากฟิลด์เฉพาะเท่านั้น
+    if (filters.feature === 'directInstallment' || filters.directInstallment === true) {
+      results = results.filter((p) => {
+        try {
+          // ตรวจสอบจากฟิลด์ directInstallment (Boolean) ก่อน
+          if (p?.directInstallment === true) {
             return true
           }
-        }
-        
-        // Fallback: ตรวจสอบจาก description ด้วย Negative Lookbehind Logic
-        // เฉพาะกรณีที่ข้อมูลยังไม่ได้แยก Field ชัดเจน
-        const description = normalizeText(p?.description || '')
-        if (description.includes('ผ่อนตรง')) {
-          // Negative Lookbehind: ต้องไม่เจอคำว่า 'ไม่รับ', 'งด', 'ไม่' อยู่ข้างหน้า
-          const negativePatterns = [
-            /ไม่รับ\s*ผ่อนตรง/i,
-            /งด\s*ผ่อนตรง/i,
-            /ไม่\s*ผ่อนตรง/i,
-            /ไม่มี\s*ผ่อนตรง/i,
-            /ไม่สามารถ\s*ผ่อนตรง/i,
-          ]
-          
-          // ตรวจสอบว่ามี negative patterns หรือไม่
-          const hasNegative = negativePatterns.some((pattern) => pattern.test(description))
-          if (hasNegative) {
-            return false // ถ้ามี negative pattern ให้ return false
+
+          // ตรวจสอบจาก tags array (ถ้ามี)
+          const tags = p?.tags || p?.customTags || []
+          if (Array.isArray(tags) && tags.length > 0) {
+            const tagText = tags.map((t) => {
+              if (typeof t === 'string') return normalizeText(t)
+              if (t && typeof t === 'object') return normalizeText(t.label || t.name || t.value || '')
+              return ''
+            }).join(' ')
+            if (tagText.includes('ผ่อนตรง')) {
+              return true
+            }
           }
-          
-          // ถ้าไม่มี negative pattern และเจอคำว่า 'ผ่อนตรง' ให้ return true
-          return true
+
+          // Fallback: ตรวจสอบจาก description ด้วย Negative Lookbehind Logic
+          // เฉพาะกรณีที่ข้อมูลยังไม่ได้แยก Field ชัดเจน
+          const description = normalizeText(p?.description || '')
+          if (description.includes('ผ่อนตรง')) {
+            // Negative Lookbehind: ต้องไม่เจอคำว่า 'ไม่รับ', 'งด', 'ไม่' อยู่ข้างหน้า
+            const negativePatterns = [
+              /ไม่รับ\s*ผ่อนตรง/i,
+              /งด\s*ผ่อนตรง/i,
+              /ไม่\s*ผ่อนตรง/i,
+              /ไม่มี\s*ผ่อนตรง/i,
+              /ไม่สามารถ\s*ผ่อนตรง/i,
+            ]
+
+            // ตรวจสอบว่ามี negative patterns หรือไม่
+            const hasNegative = negativePatterns.some((pattern) => pattern.test(description))
+            if (hasNegative) {
+              return false // ถ้ามี negative pattern ให้ return false
+            }
+
+            // ถ้าไม่มี negative pattern และเจอคำว่า 'ผ่อนตรง' ให้ return true
+            return true
+          }
+
+          return false
+        } catch {
+          return false
         }
-        
-        return false
-      } catch {
-        return false
-      }
-    })
-  }
+      })
+    }
 
     // Sort by relevance score
     if (q.length > 0) {

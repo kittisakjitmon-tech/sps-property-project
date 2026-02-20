@@ -36,7 +36,7 @@ export default function MapPicker({ lat, lng, onLocationSelect, className = '' }
 
     const initMap = async () => {
       const { AdvancedMarkerElement } = await window.google.maps.importLibrary('marker')
-      if (disposed) return
+      if (disposed || !mapRef.current) return
 
       const initialLat = lat != null && lat !== '' ? Number(lat) : 13.7563 // Bangkok default
       const initialLng = lng != null && lng !== '' ? Number(lng) : 100.5018

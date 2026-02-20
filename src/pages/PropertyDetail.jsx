@@ -10,6 +10,7 @@ import ProtectedImageContainer from '../components/ProtectedImageContainer'
 import { formatPrice } from '../lib/priceFormat'
 import { highlightText, highlightTags } from '../lib/textHighlight'
 import { usePublicAuth } from '../context/PublicAuthContext'
+import { getPropertyLabel } from '../constants/propertyTypes'
 
 function MortgageCalculator({ price, directInstallment }) {
   const [loanType, setLoanType] = useState(directInstallment ? 'direct' : 'bank')
@@ -53,22 +54,20 @@ function MortgageCalculator({ price, directInstallment }) {
             <button
               type="button"
               onClick={() => setLoanType('bank')}
-              className={`px-4 py-3 rounded-lg border-2 transition ${
-                loanType === 'bank'
-                  ? 'border-blue-900 bg-blue-50 text-blue-900 font-semibold'
-                  : 'border-slate-200 bg-white text-slate-600 hover:border-blue-300'
-              }`}
+              className={`px-4 py-3 rounded-lg border-2 transition ${loanType === 'bank'
+                ? 'border-blue-900 bg-blue-50 text-blue-900 font-semibold'
+                : 'border-slate-200 bg-white text-slate-600 hover:border-blue-300'
+                }`}
             >
               กู้แบงก์
             </button>
             <button
               type="button"
               onClick={() => setLoanType('direct')}
-              className={`px-4 py-3 rounded-lg border-2 transition ${
-                loanType === 'direct'
-                  ? 'border-blue-900 bg-blue-50 text-blue-900 font-semibold'
-                  : 'border-slate-200 bg-white text-slate-600 hover:border-blue-300'
-              }`}
+              className={`px-4 py-3 rounded-lg border-2 transition ${loanType === 'direct'
+                ? 'border-blue-900 bg-blue-50 text-blue-900 font-semibold'
+                : 'border-slate-200 bg-white text-slate-600 hover:border-blue-300'
+                }`}
             >
               ผ่อนตรง
             </button>
@@ -188,20 +187,20 @@ function LeadForm({ propertyId, propertyTitle, propertyPrice, isRental, onSucces
       setActiveTab('customer')
     }
   }, [user, isAgent])
-  
+
   // Form fields for Customer tab
   const [customerName, setCustomerName] = useState('')
   const [customerPhone, setCustomerPhone] = useState('')
   const [visitDate, setVisitDate] = useState('')
   const [visitTime, setVisitTime] = useState('')
-  
+
   // Form fields for Agent tab
   const [agentCustomerName, setAgentCustomerName] = useState('')
   const [agentName, setAgentName] = useState('')
   const [agentPhone, setAgentPhone] = useState('')
   const [agentVisitDate, setAgentVisitDate] = useState('')
   const [agentVisitTime, setAgentVisitTime] = useState('')
-  
+
   const [isLoading, setIsLoading] = useState(false)
   const [errors, setErrors] = useState({})
 
@@ -214,7 +213,7 @@ function LeadForm({ propertyId, propertyTitle, propertyPrice, isRental, onSucces
   const handleSubmit = async (e) => {
     e.preventDefault()
     const newErrors = {}
-    
+
     if (activeTab === 'customer') {
       // Customer form validation
       if (!customerName.trim()) newErrors.customerName = 'กรุณากรอกชื่อลูกค้า'
@@ -231,7 +230,7 @@ function LeadForm({ propertyId, propertyTitle, propertyPrice, isRental, onSucces
       if (!agentVisitDate.trim()) newErrors.agentVisitDate = 'กรุณาเลือกวันที่เข้าชม'
       if (!agentVisitTime.trim()) newErrors.agentVisitTime = 'กรุณาเลือกเวลา'
     }
-    
+
     setErrors(newErrors)
     if (Object.keys(newErrors).length > 0) return
 
@@ -240,24 +239,24 @@ function LeadForm({ propertyId, propertyTitle, propertyPrice, isRental, onSucces
     try {
       const appointmentData = activeTab === 'customer'
         ? {
-            type: 'Customer',
-            contactName: customerName.trim(),
-            tel: customerPhone.trim(),
-            date: visitDate.trim(),
-            time: visitTime.trim(),
-            propertyId: propertyId || '',
-            propertyTitle: propertyTitle || '',
-          }
+          type: 'Customer',
+          contactName: customerName.trim(),
+          tel: customerPhone.trim(),
+          date: visitDate.trim(),
+          time: visitTime.trim(),
+          propertyId: propertyId || '',
+          propertyTitle: propertyTitle || '',
+        }
         : {
-            type: 'Agent',
-            agentName: agentName.trim(),
-            contactName: agentCustomerName.trim(),
-            tel: agentPhone.trim(),
-            date: agentVisitDate.trim(),
-            time: agentVisitTime.trim(),
-            propertyId: propertyId || '',
-            propertyTitle: propertyTitle || '',
-          }
+          type: 'Agent',
+          agentName: agentName.trim(),
+          contactName: agentCustomerName.trim(),
+          tel: agentPhone.trim(),
+          date: agentVisitDate.trim(),
+          time: agentVisitTime.trim(),
+          propertyId: propertyId || '',
+          propertyTitle: propertyTitle || '',
+        }
 
       await createAppointment(appointmentData)
 
@@ -274,13 +273,13 @@ function LeadForm({ propertyId, propertyTitle, propertyPrice, isRental, onSucces
         setAgentVisitDate('')
         setAgentVisitTime('')
       }
-      
+
       // Show success alert
       const message = activeTab === 'customer'
         ? 'ส่งคำขอนัดเยี่ยมชมสำเร็จ! เจ้าหน้าที่จะติดต่อกลับเร็วๆ นี้'
         : 'ส่งคำขอนัดเยี่ยมชมสำเร็จ! เจ้าหน้าที่จะติดต่อกลับเร็วๆ นี้'
       alert(message)
-      
+
       onSuccess?.()
     } catch (err) {
       console.error(err)
@@ -474,7 +473,7 @@ export default function PropertyDetail() {
   const [searchParams] = useSearchParams()
   const { user, isAgent } = usePublicAuth()
   const searchQuery = searchParams.get('q') || ''
-  
+
   const [property, setProperty] = useState(null)
   const [loading, setLoading] = useState(true)
   const [galleryIndex, setGalleryIndex] = useState(0)
@@ -574,7 +573,7 @@ export default function PropertyDetail() {
   }
 
   return (
-    <PageLayout 
+    <PageLayout
       heroTitle={property.title}
       heroSubtitle={`${loc.district || ''}, ${loc.province || ''}`}
       searchComponent={null}
@@ -607,7 +606,7 @@ export default function PropertyDetail() {
               value: property.area,
               unitCode: 'MTK',
             } : undefined,
-            propertyType: property.type || '',
+            propertyType: getPropertyLabel(property.type) || '',
             image: property.images && property.images.length > 0 ? property.images : [],
           })}
         </script>
@@ -664,21 +663,21 @@ export default function PropertyDetail() {
                       </button>
                     </div>
                   )}
-                  
+
                   {/* Badge 2: Transaction Type (ซื้อ/เช่า) */}
                   {property.type && (
                     <span className="px-3 py-1.5 rounded-full bg-blue-100 text-blue-800 text-sm font-medium">
                       {property.isRental ? 'เช่า' : 'ซื้อ'}
                     </span>
                   )}
-                  
+
                   {/* Badge 3: Asset Type (มือ 1/มือ 2) - แสดงเฉพาะทรัพย์ขาย */}
                   {!property.isRental && property.propertySubStatus && (
                     <span className="px-3 py-1.5 rounded-full bg-blue-900 text-white text-sm font-medium">
                       {property.propertySubStatus}
                     </span>
                   )}
-                  
+
                   {/* Badge 4: Status */}
                   {(() => {
                     let statusLabel = ''
@@ -711,7 +710,7 @@ export default function PropertyDetail() {
                       </span>
                     ) : null
                   })()}
-                  
+
                   {/* ผ่อนตรง Badge */}
                   {property.directInstallment && (
                     <span className="px-3 py-1.5 rounded-full text-sm font-semibold bg-yellow-400 text-blue-900">
@@ -726,13 +725,13 @@ export default function PropertyDetail() {
                     <h1 className="text-2xl sm:text-3xl font-bold text-blue-900 mb-4">
                       {property.title}
                     </h1>
-                    
+
                     {/* Price Section */}
                     <p className="text-2xl font-bold text-amber-700 mb-4">
                       {formatPrice(property.price, property.isRental, property.showPrice)}
                     </p>
                     {/* Custom Tags with Highlight */}
-                    
+
                   </div>
                   {/* แสดงปุ่มแชร์เฉพาะเมื่อล็อกอินแล้ว */}
                   {user && isAgent() && (
@@ -754,7 +753,7 @@ export default function PropertyDetail() {
                     <MapPin className="h-4 w-4 shrink-0" />
                     <span>{loc.district || ''}{loc.district && loc.province ? ', ' : ''}{loc.province || ''}</span>
                   </div>
-                  
+
                   {/* Specs Row */}
                   <div className="flex flex-wrap items-center gap-4 text-gray-600">
                     <span className="flex items-center gap-1.5">
@@ -838,18 +837,18 @@ export default function PropertyDetail() {
                   </div>
                 )}
               </div>
-                    {property.mapUrl && !property.mapUrl.includes('/embed') && (
-                      <div className="bottom-2 right-2">
-                        <a
-                          href={property.mapUrl}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="px-3 py-1.5 bg-white rounded-lg shadow-md text-xs text-blue-900 font-medium hover:bg-slate-50 transition"
-                        >
-                          เปิดใน Google Maps
-                        </a>
-                      </div>
-                    )}
+              {property.mapUrl && !property.mapUrl.includes('/embed') && (
+                <div className="bottom-2 right-2">
+                  <a
+                    href={property.mapUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="px-3 py-1.5 bg-white rounded-lg shadow-md text-xs text-blue-900 font-medium hover:bg-slate-50 transition"
+                  >
+                    เปิดใน Google Maps
+                  </a>
+                </div>
+              )}
 
               {/* Map */}
               <div className="bg-white rounded-xl border border-slate-200 overflow-hidden shadow-md">
@@ -898,30 +897,31 @@ export default function PropertyDetail() {
 
             <div className="lg:col-span-1">
               <div className="lg:sticky lg:top-24 space-y-6">
-              {/* Sticky contact - ธีม Blue 30%, White 60%, Yellow 10% */}
-              <div className="bg-white rounded-xl border border-blue-100 p-6 shadow-md">
-                <div className="pt-4 border-slate-100">
-                  <p className="text-sm font-medium text-slate-700 mb-2">จองเยี่ยมชม (ส่งข้อความ)</p>
-                  <LeadForm
-                    propertyId={property.propertyId || property.id}
-                    propertyTitle={property.title}
-                    propertyPrice={property.price}
-                    isRental={property.isRental}
-                    onSuccess={() => {image.png
-                      setToastMessage('ส่งข้อมูลสำเร็จ เจ้าหน้าที่จะติดต่อกลับ')
-                      setShowToast(true)
-                      setTimeout(() => setShowToast(false), 3000)
-                    }}
-                    onError={() => {
-                      setToastMessage('เกิดข้อผิดพลาด กรุณาลองใหม่อีกครั้ง')
-                      setShowToast(true)
-                      setTimeout(() => setShowToast(false), 3000)
-                    }}
-                  />
+                {/* Sticky contact - ธีม Blue 30%, White 60%, Yellow 10% */}
+                <div className="bg-white rounded-xl border border-blue-100 p-6 shadow-md">
+                  <div className="pt-4 border-slate-100">
+                    <p className="text-sm font-medium text-slate-700 mb-2">จองเยี่ยมชม (ส่งข้อความ)</p>
+                    <LeadForm
+                      propertyId={property.propertyId || property.id}
+                      propertyTitle={property.title}
+                      propertyPrice={property.price}
+                      isRental={property.isRental}
+                      onSuccess={() => {
+                        image.png
+                        setToastMessage('ส่งข้อมูลสำเร็จ เจ้าหน้าที่จะติดต่อกลับ')
+                        setShowToast(true)
+                        setTimeout(() => setShowToast(false), 3000)
+                      }}
+                      onError={() => {
+                        setToastMessage('เกิดข้อผิดพลาด กรุณาลองใหม่อีกครั้ง')
+                        setShowToast(true)
+                        setTimeout(() => setShowToast(false), 3000)
+                      }}
+                    />
+                  </div>
                 </div>
-              </div>
 
-              <NeighborhoodData property={property} />
+                <NeighborhoodData property={property} />
               </div>
             </div>
           </div>

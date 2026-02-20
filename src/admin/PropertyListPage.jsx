@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom'
 import { useAdminAuth } from '../context/AdminAuthContext'
 import { getPropertiesSnapshot } from '../lib/firestore'
 import { formatPrice } from '../lib/priceFormat'
+import { getPropertyLabel } from '../constants/propertyTypes'
 import { FileText, Plus, Pencil, Search, Trash2, ChevronLeft, ChevronRight } from 'lucide-react'
 
 /**
@@ -14,13 +15,13 @@ import { FileText, Plus, Pencil, Search, Trash2, ChevronLeft, ChevronRight } fro
  */
 function getStatusBadges(property) {
   const badges = []
-  
+
   // Determine listingType (รองรับข้อมูลเก่า)
   const listingType = property.listingType || (property.isRental ? 'rent' : 'sale')
 
   if (listingType === 'sale') {
     // กรณี listingType === 'sale' (ซื้อ)
-    
+
     // Badge 1: สภาพบ้าน (มือ 1/มือ 2)
     const propertyCondition = property.propertyCondition || property.propertySubStatus
     if (propertyCondition === 'มือ 1') {
@@ -44,7 +45,7 @@ function getStatusBadges(property) {
     }
   } else if (listingType === 'rent') {
     // กรณี listingType === 'rent' (เช่า/ผ่อนตรง)
-    
+
     // Badge 1: ประเภท (เช่า/ผ่อนตรง)
     const subListingType = property.subListingType
     if (subListingType === 'rent_only') {
@@ -102,7 +103,7 @@ export default function PropertyListPage() {
 
   const [properties, setProperties] = useState([])
   const [loading, setLoading] = useState(true)
-  
+
   // State Management: Search, Filter และ Pagination
   const [searchTerm, setSearchTerm] = useState('')
   const [filters, setFilters] = useState({
@@ -121,7 +122,7 @@ export default function PropertyListPage() {
 
   useEffect(() => {
     let isMounted = true
-    
+
     try {
       if (!user) {
         setLoading(false)
@@ -143,7 +144,7 @@ export default function PropertyListPage() {
 
       const unsub = getPropertiesSnapshot((allProperties) => {
         if (!isMounted) return
-        
+
         try {
           if (Array.isArray(allProperties)) {
             setProperties(allProperties)
@@ -364,7 +365,7 @@ export default function PropertyListPage() {
       return []
     }
   }, [filteredProperties])
-  
+
   const pending = useMemo(() => {
     try {
       return Array.isArray(filteredProperties) ? filteredProperties.filter((p) => p?.status === 'pending') : []
@@ -372,7 +373,7 @@ export default function PropertyListPage() {
       return []
     }
   }, [filteredProperties])
-  
+
   const sold = useMemo(() => {
     try {
       return Array.isArray(filteredProperties) ? filteredProperties.filter((p) => p?.status === 'sold') : []
@@ -380,7 +381,7 @@ export default function PropertyListPage() {
       return []
     }
   }, [filteredProperties])
-  
+
   const reserved = useMemo(() => {
     try {
       return Array.isArray(filteredProperties) ? filteredProperties.filter((p) => p?.status === 'reserved') : []
@@ -470,371 +471,369 @@ export default function PropertyListPage() {
   try {
     return (
       <div className="max-w-6xl mx-auto p-4 sm:p-6">
-      {/* Header */}
-      <div className="mb-6 flex items-center justify-between">
-        <div>
-          <h1 className="text-3xl font-bold text-blue-900 mb-2">จัดการทรัพย์</h1>
-          <p className="text-slate-600">
-            รายการประกาศทั้งหมด ({safeProperties.length} รายการ)
-          </p>
-        </div>
-        <Link
-          to="/admin/properties/new"
-          className="flex items-center gap-2 px-4 py-2 bg-blue-900 text-white font-semibold rounded-lg hover:bg-blue-800 transition"
-        >
-          <Plus className="h-5 w-5" />
-          เพิ่มประกาศใหม่
-        </Link>
-      </div>
-
-      {/* Stats */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
-        <div className="bg-white rounded-xl border border-slate-200 p-4">
-          <p className="text-sm text-slate-600 mb-1">ว่าง</p>
-          <p className="text-2xl font-bold text-green-600">{available.length}</p>
-        </div>
-        <div className="bg-white rounded-xl border border-slate-200 p-4">
-          <p className="text-sm text-slate-600 mb-1">ติดจอง</p>
-          <p className="text-2xl font-bold text-yellow-600">{reserved.length}</p>
-        </div>
-        <div className="bg-white rounded-xl border border-slate-200 p-4">
-          <p className="text-sm text-slate-600 mb-1">ขายแล้ว</p>
-          <p className="text-2xl font-bold text-blue-600">{sold.length}</p>
-        </div>
-        <div className="bg-white rounded-xl border border-slate-200 p-4">
-          <p className="text-sm text-slate-600 mb-1">รออนุมัติ</p>
-          <p className="text-2xl font-bold text-orange-600">{pending.length}</p>
-        </div>
-      </div>
-
-      {/* Search & Filter Bar */}
-      <div className="bg-white rounded-xl border border-slate-200 p-6 mb-6">
-        {/* Search Input */}
-        <div className="mb-4">
-          <div className="relative">
-            <Search className="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-slate-400 pointer-events-none" />
-            <input
-              type="text"
-              value={searchTerm}
-              onChange={handleSearchChange}
-              placeholder="ค้นหาด้วยชื่อโครงการ หรือ รหัสทรัพย์ (เช่น SPS-TW-90)..."
-              className="w-full pl-12 pr-4 py-3 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-            />
-          </div>
-        </div>
-
-        {/* Filter Dropdowns */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4 items-end">
-          {/* ประเภททรัพย์ */}
+        {/* Header */}
+        <div className="mb-6 flex items-center justify-between">
           <div>
-            <label className="block text-sm font-medium text-slate-700 mb-2">ประเภททรัพย์</label>
-            <select
-              value={filters.type}
-              onChange={(e) => handleFilterChange('type', e.target.value)}
-              className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-            >
-              <option value="">ทั้งหมด</option>
-              {uniqueTypes.map((type) => (
-                <option key={type} value={type}>
-                  {type}
-                </option>
-              ))}
-            </select>
-          </div>
-
-          {/* ประเภทการดีล (Listing Type) */}
-          <div>
-            <label className="block text-sm font-medium text-slate-700 mb-2">ประเภทการดีล</label>
-            <select
-              value={filters.listingType}
-              onChange={(e) => {
-                const newListingType = e.target.value
-                handleFilterChange('listingType', newListingType)
-                // Reset sub-filters when listingType changes
-                if (newListingType !== 'sale') {
-                  handleFilterChange('propertyCondition', '')
-                }
-                if (newListingType !== 'rent') {
-                  handleFilterChange('subListingType', '')
-                }
-              }}
-              className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-            >
-              <option value="">ทั้งหมด</option>
-              <option value="sale">ซื้อ</option>
-              <option value="rent">เช่า/ผ่อนตรง</option>
-            </select>
-          </div>
-
-          {/* Dynamic Filter: สภาพบ้าน (สำหรับ sale) หรือ รูปแบบ (สำหรับ rent) */}
-          {filters.listingType === 'sale' ? (
-            <div>
-              <label className="block text-sm font-medium text-slate-700 mb-2">สภาพ</label>
-              <select
-                value={filters.propertyCondition}
-                onChange={(e) => handleFilterChange('propertyCondition', e.target.value)}
-                className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-              >
-                <option value="">ทั้งหมด</option>
-                <option value="มือ 1">มือ 1</option>
-                <option value="มือ 2">มือ 2</option>
-              </select>
-            </div>
-          ) : filters.listingType === 'rent' ? (
-            <div>
-              <label className="block text-sm font-medium text-slate-700 mb-2">รูปแบบ</label>
-              <select
-                value={filters.subListingType}
-                onChange={(e) => handleFilterChange('subListingType', e.target.value)}
-                className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-              >
-                <option value="">ทั้งหมด</option>
-                <option value="rent_only">เช่าเท่านั้น</option>
-                <option value="installment_only">ผ่อนตรง</option>
-              </select>
-            </div>
-          ) : (
-            <div>
-              <label className="block text-sm font-medium text-slate-700 mb-2">สภาพ/รูปแบบ</label>
-              <select
-                disabled
-                className="w-full px-4 py-2 border border-slate-200 rounded-lg bg-slate-50 text-slate-400 cursor-not-allowed"
-              >
-                <option value="">เลือกประเภทการดีลก่อน</option>
-              </select>
-            </div>
-          )}
-
-          {/* สถานะ (Availability) */}
-          <div>
-            <label className="block text-sm font-medium text-slate-700 mb-2">สถานะ</label>
-            <select
-              value={filters.availability}
-              onChange={(e) => handleFilterChange('availability', e.target.value)}
-              className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-            >
-              <option value="">ทั้งหมด</option>
-              <option value="available">ว่าง</option>
-              <option value="sold">ขายแล้ว</option>
-              <option value="reserved">ติดจอง</option>
-            </select>
-          </div>
-
-          {/* Reset Filters Button */}
-          <div>
-            <button
-              onClick={handleResetFilters}
-              className="w-full px-4 py-2 bg-slate-100 text-slate-700 rounded-lg hover:bg-slate-200 transition border border-slate-300 flex items-center justify-center gap-2"
-            >
-              <Trash2 className="h-4 w-4" />
-              Reset Filters
-            </button>
-          </div>
-        </div>
-
-        {/* Filter Summary (แสดงเมื่อมี filter active) */}
-        {(searchTerm || filters.type || filters.listingType || filters.propertyCondition || filters.subListingType || filters.availability) && (
-          <div className="mt-4 pt-4 border-t border-slate-200">
-            <p className="text-xs text-slate-500 mb-2">
-              Active Filters: {[
-                searchTerm && `ค้นหา: "${searchTerm}"`,
-                filters.type && `ประเภท: ${filters.type}`,
-                filters.listingType && `ดีล: ${filters.listingType === 'sale' ? 'ซื้อ' : 'เช่า/ผ่อนตรง'}`,
-                filters.propertyCondition && `สภาพ: ${filters.propertyCondition}`,
-                filters.subListingType && `รูปแบบ: ${filters.subListingType === 'rent_only' ? 'เช่าเท่านั้น' : 'ผ่อนตรง'}`,
-                filters.availability && `สถานะ: ${filters.availability === 'available' ? 'ว่าง' : filters.availability === 'sold' ? 'ขายแล้ว' : 'ติดจอง'}`,
-              ].filter(Boolean).join(' • ')}
+            <h1 className="text-3xl font-bold text-blue-900 mb-2">จัดการทรัพย์</h1>
+            <p className="text-slate-600">
+              รายการประกาศทั้งหมด ({safeProperties.length} รายการ)
             </p>
           </div>
-        )}
-      </div>
-
-      {/* Properties Table */}
-      {safeProperties.length === 0 ? (
-        <div className="bg-white rounded-xl border border-slate-200 p-12 text-center">
-          <FileText className="h-16 w-16 mx-auto mb-4 text-slate-400" />
-          <p className="text-lg font-medium text-slate-700 mb-2">ยังไม่มีประกาศ</p>
-          <p className="text-slate-600 mb-6">เริ่มต้นด้วยการเพิ่มประกาศแรก</p>
           <Link
             to="/admin/properties/new"
-            className="inline-flex items-center gap-2 px-6 py-3 bg-blue-900 text-white font-semibold rounded-lg hover:bg-blue-800 transition"
+            className="flex items-center gap-2 px-4 py-2 bg-blue-900 text-white font-semibold rounded-lg hover:bg-blue-800 transition"
           >
             <Plus className="h-5 w-5" />
             เพิ่มประกาศใหม่
           </Link>
         </div>
-      ) : (
-        <>
-          <div className="bg-white rounded-xl border border-slate-200 overflow-hidden mb-4">
-            <div className="overflow-x-auto">
-              <table className="w-full">
-                <thead>
-                  <tr className="bg-slate-50/80 text-left text-xs font-medium text-slate-600 uppercase tracking-wider">
-                    <th className="px-6 py-3 whitespace-nowrap">ID</th>
-                    <th className="px-6 py-3">ชื่อประกาศ</th>
-                    <th className="px-6 py-3 whitespace-nowrap">ประเภท</th>
-                    <th className="px-6 py-3 whitespace-nowrap">สถานะ</th>
-                    <th className="px-6 py-3 whitespace-nowrap text-right">ราคา</th>
-                    <th className="px-6 py-3 whitespace-nowrap text-center">แก้ไข</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {paginatedProperties.length === 0 ? (
-                    <tr>
-                      <td colSpan={6} className="px-6 py-12 text-center text-slate-500">
-                        <FileText className="h-12 w-12 mx-auto mb-3 text-slate-400" />
-                        <p className="text-lg font-medium">ไม่พบข้อมูลที่ค้นหา</p>
-                        <p className="text-sm mt-1">ลองเปลี่ยนคำค้นหาหรือตัวกรอง</p>
-                      </td>
-                    </tr>
-                  ) : (
-                    paginatedProperties.map((property) => {
-                      if (!property || !property.id) {
-                        return null
-                      }
-                      try {
-                        const badges = getStatusBadges(property)
-                        const loc = property.location || {}
-                        return (
-                        <tr key={property.id} className="border-t border-slate-100 hover:bg-slate-50/50 transition-colors">
-                          <td className="px-6 py-4 font-mono text-sm font-medium text-slate-800 whitespace-nowrap">
-                            {property.propertyId || '-'}
-                          </td>
-                          <td className="px-6 py-4">
-                            <span className="font-medium text-slate-800 line-clamp-2">{property.title}</span>
-                            <p className="text-xs text-slate-500 mt-0.5">
-                              {loc.district}, {loc.province}
-                            </p>
-                          </td>
-                          <td className="px-6 py-4 text-slate-600 text-sm whitespace-nowrap">{property.type}</td>
-                          <td className="px-6 py-4">
-                            <div className="flex gap-2 flex-wrap">
-                              {badges.map((badge, index) => (
-                                <span
-                                  key={index}
-                                  className={`inline-flex px-2.5 py-1 rounded-lg text-xs font-medium ${badge.color}`}
-                                >
-                                  {badge.label}
-                                </span>
-                              ))}
-                            </div>
-                          </td>
-                          <td className="px-6 py-4 text-right text-slate-700 text-sm whitespace-nowrap">
-                            {formatPrice(property.price, property.isRental, true)}
-                          </td>
-                          <td className="px-6 py-4 text-center">
-                            <Link
-                              to={`/admin/properties/edit/${property.id}`}
-                              className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg bg-blue-50 text-blue-900 font-medium hover:bg-blue-100 transition"
-                              aria-label={`แก้ไข ${property.title}`}
-                            >
-                              <Pencil className="h-4 w-4" />
-                              แก้ไข
-                            </Link>
-                          </td>
-                        </tr>
-                        )
-                      } catch (error) {
-                        console.error('PropertyListPage: Error rendering property row:', error, property)
-                        return null
-                      }
-                    }).filter(Boolean)
-                  )}
-                </tbody>
-              </table>
+
+        {/* Stats */}
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+          <div className="bg-white rounded-xl border border-slate-200 p-4">
+            <p className="text-sm text-slate-600 mb-1">ว่าง</p>
+            <p className="text-2xl font-bold text-green-600">{available.length}</p>
+          </div>
+          <div className="bg-white rounded-xl border border-slate-200 p-4">
+            <p className="text-sm text-slate-600 mb-1">ติดจอง</p>
+            <p className="text-2xl font-bold text-yellow-600">{reserved.length}</p>
+          </div>
+          <div className="bg-white rounded-xl border border-slate-200 p-4">
+            <p className="text-sm text-slate-600 mb-1">ขายแล้ว</p>
+            <p className="text-2xl font-bold text-blue-600">{sold.length}</p>
+          </div>
+          <div className="bg-white rounded-xl border border-slate-200 p-4">
+            <p className="text-sm text-slate-600 mb-1">รออนุมัติ</p>
+            <p className="text-2xl font-bold text-orange-600">{pending.length}</p>
+          </div>
+        </div>
+
+        {/* Search & Filter Bar */}
+        <div className="bg-white rounded-xl border border-slate-200 p-6 mb-6">
+          {/* Search Input */}
+          <div className="mb-4">
+            <div className="relative">
+              <Search className="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-slate-400 pointer-events-none" />
+              <input
+                type="text"
+                value={searchTerm}
+                onChange={handleSearchChange}
+                placeholder="ค้นหาด้วยชื่อโครงการ หรือ รหัสทรัพย์ (เช่น SPS-TW-90)..."
+                className="w-full pl-12 pr-4 py-3 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              />
             </div>
           </div>
 
-          {/* Pagination Controls */}
-          {filteredProperties.length > 0 && (
-            <div className="bg-white rounded-xl border border-slate-200 p-4 flex flex-col sm:flex-row items-center justify-between gap-4">
-              {/* Results Info */}
-              <div className="text-sm text-slate-600">
-                แสดง{' '}
-                <span className="font-semibold text-slate-800">
-                  {filteredProperties.length === 0
-                    ? 0
-                    : (currentPage - 1) * itemsPerPage + 1}
-                </span>
-                {' - '}
-                <span className="font-semibold text-slate-800">
-                  {Math.min(currentPage * itemsPerPage, filteredProperties.length)}
-                </span>
-                {' จากทั้งหมด '}
-                <span className="font-semibold text-slate-800">{filteredProperties.length.toLocaleString('th-TH')}</span>{' '}
-                รายการ
-              </div>
+          {/* Filter Dropdowns */}
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4 items-end">
+            {/* ประเภททรัพย์ */}
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-2">ประเภททรัพย์</label>
+              <select
+                value={filters.type}
+                onChange={(e) => handleFilterChange('type', e.target.value)}
+                className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+              >
+                <option value="">ทั้งหมด</option>
+                {uniqueTypes.map((type) => (
+                  <option key={type} value={type}>
+                    {getPropertyLabel(type)}
+                  </option>
+                ))}
+              </select>
+            </div>
 
-              {/* Pagination Buttons */}
-              <div className="flex items-center gap-2">
-                {/* Previous Button */}
-                <button
-                  onClick={() => handlePageChange(currentPage - 1)}
-                  disabled={currentPage === 1}
-                  className={`flex items-center gap-1 px-3 py-2 rounded-lg text-sm font-medium transition ${
-                    currentPage === 1
-                      ? 'bg-slate-100 text-slate-400 cursor-not-allowed'
-                      : 'bg-white border border-slate-300 text-slate-700 hover:bg-slate-50'
-                  }`}
+            {/* ประเภทการดีล (Listing Type) */}
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-2">ประเภทการดีล</label>
+              <select
+                value={filters.listingType}
+                onChange={(e) => {
+                  const newListingType = e.target.value
+                  handleFilterChange('listingType', newListingType)
+                  // Reset sub-filters when listingType changes
+                  if (newListingType !== 'sale') {
+                    handleFilterChange('propertyCondition', '')
+                  }
+                  if (newListingType !== 'rent') {
+                    handleFilterChange('subListingType', '')
+                  }
+                }}
+                className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+              >
+                <option value="">ทั้งหมด</option>
+                <option value="sale">ซื้อ</option>
+                <option value="rent">เช่า/ผ่อนตรง</option>
+              </select>
+            </div>
+
+            {/* Dynamic Filter: สภาพบ้าน (สำหรับ sale) หรือ รูปแบบ (สำหรับ rent) */}
+            {filters.listingType === 'sale' ? (
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-2">สภาพ</label>
+                <select
+                  value={filters.propertyCondition}
+                  onChange={(e) => handleFilterChange('propertyCondition', e.target.value)}
+                  className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
                 >
-                  <ChevronLeft className="h-4 w-4" />
-                  ก่อนหน้า
-                </button>
-
-                {/* Page Numbers */}
-                <div className="flex items-center gap-1">
-                  {Array.from({ length: totalPages }, (_, i) => i + 1)
-                    .filter((page) => {
-                      // Show first page, last page, current page, and pages around current
-                      return (
-                        page === 1 ||
-                        page === totalPages ||
-                        (page >= currentPage - 1 && page <= currentPage + 1)
-                      )
-                    })
-                    .map((page, index, array) => {
-                      // Add ellipsis if there's a gap
-                      const prevPage = array[index - 1]
-                      const showEllipsis = prevPage && page - prevPage > 1
-
-                      return (
-                        <div key={page} className="flex items-center gap-1">
-                          {showEllipsis && (
-                            <span className="px-2 text-slate-400">...</span>
-                          )}
-                          <button
-                            onClick={() => handlePageChange(page)}
-                            className={`px-3 py-2 rounded-lg text-sm font-medium transition ${
-                              currentPage === page
-                                ? 'bg-blue-900 text-white'
-                                : 'bg-white border border-slate-300 text-slate-700 hover:bg-slate-50'
-                            }`}
-                          >
-                            {page}
-                          </button>
-                        </div>
-                      )
-                    })}
-                </div>
-
-                {/* Next Button */}
-                <button
-                  onClick={() => handlePageChange(currentPage + 1)}
-                  disabled={currentPage === totalPages}
-                  className={`flex items-center gap-1 px-3 py-2 rounded-lg text-sm font-medium transition ${
-                    currentPage === totalPages
-                      ? 'bg-slate-100 text-slate-400 cursor-not-allowed'
-                      : 'bg-white border border-slate-300 text-slate-700 hover:bg-slate-50'
-                  }`}
-                >
-                  ถัดไป
-                  <ChevronRight className="h-4 w-4" />
-                </button>
+                  <option value="">ทั้งหมด</option>
+                  <option value="มือ 1">มือ 1</option>
+                  <option value="มือ 2">มือ 2</option>
+                </select>
               </div>
+            ) : filters.listingType === 'rent' ? (
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-2">รูปแบบ</label>
+                <select
+                  value={filters.subListingType}
+                  onChange={(e) => handleFilterChange('subListingType', e.target.value)}
+                  className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                >
+                  <option value="">ทั้งหมด</option>
+                  <option value="rent_only">เช่าเท่านั้น</option>
+                  <option value="installment_only">ผ่อนตรง</option>
+                </select>
+              </div>
+            ) : (
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-2">สภาพ/รูปแบบ</label>
+                <select
+                  disabled
+                  className="w-full px-4 py-2 border border-slate-200 rounded-lg bg-slate-50 text-slate-400 cursor-not-allowed"
+                >
+                  <option value="">เลือกประเภทการดีลก่อน</option>
+                </select>
+              </div>
+            )}
+
+            {/* สถานะ (Availability) */}
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-2">สถานะ</label>
+              <select
+                value={filters.availability}
+                onChange={(e) => handleFilterChange('availability', e.target.value)}
+                className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+              >
+                <option value="">ทั้งหมด</option>
+                <option value="available">ว่าง</option>
+                <option value="sold">ขายแล้ว</option>
+                <option value="reserved">ติดจอง</option>
+              </select>
+            </div>
+
+            {/* Reset Filters Button */}
+            <div>
+              <button
+                onClick={handleResetFilters}
+                className="w-full px-4 py-2 bg-slate-100 text-slate-700 rounded-lg hover:bg-slate-200 transition border border-slate-300 flex items-center justify-center gap-2"
+              >
+                <Trash2 className="h-4 w-4" />
+                Reset Filters
+              </button>
+            </div>
+          </div>
+
+          {/* Filter Summary (แสดงเมื่อมี filter active) */}
+          {(searchTerm || filters.type || filters.listingType || filters.propertyCondition || filters.subListingType || filters.availability) && (
+            <div className="mt-4 pt-4 border-t border-slate-200">
+              <p className="text-xs text-slate-500 mb-2">
+                Active Filters: {[
+                  searchTerm && `ค้นหา: "${searchTerm}"`,
+                  filters.type && `ประเภท: ${getPropertyLabel(filters.type)}`,
+                  filters.listingType && `ดีล: ${filters.listingType === 'sale' ? 'ซื้อ' : 'เช่า/ผ่อนตรง'}`,
+                  filters.propertyCondition && `สภาพ: ${filters.propertyCondition}`,
+                  filters.subListingType && `รูปแบบ: ${filters.subListingType === 'rent_only' ? 'เช่าเท่านั้น' : 'ผ่อนตรง'}`,
+                  filters.availability && `สถานะ: ${filters.availability === 'available' ? 'ว่าง' : filters.availability === 'sold' ? 'ขายแล้ว' : 'ติดจอง'}`,
+                ].filter(Boolean).join(' • ')}
+              </p>
             </div>
           )}
-        </>
-      )}
+        </div>
+
+        {/* Properties Table */}
+        {safeProperties.length === 0 ? (
+          <div className="bg-white rounded-xl border border-slate-200 p-12 text-center">
+            <FileText className="h-16 w-16 mx-auto mb-4 text-slate-400" />
+            <p className="text-lg font-medium text-slate-700 mb-2">ยังไม่มีประกาศ</p>
+            <p className="text-slate-600 mb-6">เริ่มต้นด้วยการเพิ่มประกาศแรก</p>
+            <Link
+              to="/admin/properties/new"
+              className="inline-flex items-center gap-2 px-6 py-3 bg-blue-900 text-white font-semibold rounded-lg hover:bg-blue-800 transition"
+            >
+              <Plus className="h-5 w-5" />
+              เพิ่มประกาศใหม่
+            </Link>
+          </div>
+        ) : (
+          <>
+            <div className="bg-white rounded-xl border border-slate-200 overflow-hidden mb-4">
+              <div className="overflow-x-auto">
+                <table className="w-full">
+                  <thead>
+                    <tr className="bg-slate-50/80 text-left text-xs font-medium text-slate-600 uppercase tracking-wider">
+                      <th className="px-6 py-3 whitespace-nowrap">ID</th>
+                      <th className="px-6 py-3">ชื่อประกาศ</th>
+                      <th className="px-6 py-3 whitespace-nowrap">ประเภท</th>
+                      <th className="px-6 py-3 whitespace-nowrap">สถานะ</th>
+                      <th className="px-6 py-3 whitespace-nowrap text-right">ราคา</th>
+                      <th className="px-6 py-3 whitespace-nowrap text-center">แก้ไข</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {paginatedProperties.length === 0 ? (
+                      <tr>
+                        <td colSpan={6} className="px-6 py-12 text-center text-slate-500">
+                          <FileText className="h-12 w-12 mx-auto mb-3 text-slate-400" />
+                          <p className="text-lg font-medium">ไม่พบข้อมูลที่ค้นหา</p>
+                          <p className="text-sm mt-1">ลองเปลี่ยนคำค้นหาหรือตัวกรอง</p>
+                        </td>
+                      </tr>
+                    ) : (
+                      paginatedProperties.map((property, index) => {
+                        if (!property || !property.id) {
+                          return null
+                        }
+                        try {
+                          const badges = getStatusBadges(property)
+                          const loc = property.location || {}
+
+                          return (
+                            <tr key={property.id} className="border-t border-slate-100 hover:bg-slate-50/50 transition-colors">
+                              <td className="px-6 py-4 font-mono text-sm font-medium text-slate-800 whitespace-nowrap">
+                                {property.displayId || property.propertyId || '-'}
+                              </td>
+                              <td className="px-6 py-4">
+                                <span className="font-medium text-slate-800 line-clamp-2">{property.title}</span>
+                                <p className="text-xs text-slate-500 mt-0.5">
+                                  {loc.district}, {loc.province}
+                                </p>
+                              </td>
+                              <td className="px-6 py-4 text-slate-600 text-sm whitespace-nowrap">{getPropertyLabel(property.type)}</td>
+                              <td className="px-6 py-4">
+                                <div className="flex gap-2 flex-wrap">
+                                  {badges.map((badge, index) => (
+                                    <span
+                                      key={index}
+                                      className={`inline-flex px-2.5 py-1 rounded-lg text-xs font-medium ${badge.color}`}
+                                    >
+                                      {badge.label}
+                                    </span>
+                                  ))}
+                                </div>
+                              </td>
+                              <td className="px-6 py-4 text-right text-slate-700 text-sm whitespace-nowrap">
+                                {formatPrice(property.price, property.isRental, true)}
+                              </td>
+                              <td className="px-6 py-4 text-center">
+                                <Link
+                                  to={`/admin/properties/edit/${property.id}`}
+                                  className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg bg-blue-50 text-blue-900 font-medium hover:bg-blue-100 transition"
+                                  aria-label={`แก้ไข ${property.title}`}
+                                >
+                                  <Pencil className="h-4 w-4" />
+                                  แก้ไข
+                                </Link>
+                              </td>
+                            </tr>
+                          )
+                        } catch (error) {
+                          console.error('PropertyListPage: Error rendering property row:', error, property)
+                          return null
+                        }
+                      }).filter(Boolean)
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            {/* Pagination Controls */}
+            {filteredProperties.length > 0 && (
+              <div className="bg-white rounded-xl border border-slate-200 p-4 flex flex-col sm:flex-row items-center justify-between gap-4">
+                {/* Results Info */}
+                <div className="text-sm text-slate-600">
+                  แสดง{' '}
+                  <span className="font-semibold text-slate-800">
+                    {filteredProperties.length === 0
+                      ? 0
+                      : (currentPage - 1) * itemsPerPage + 1}
+                  </span>
+                  {' - '}
+                  <span className="font-semibold text-slate-800">
+                    {Math.min(currentPage * itemsPerPage, filteredProperties.length)}
+                  </span>
+                  {' จากทั้งหมด '}
+                  <span className="font-semibold text-slate-800">{filteredProperties.length.toLocaleString('th-TH')}</span>{' '}
+                  รายการ
+                </div>
+
+                {/* Pagination Buttons */}
+                <div className="flex items-center gap-2">
+                  {/* Previous Button */}
+                  <button
+                    onClick={() => handlePageChange(currentPage - 1)}
+                    disabled={currentPage === 1}
+                    className={`flex items-center gap-1 px-3 py-2 rounded-lg text-sm font-medium transition ${currentPage === 1
+                      ? 'bg-slate-100 text-slate-400 cursor-not-allowed'
+                      : 'bg-white border border-slate-300 text-slate-700 hover:bg-slate-50'
+                      }`}
+                  >
+                    <ChevronLeft className="h-4 w-4" />
+                    ก่อนหน้า
+                  </button>
+
+                  {/* Page Numbers */}
+                  <div className="flex items-center gap-1">
+                    {Array.from({ length: totalPages }, (_, i) => i + 1)
+                      .filter((page) => {
+                        // Show first page, last page, current page, and pages around current
+                        return (
+                          page === 1 ||
+                          page === totalPages ||
+                          (page >= currentPage - 1 && page <= currentPage + 1)
+                        )
+                      })
+                      .map((page, index, array) => {
+                        // Add ellipsis if there's a gap
+                        const prevPage = array[index - 1]
+                        const showEllipsis = prevPage && page - prevPage > 1
+
+                        return (
+                          <div key={page} className="flex items-center gap-1">
+                            {showEllipsis && (
+                              <span className="px-2 text-slate-400">...</span>
+                            )}
+                            <button
+                              onClick={() => handlePageChange(page)}
+                              className={`px-3 py-2 rounded-lg text-sm font-medium transition ${currentPage === page
+                                ? 'bg-blue-900 text-white'
+                                : 'bg-white border border-slate-300 text-slate-700 hover:bg-slate-50'
+                                }`}
+                            >
+                              {page}
+                            </button>
+                          </div>
+                        )
+                      })}
+                  </div>
+
+                  {/* Next Button */}
+                  <button
+                    onClick={() => handlePageChange(currentPage + 1)}
+                    disabled={currentPage === totalPages}
+                    className={`flex items-center gap-1 px-3 py-2 rounded-lg text-sm font-medium transition ${currentPage === totalPages
+                      ? 'bg-slate-100 text-slate-400 cursor-not-allowed'
+                      : 'bg-white border border-slate-300 text-slate-700 hover:bg-slate-50'
+                      }`}
+                  >
+                    ถัดไป
+                    <ChevronRight className="h-4 w-4" />
+                  </button>
+                </div>
+              </div>
+            )}
+          </>
+        )}
       </div>
     )
   } catch (error) {

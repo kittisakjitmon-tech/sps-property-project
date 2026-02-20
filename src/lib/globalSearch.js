@@ -3,6 +3,7 @@
  * Centralized filtering function that handles keyword search, category/status filtering, and price range
  * with full backward compatibility support
  */
+import { getPropertyLabel } from '../constants/propertyTypes'
 
 /**
  * Normalize text for comparison (lowercase, trim, remove extra spaces)
@@ -19,19 +20,19 @@ function normalizeText(text) {
  */
 function smartTokenize(query) {
   if (!query || typeof query !== 'string') return []
-  
+
   const normalized = normalizeText(query)
   if (!normalized) return []
-  
+
   const tokens = []
   let remainingText = normalized
-  
+
   // Extract special keywords: 'มือ 1', 'มือ 2', 'มือ1', 'มือ2'
   const specialPatterns = [
     /มือ\s*1/g,  // Matches 'มือ 1' or 'มือ1'
     /มือ\s*2/g,  // Matches 'มือ 2' or 'มือ2'
   ]
-  
+
   // Find all special keywords and their positions
   const specialMatches = []
   specialPatterns.forEach((pattern) => {
@@ -43,10 +44,10 @@ function smartTokenize(query) {
       })
     }
   })
-  
+
   // Sort by index (ascending)
   specialMatches.sort((a, b) => a.index - b.index)
-  
+
   // Extract special keywords and remaining text
   let lastIndex = 0
   specialMatches.forEach((match) => {
@@ -59,7 +60,7 @@ function smartTokenize(query) {
         tokens.push(...beforeTokens)
       }
     }
-    
+
     // Add the special keyword (normalize to 'มือ 1' or 'มือ 2')
     const normalizedKeyword = match.text.replace(/\s+/g, ' ').trim()
     if (normalizedKeyword === 'มือ1' || normalizedKeyword === 'มือ 1') {
@@ -69,10 +70,10 @@ function smartTokenize(query) {
     } else {
       tokens.push(normalizedKeyword)
     }
-    
+
     lastIndex = match.index + match.text.length
   })
-  
+
   // Add remaining text after the last special keyword
   if (lastIndex < remainingText.length) {
     const afterText = remainingText.substring(lastIndex).trim()
@@ -82,12 +83,12 @@ function smartTokenize(query) {
       tokens.push(...afterTokens)
     }
   }
-  
+
   // If no special keywords found, use regular split
   if (specialMatches.length === 0) {
     return normalized.split(/\s+/).filter((t) => t.length > 0)
   }
-  
+
   return tokens.filter((t) => t.length > 0)
 }
 
@@ -248,7 +249,7 @@ export function filterProperties(properties = [], filters = {}) {
         if (normalizedKeyword) {
           // Use smart tokenization to extract special keywords ('มือ 1', 'มือ 2') first
           const keywords = smartTokenize(normalizedKeyword)
-          
+
           if (keywords.length > 0) {
             // Check if ALL keywords match (AND Logic)
             const allKeywordsMatch = keywords.every((keyword) => {
@@ -263,34 +264,35 @@ export function filterProperties(properties = [], filters = {}) {
                 }
                 // Also check in other fields as fallback
               }
-              
+
               // Create searchable text from property fields
               const searchableFields = [
                 property.title || '',
                 property.propertyId || '',
                 property.type || '',
+                getPropertyLabel(property.type) || '',
                 property.locationDisplay || '',
                 property.location?.province || '',
                 property.location?.district || '',
                 property.location?.subDistrict || '',
                 property.description || '', // Backward compatibility
               ]
-              
+
               // Combine all fields into one searchable string
               const searchableText = normalizeText(searchableFields.join(' '))
-              
+
               // Check if keyword exists in searchable text
               const matchesInText = searchableText.includes(keyword)
-              
+
               // Check if keyword exists in customTags array
               const matchesInTags = matchesArrayField(property.customTags, keyword)
-              
+
               // Check if keyword exists in nearbyPlace array
               const matchesInNearby = matchesArrayField(property.nearbyPlace, keyword)
-              
+
               return matchesInText || matchesInTags || matchesInNearby
             })
-            
+
             if (!allKeywordsMatch) return false
           }
         }

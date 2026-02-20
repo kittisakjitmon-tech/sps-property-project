@@ -19,6 +19,8 @@ import { ref, uploadBytes, getDownloadURL, deleteObject } from 'firebase/storage
 import { writeBatch } from 'firebase/firestore'
 import { db, storage } from './firebase'
 
+export { db, writeBatch }
+
 const PROPERTIES = 'properties'
 const LEADS = 'leads'
 const SHARE_LINKS = 'share_links'
@@ -587,10 +589,10 @@ export async function getPopularLocationsOnce() {
 
 export async function createPopularLocation(data) {
   const snap = await getDocs(collection(db, POPULAR_LOCATIONS))
-  const maxOrder = snap.docs.length > 0 
+  const maxOrder = snap.docs.length > 0
     ? Math.max(...snap.docs.map((d) => d.data().order ?? 0), -1)
     : -1
-  
+
   await addDoc(collection(db, POPULAR_LOCATIONS), {
     ...data,
     order: maxOrder + 1,
@@ -646,7 +648,7 @@ export async function batchUpdatePopularLocationOrders(updates) {
 export function getUserPropertiesSnapshot(userId, callback) {
   if (!userId) {
     callback([])
-    return () => {}
+    return () => { }
   }
   const q = query(collection(db, PROPERTIES), where('createdBy', '==', userId))
   return onSnapshot(q, (snap) => {
