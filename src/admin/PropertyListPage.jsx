@@ -189,15 +189,18 @@ export default function PropertyListPage() {
 
       let filtered = [...properties]
 
-      // Search Filter: ตรวจสอบ title หรือ propertyId (Case-insensitive)
+      // Search Filter: ตรวจสอบ title, รหัสทรัพย์ (displayId), หรือ ประเภทบ้าน (propertyTypeLabel)
       if (searchTerm && typeof searchTerm === 'string' && searchTerm.trim()) {
         const searchLower = searchTerm.toLowerCase().trim()
         filtered = filtered.filter((p) => {
           try {
             if (!p || typeof p !== 'object') return false
+
             const titleMatch = p.title?.toLowerCase().includes(searchLower) || false
-            const idMatch = p.propertyId?.toLowerCase().includes(searchLower) || false
-            return titleMatch || idMatch
+            const idMatch = (p.displayId || p.propertyId || '').toLowerCase().includes(searchLower) || false
+            const typeLabelMatch = getPropertyLabel(p.type).toLowerCase().includes(searchLower) || false
+
+            return titleMatch || idMatch || typeLabelMatch
           } catch {
             return false
           }

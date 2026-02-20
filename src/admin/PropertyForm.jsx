@@ -272,9 +272,9 @@ export default function PropertyForm() {
   const handleTypeChange = (newType) => {
     const isRental = newType === 'SPS-RP-ID' || newType === 'บ้านเช่า'
     const next = { type: newType, isRental }
-    if (!isEdit && !propertyIdManuallyEdited) {
+    if (!isEdit && !displayIdManuallyEdited) {
       const nextId = generatePropertyID(newType, allProperties)
-      next.propertyId = nextId
+      next.displayId = nextId
     }
     if (isRental) {
       next.propertySubStatus = ''

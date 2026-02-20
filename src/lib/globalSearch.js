@@ -269,6 +269,7 @@ export function filterProperties(properties = [], filters = {}) {
               const searchableFields = [
                 property.title || '',
                 property.propertyId || '',
+                property.displayId || '',
                 property.type || '',
                 getPropertyLabel(property.type) || '',
                 property.locationDisplay || '',
