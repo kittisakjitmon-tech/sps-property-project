@@ -31,6 +31,7 @@ import { useState } from 'react'
 import { getPropertiesOnce, db, writeBatch } from '../lib/firestore'
 import { PROPERTY_TYPES } from '../constants/propertyTypes'
 import { doc, serverTimestamp } from 'firebase/firestore'
+import { generateAutoTags } from '../lib/autoTags'
 
 // ─── Stat Card Component ────────────────────────────────────────────────────
 function StatCard({ title, value, icon: Icon, iconBg, href }) {
@@ -161,6 +162,8 @@ export default function Dashboard() {
 
   const [migrating, setMigrating] = useState(false)
   const [migrationDone, setMigrationDone] = useState(false)
+  const [tagsRegenerating, setTagsRegenerating] = useState(false)
+  const [tagsDone, setTagsDone] = useState(false)
 
   const handleMigration = async () => {
     if (!window.confirm('คุณต้องการรันสคริปต์ปรับปรุงระบบ ID (PropertyTypes & DisplayId) หรือไม่?')) return
@@ -260,6 +263,45 @@ export default function Dashboard() {
     }
   }
 
+  const handleRegenerateTags = async () => {
+    if (!window.confirm('คุณต้องการรีเซ็ต Custom Tags ทั้งหมดหรือไม่?\n⚠️ Tags ที่เคยใส่เองจะถูกลบและสร้างใหม่จากข้อมูลจริงของ property')) return
+    setTagsRegenerating(true)
+    try {
+      const allProps = await getPropertiesOnce()
+      if (!allProps || allProps.length === 0) {
+        alert('ไม่มีข้อมูลอสังหาริมทรัพย์')
+        return
+      }
+
+      // Firestore batch supports max 500 ops — split into chunks of 400
+      const CHUNK = 400
+      let totalUpdated = 0
+      for (let i = 0; i < allProps.length; i += CHUNK) {
+        const chunk = allProps.slice(i, i + CHUNK)
+        const batch = writeBatch(db)
+        chunk.forEach((property) => {
+          const autoTags = generateAutoTags(property)
+          const docRef = doc(db, 'properties', property.id)
+          batch.update(docRef, {
+            customTags: autoTags,
+            tags: autoTags,
+            updatedAt: serverTimestamp(),
+          })
+          totalUpdated++
+        })
+        await batch.commit()
+      }
+
+      alert(`รีเซ็ต Custom Tags สำเร็จ ${totalUpdated} รายการ`)
+      setTagsDone(true)
+    } catch (e) {
+      console.error(e)
+      alert('เกิดข้อผิดพลาด: ' + e.message)
+    } finally {
+      setTagsRegenerating(false)
+    }
+  }
+
   const pendingCount = pendingProperties.length
 
   if (loading) {
@@ -283,6 +325,18 @@ export default function Dashboard() {
               {migrating ? <Loader2 className="h-4 w-4 animate-spin" /> : <DatabaseZap className="h-4 w-4" />}
               เริ่มการปรับปรุงระบบ ID (Migration)
             </button>
+          )}
+          {!tagsDone ? (
+            <button
+              onClick={handleRegenerateTags}
+              disabled={tagsRegenerating}
+              className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-amber-600 text-white font-semibold hover:bg-amber-700 transition-colors shadow-sm disabled:opacity-50"
+            >
+              {tagsRegenerating ? <Loader2 className="h-4 w-4 animate-spin" /> : <DatabaseZap className="h-4 w-4" />}
+              รีเซ็ต Custom Tags
+            </button>
+          ) : (
+            <span className="text-sm text-emerald-600 font-medium">✓ Tags อัปเดตแล้ว</span>
           )}
           <Link
             to="/admin/properties/new"
