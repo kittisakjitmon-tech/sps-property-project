@@ -722,6 +722,9 @@ export default function PropertyDetail() {
                 {/* Title Section */}
                 <div className="flex items-start justify-between mb-4">
                   <div className="flex-1">
+                    {property.displayId && (
+                      <p className="text-xs font-mono text-slate-400 mb-1.5">{property.displayId}</p>
+                    )}
                     <h1 className="text-2xl sm:text-3xl font-bold text-blue-900 mb-4">
                       {property.title}
                     </h1>
