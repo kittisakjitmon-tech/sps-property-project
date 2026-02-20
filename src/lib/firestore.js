@@ -667,10 +667,11 @@ const AUDIT_LOGS = 'audit_logs'
 const ACTIVITIES = 'activities'
 
 /** Activities - Realtime snapshot สำหรับบันทึกกิจกรรม */
-export function getActivitiesSnapshot(callback) {
+export function getActivitiesSnapshot(callback, limitCount = 20) {
   const q = query(
     collection(db, ACTIVITIES),
-    orderBy('timestamp', 'desc')
+    orderBy('timestamp', 'desc'),
+    limit(limitCount)
   )
   return onSnapshot(q, (snap) => {
     const list = snap.docs.map((d) => {

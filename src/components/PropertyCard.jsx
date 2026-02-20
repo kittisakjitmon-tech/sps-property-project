@@ -326,7 +326,7 @@ function PropertyCard({ property, featuredLabel = 'แนะนำ', searchQuery
             {/* Display ID */}
             {property.displayId && (
               <span className="text-[10px] text-white drop-shadow-md font-medium mt-0.5 text-right bg-black/40 px-2 py-0.5 rounded-md backdrop-blur-sm">
-                ID: {property.displayId}
+                {property.displayId}
               </span>
             )}
           </div>

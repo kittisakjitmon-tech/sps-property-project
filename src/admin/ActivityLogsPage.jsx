@@ -15,14 +15,12 @@ const ACTIVITY_TYPES = [
 function formatTimestamp(ts) {
   if (!ts?.toDate) return '-'
   const d = ts.toDate()
-  return d.toLocaleDateString('th-TH', {
-    day: '2-digit',
-    month: '2-digit',
-    year: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
-    hour12: false,
-  })
+  const day = String(d.getDate()).padStart(2, '0')
+  const month = String(d.getMonth() + 1).padStart(2, '0')
+  const year = d.getFullYear()
+  const hours = String(d.getHours()).padStart(2, '0')
+  const minutes = String(d.getMinutes()).padStart(2, '0')
+  return `${day}/${month}/${year} ${hours}:${minutes}`
 }
 
 function actionMatchesFilter(action, filterType) {
@@ -60,11 +58,12 @@ export default function ActivityLogsPage() {
   const [activities, setActivities] = useState([])
   const [filterType, setFilterType] = useState('')
   const [filterUser, setFilterUser] = useState('')
+  const [limitCount, setLimitCount] = useState(20)
 
   useEffect(() => {
-    const unsub = getActivitiesSnapshot(setActivities)
+    const unsub = getActivitiesSnapshot(setActivities, limitCount)
     return () => unsub()
-  }, [])
+  }, [limitCount])
 
   const uniqueUsers = useMemo(() => {
     const emails = [...new Set(activities.map((a) => a.user?.email).filter(Boolean))]
@@ -179,6 +178,16 @@ export default function ActivityLogsPage() {
         {filteredLogs.length === 0 && (
           <div className="px-6 py-12 text-center text-slate-500">
             {activities.length === 0 ? 'ยังไม่มีรายการกิจกรรม' : 'ไม่พบรายการที่ตรงกับตัวกรอง'}
+          </div>
+        )}
+        {activities.length >= limitCount && (
+          <div className="px-6 py-4 border-t border-gray-100 bg-slate-50 flex justify-center">
+            <button
+              onClick={() => setLimitCount((prev) => prev + 20)}
+              className="px-4 py-2 bg-white border border-slate-200 text-slate-700 rounded-lg hover:bg-slate-100 transition shadow-sm text-sm font-medium"
+            >
+              โหลดเพิ่มเติม (Load More)
+            </button>
           </div>
         )}
       </div>
