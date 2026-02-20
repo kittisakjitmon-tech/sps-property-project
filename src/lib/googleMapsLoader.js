@@ -1,4 +1,4 @@
-import { Loader } from '@googlemaps/js-api-loader'
+import { setOptions, importLibrary } from '@googlemaps/js-api-loader'
 
 let googleMapsLoadingPromise = null
 
@@ -12,19 +12,18 @@ export function loadGoogleMapsApi({ libraries = [] } = {}) {
     return Promise.reject(new Error('Missing VITE_GOOGLE_PLACES_API_KEY'))
   }
 
-  const loader = new Loader({
-    apiKey,
-    version: 'weekly',
-    libraries: Array.from(new Set([...libraries, 'marker', 'places']))
+  // Set the necessary options to load the Maps API
+  setOptions({
+    key: apiKey,
+    version: 'weekly'
   })
 
-  googleMapsLoadingPromise = loader.load()
+  // Start the loading process by importing 'maps', and optionally preload other libraries
+  const loaders = ['maps', ...libraries].filter(Boolean).map(lib => importLibrary(lib))
+
+  googleMapsLoadingPromise = Promise.all(loaders)
     .then(() => {
-      // Ensure importLibrary is available for components that rely on it
-      // Since we preload 'marker' and 'places', they will be available synchronously
-      if (window.google.maps && !window.google.maps.importLibrary) {
-        window.google.maps.importLibrary = (lib) => Promise.resolve(window.google.maps[lib])
-      }
+      // Return the globally available window.google after loading is complete
       return window.google
     })
     .catch((error) => {
