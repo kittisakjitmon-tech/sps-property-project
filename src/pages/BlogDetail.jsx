@@ -3,6 +3,7 @@ import { useParams, Link } from 'react-router-dom'
 import { Calendar, ArrowLeft, Play } from 'lucide-react'
 import PageLayout from '../components/PageLayout'
 import { getBlogByIdOnce } from '../lib/firestore'
+import { Helmet } from 'react-helmet-async'
 
 export default function BlogDetail() {
   const { id } = useParams()
@@ -94,87 +95,97 @@ export default function BlogDetail() {
   const coverImage = blog.images?.[0]
   const youtubeEmbedUrl = getYouTubeEmbedUrl(blog.youtubeUrl)
 
+  const title = `${blog.title} | SPS Property Solution`
+  const description = (blog.content || '').substring(0, 160) + '...'
+
   return (
-    <PageLayout>
-      <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
-        {/* Back Button */}
-        <Link
-          to="/blogs"
-          className="inline-flex items-center gap-2 text-slate-600 hover:text-blue-900 mb-6 transition"
-        >
-          <ArrowLeft className="h-5 w-5" />
-          กลับไปหน้าบทความทั้งหมด
-        </Link>
-
-        {/* Title */}
-        <h1 className="text-3xl md:text-4xl font-bold text-slate-900 mb-4">{blog.title}</h1>
-
-        {/* Date */}
-        <div className="flex items-center gap-2 text-slate-500 mb-8">
-          <Calendar className="h-5 w-5" />
-          <span>{formatDate(blog.createdAt)}</span>
-        </div>
-
-        {/* Cover Image */}
-        {coverImage && (
-          <div className="mb-8 rounded-lg overflow-hidden">
-            <img
-              src={coverImage}
-              alt={blog.title}
-              className="w-full h-auto object-cover"
-            />
-          </div>
-        )}
-
-        {/* YouTube Video */}
-        {youtubeEmbedUrl && (
-          <div className="mb-8 aspect-video rounded-lg overflow-hidden">
-            <iframe
-              src={youtubeEmbedUrl}
-              title={blog.title}
-              className="w-full h-full"
-              allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-              allowFullScreen
-            />
-          </div>
-        )}
-
-        {/* Content */}
-        <div className="prose prose-slate max-w-none mb-8">
-          <div className="whitespace-pre-wrap text-slate-700 leading-relaxed">
-            {blog.content}
-          </div>
-        </div>
-
-        {/* Image Gallery */}
-        {blog.images && blog.images.length > 1 && (
-          <div className="mt-12">
-            <h2 className="text-2xl font-bold text-slate-900 mb-6">รูปภาพเพิ่มเติม</h2>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {blog.images.slice(1).map((imageUrl, index) => (
-                <div key={index} className="rounded-lg overflow-hidden">
-                  <img
-                    src={imageUrl}
-                    alt={`${blog.title} - รูปภาพ ${index + 2}`}
-                    className="w-full h-auto object-cover"
-                  />
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
-
-        {/* Back to Blogs */}
-        <div className="mt-12 pt-8 border-t border-slate-200">
+    <>
+      <Helmet>
+        <title>{title}</title>
+        <meta name="description" content={description} />
+        <link rel="canonical" href={`https://spspropertysolutions.com/blogs/${blog.id}`} />
+      </Helmet>
+      <PageLayout>
+        <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
+          {/* Back Button */}
           <Link
             to="/blogs"
-            className="inline-flex items-center gap-2 text-blue-900 hover:underline font-medium"
+            className="inline-flex items-center gap-2 text-slate-600 hover:text-blue-900 mb-6 transition"
           >
             <ArrowLeft className="h-5 w-5" />
             กลับไปหน้าบทความทั้งหมด
           </Link>
+
+          {/* Title */}
+          <h1 className="text-3xl md:text-4xl font-bold text-slate-900 mb-4">{blog.title}</h1>
+
+          {/* Date */}
+          <div className="flex items-center gap-2 text-slate-500 mb-8">
+            <Calendar className="h-5 w-5" />
+            <span>{formatDate(blog.createdAt)}</span>
+          </div>
+
+          {/* Cover Image */}
+          {coverImage && (
+            <div className="mb-8 rounded-lg overflow-hidden">
+              <img
+                src={coverImage}
+                alt={blog.title}
+                className="w-full h-auto object-cover"
+              />
+            </div>
+          )}
+
+          {/* YouTube Video */}
+          {youtubeEmbedUrl && (
+            <div className="mb-8 aspect-video rounded-lg overflow-hidden">
+              <iframe
+                src={youtubeEmbedUrl}
+                title={blog.title}
+                className="w-full h-full"
+                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                allowFullScreen
+              />
+            </div>
+          )}
+
+          {/* Content */}
+          <div className="prose prose-slate max-w-none mb-8">
+            <div className="whitespace-pre-wrap text-slate-700 leading-relaxed">
+              {blog.content}
+            </div>
+          </div>
+
+          {/* Image Gallery */}
+          {blog.images && blog.images.length > 1 && (
+            <div className="mt-12">
+              <h2 className="text-2xl font-bold text-slate-900 mb-6">รูปภาพเพิ่มเติม</h2>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {blog.images.slice(1).map((imageUrl, index) => (
+                  <div key={index} className="rounded-lg overflow-hidden">
+                    <img
+                      src={imageUrl}
+                      alt={`${blog.title} - รูปภาพ ${index + 2}`}
+                      className="w-full h-auto object-cover"
+                    />
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Back to Blogs */}
+          <div className="mt-12 pt-8 border-t border-slate-200">
+            <Link
+              to="/blogs"
+              className="inline-flex items-center gap-2 text-blue-900 hover:underline font-medium"
+            >
+              <ArrowLeft className="h-5 w-5" />
+              กลับไปหน้าบทความทั้งหมด
+            </Link>
+          </div>
         </div>
-      </div>
-    </PageLayout>
+      </PageLayout>
+    </>
   )
 }

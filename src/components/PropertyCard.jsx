@@ -5,6 +5,7 @@ import { isFavorite, toggleFavorite } from '../lib/favorites'
 import { formatPrice } from '../lib/priceFormat'
 import ProtectedImageContainer from './ProtectedImageContainer'
 import { highlightText, highlightTags } from '../lib/textHighlight'
+import { getPropertyLabel } from '../constants/propertyTypes'
 
 const DEFAULT_IMAGE = 'https://images.unsplash.com/photo-1564013799919-ab600027ffc6?w=400'
 
@@ -252,7 +253,7 @@ function PropertyCard({ property, featuredLabel = 'แนะนำ', searchQuery
             <ProtectedImageContainer className="absolute inset-0 w-full h-full" propertyId={property.propertyId}>
               <img
                 src={coverImage}
-                alt={property.title || 'Property image'}
+                alt={`${getPropertyLabel(property.type) || 'อสังหาริมทรัพย์'} โครงการ ${property.title} ทำเล ${property.location?.district || ''}, ${property.location?.province || ''}`}
                 className="w-full h-full object-cover protected-image transition-transform duration-700 ease-in-out group-hover:scale-110"
                 loading="lazy"
                 decoding="async"

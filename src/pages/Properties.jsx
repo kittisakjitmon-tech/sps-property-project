@@ -11,6 +11,7 @@ import { SlidersHorizontal, Search, X, Wallet, Landmark, SearchX } from 'lucide-
 import { searchProperties } from '../lib/smartSearch'
 import { filterProperties } from '../lib/globalSearch'
 import { useTypingPlaceholder } from '../components/TypingPlaceholder'
+import { Helmet } from 'react-helmet-async'
 
 export default function Properties() {
   const [searchParams, setSearchParams] = useSearchParams()

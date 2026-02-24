@@ -14,6 +14,14 @@
     ],
     "rewrites": [
       {
+        "source": "/sitemap.xml",
+        "function": "sitemap"
+      },
+      {
+        "source": "/properties/**",
+        "function": "dynamicMeta"
+      },
+      {
         "source": "**",
         "destination": "/index.html"
       }

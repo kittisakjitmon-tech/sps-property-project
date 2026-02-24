@@ -11,6 +11,7 @@ import { formatPrice } from '../lib/priceFormat'
 import { highlightText, highlightTags } from '../lib/textHighlight'
 import { usePublicAuth } from '../context/PublicAuthContext'
 import { getPropertyLabel } from '../constants/propertyTypes'
+import RelatedProperties from '../components/RelatedProperties'
 
 function MortgageCalculator({ price, directInstallment }) {
   const [loanType, setLoanType] = useState(directInstallment ? 'direct' : 'bank')
@@ -581,33 +582,44 @@ export default function PropertyDetail() {
       <Helmet>
         <title>{title}</title>
         <meta name="description" content={description} />
+        <link rel="canonical" href={`https://spspropertysolutions.com/properties/${property.id}`} />
         <script type="application/ld+json">
           {JSON.stringify({
             '@context': 'https://schema.org',
             '@type': 'RealEstateListing',
             name: property.title,
             description: property.description || '',
+            image: property.images && property.images.length > 0 ? property.images : [],
+            url: window.location.href,
+            datePosted: property.createdAt ? new Date(property.createdAt.seconds * 1000).toISOString() : new Date().toISOString(),
+            offers: {
+              '@type': 'Offer',
+              price: property.price || 0,
+              priceCurrency: 'THB',
+              availability: property.status === 'available' ? 'https://schema.org/InStock' : 'https://schema.org/SoldOut',
+              url: window.location.href
+            },
             address: {
               '@type': 'PostalAddress',
               addressLocality: loc.district || '',
               addressRegion: loc.province || '',
               addressCountry: 'TH',
             },
-            offers: {
-              '@type': 'Offer',
-              price: property.price || 0,
-              priceCurrency: 'THB',
-              availability: property.status === 'available' ? 'https://schema.org/InStock' : 'https://schema.org/SoldOut',
-            },
+            ...(loc.lat && loc.lng ? {
+              geo: {
+                '@type': 'GeoCoordinates',
+                latitude: loc.lat,
+                longitude: loc.lng
+              }
+            } : {}),
             numberOfRooms: property.bedrooms || 0,
             numberOfBathroomsTotal: property.bathrooms || 0,
             floorSize: property.area ? {
               '@type': 'QuantitativeValue',
               value: property.area,
-              unitCode: 'MTK',
+              unitText: 'SQM'
             } : undefined,
             propertyType: getPropertyLabel(property.type) || '',
-            image: property.images && property.images.length > 0 ? property.images : [],
           })}
         </script>
       </Helmet>
@@ -620,8 +632,10 @@ export default function PropertyDetail() {
                 <ProtectedImageContainer propertyId={property.propertyId} className="aspect-video relative bg-slate-200">
                   <img
                     src={imgs[galleryIndex]}
-                    alt={property.title}
+                    alt={`${getPropertyLabel(property.type) || 'อสังหาริมทรัพย์'} โครงการ ${property.title} - รูปภาพที่ ${galleryIndex + 1}`}
                     className="w-full h-full object-cover protected-image"
+                    loading="lazy"
+                    decoding="async"
                     draggable={false}
                   />
                 </ProtectedImageContainer>
@@ -633,8 +647,16 @@ export default function PropertyDetail() {
                         type="button"
                         onClick={() => setGalleryIndex(i)}
                         className={`shrink-0 w-20 h-14 rounded-lg overflow-hidden border-2 ${i === galleryIndex ? 'border-blue-900' : 'border-transparent'}`}
+                        aria-label={`ดูรูปภาพที่ ${i + 1} จากทั้งหมด ${imgs.length} รูป`}
                       >
-                        <img src={img} alt="" className="w-full h-full object-cover protected-image" draggable={false} />
+                        <img
+                          src={img}
+                          alt={`รูปย่อที่ ${i + 1} โครงการ ${property.title}`}
+                          className="w-full h-full object-cover protected-image"
+                          loading="lazy"
+                          decoding="async"
+                          draggable={false}
+                        />
                       </button>
                     ))}
                   </div>
@@ -896,6 +918,9 @@ export default function PropertyDetail() {
                   <MortgageCalculator price={property.price} directInstallment={property.directInstallment} />
                 </div>
               )}
+
+              {/* Related Properties */}
+              <RelatedProperties currentPropertyId={property.id} district={loc.district} type={property.type} />
             </div>
 
             <div className="lg:col-span-1">

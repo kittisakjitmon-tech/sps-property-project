@@ -259,7 +259,7 @@ exports.onAppointmentCreated = functions
 
     try {
       const { adminIds } = getLineConfig()
-      
+
       // Safety check: ตรวจสอบว่า adminIds มีค่าและไม่ว่างเปล่า
       if (!adminIds || adminIds.length === 0) {
         functions.logger.warn(`No Admin IDs configured - ข้ามการส่ง LINE notification สำหรับ appointment ${appointmentId}`)
@@ -334,7 +334,7 @@ exports.lineWebhook = functions
         // ตรวจสอบว่าเป็น message event และมี userId
         if (event.type === 'message' && event.source && event.source.userId) {
           const userId = event.source.userId
-          
+
           // Log User ID ที่พบ
           functions.logger.info(`🚨 USER ID FOUND: ${userId}`)
           console.log(`🚨 USER ID FOUND: ${userId}`)
@@ -399,5 +399,190 @@ exports.lineWebhook = functions
       })
       // ส่ง 200 OK กลับไปเสมอแม้เกิด error (เพื่อไม่ให้ LINE retry)
       res.status(200).send('OK')
+    }
+  })
+
+/**
+ * Dynamic Sitemap Generator
+ * สร้าง sitemap.xml แบบ Real-time เพื่อให้ Google Bot มาดึงข้อมูลประกาศทั้งหมด
+ */
+exports.sitemap = functions
+  .runWith({
+    timeoutSeconds: 60,
+    memory: '256MB',
+  })
+  .https
+  .onRequest(async (req, res) => {
+    try {
+      const db = admin.firestore()
+      let sitemap = '<?xml version="1.0" encoding="UTF-8"?>\n'
+      sitemap += '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n'
+
+      const baseUrl = 'https://spspropertysolutions.com'
+
+      // 1. หน้า Static หลักๆ
+      const staticPages = [
+        '/',
+        '/properties',
+        '/blogs',
+        '/contact',
+        '/loan-services'
+      ]
+
+      for (const page of staticPages) {
+        sitemap += '  <url>\n'
+        sitemap += `    <loc>${baseUrl}${page}</loc>\n`
+        sitemap += `    <changefreq>${page === '/' ? 'daily' : 'weekly'}</changefreq>\n`
+        sitemap += `    <priority>${page === '/' ? '1.0' : '0.8'}</priority>\n`
+        sitemap += '  </url>\n'
+      }
+
+      // 2. หน้า Properties (ดึงเฉพาะ status: available)
+      const propertiesSnapshot = await db.collection(FIRESTORE_PROPERTIES)
+        .where('status', '==', 'available')
+        .get()
+
+      propertiesSnapshot.forEach(doc => {
+        const id = doc.id
+        const updatedAt = doc.data().updatedAt?.toDate() || new Date()
+        const formattedDate = updatedAt.toISOString().split('T')[0] // YYYY-MM-DD
+
+        sitemap += '  <url>\n'
+        sitemap += `    <loc>${baseUrl}/properties/${id}</loc>\n`
+        sitemap += `    <lastmod>${formattedDate}</lastmod>\n`
+        sitemap += '    <changefreq>daily</changefreq>\n'
+        sitemap += '    <priority>0.9</priority>\n'
+        sitemap += '  </url>\n'
+      })
+
+      // 3. หน้า Blogs (ดึงเฉพาะ published: true)
+      const blogsSnapshot = await db.collection('blogs')
+        .where('published', '==', true)
+        .get()
+
+      blogsSnapshot.forEach(doc => {
+        const id = doc.id
+        const updatedAt = doc.data().updatedAt?.toDate() || doc.data().createdAt?.toDate() || new Date()
+        const formattedDate = updatedAt.toISOString().split('T')[0] // YYYY-MM-DD
+
+        sitemap += '  <url>\n'
+        sitemap += `    <loc>${baseUrl}/blogs/${id}</loc>\n`
+        sitemap += `    <lastmod>${formattedDate}</lastmod>\n`
+        sitemap += '    <changefreq>monthly</changefreq>\n'
+        sitemap += '    <priority>0.7</priority>\n'
+        sitemap += '  </url>\n'
+      })
+
+      sitemap += '</urlset>'
+
+      res.set('Content-Type', 'application/xml')
+      res.status(200).send(sitemap)
+
+    } catch (error) {
+      res.status(500).send('Error generating sitemap')
+    }
+  })
+
+/**
+ * Dynamic OG Meta Tags Generator
+ * Intercepts requests for /properties/:id
+ * If the request is from a social bot (Facebook, LINE, etc.), it queries Firestore and returns an HTML skeleton with correct Open Graph meta tags.
+ * If it's a real user, it serves the Firebase Hosting index.html (SPA).
+ */
+exports.dynamicMeta = functions
+  .runWith({
+    timeoutSeconds: 30,
+    memory: '256MB',
+  })
+  .https
+  .onRequest(async (req, res) => {
+    const userAgent = req.headers['user-agent']?.toLowerCase() || ''
+
+    // Check if the requester is a social bot
+    const isBot = userAgent.includes('facebookexternalhit') ||
+      userAgent.includes('line') ||
+      userAgent.includes('twitterbot') ||
+      userAgent.includes('linkedinbot') ||
+      userAgent.includes('whatsapp') ||
+      userAgent.includes('telegrambot')
+
+    // Only process /properties/:id paths
+    const pathSegments = req.path.split('/').filter(Boolean)
+    if (pathSegments[0] !== 'properties' || !pathSegments[1]) {
+      // Not a property detail page, handle as normal or return 404
+      return res.status(404).send('Not Found')
+    }
+
+    const propertyId = pathSegments[1]
+
+    if (isBot) {
+      try {
+        const db = admin.firestore()
+        const docRef = db.collection(FIRESTORE_PROPERTIES).doc(propertyId)
+        const docSnap = await docRef.get()
+
+        if (!docSnap.exists) {
+          return res.status(404).send('Property Not Found')
+        }
+
+        const property = docSnap.data()
+        const title = `${property.title || 'อสังหาริมทรัพย์'} | SPS Property Solution`
+        const description = property.description ? property.description.substring(0, 150) + '...' : 'รายละเอียดอสังหาริมทรัพย์ SPS Property Solution ชลบุรี'
+        const imageUrl = property.images && property.images.length > 0 ? property.images[0] : 'https://spspropertysolutions.com/icon.png'
+        const url = `https://spspropertysolutions.com/properties/${propertyId}`
+
+        // Return a basic HTML structure with only the meta tags bots care about
+        const htmlContent = `
+          <!DOCTYPE html>
+          <html lang="th">
+          <head>
+            <meta charset="UTF-8">
+            <title>${title}</title>
+            <meta name="description" content="${description}">
+            
+            <!-- Open Graph / Facebook / LINE -->
+            <meta property="og:type" content="article">
+            <meta property="og:title" content="${title}">
+            <meta property="og:description" content="${description}">
+            <meta property="og:image" content="${imageUrl}">
+            <meta property="og:url" content="${url}">
+            
+            <!-- Twitter -->
+            <meta name="twitter:card" content="summary_large_image">
+            <meta name="twitter:title" content="${title}">
+            <meta name="twitter:description" content="${description}">
+            <meta name="twitter:image" content="${imageUrl}">
+          </head>
+          <body>
+            <h1>${title}</h1>
+            <p>${description}</p>
+            <img src="${imageUrl}" alt="${title}">
+          </body>
+          </html>
+        `
+
+        res.set('Cache-Control', 'public, max-age=300, s-maxage=600')
+        return res.status(200).send(htmlContent)
+
+      } catch (error) {
+        functions.logger.error('Error generating dynamic meta tags:', error)
+        return res.status(500).send('Internal Server Error')
+      }
+    } else {
+      // Not a bot. Serve the standard SPA React index file.
+      // Since Firebase Hosting will redirect to index.html anyway, we can just fetch the index.html from hosting and return it,
+      // OR technically in firebase.json rewrites, the function returning a standard response is okay.
+      // For simplicity, we can fetch the origin index.html, but a common pattern is to just let Firebase Hosting handle non-bot traffic by rewriting back to index.html using another rule, but since rewrites stop at the first match, we must serve index.html here.
+
+      const fetch = require('node-fetch')
+      try {
+        // Fetch the index.html from your own domain (ensure it doesn't cause an infinite loop by fetching the root URL, which hits the fallback rewrite)
+        const response = await fetch('https://spspropertysolutions.com/')
+        const html = await response.text()
+        res.set('Cache-Control', 'public, max-age=300, s-maxage=600')
+        return res.status(200).send(html)
+      } catch (error) {
+        return res.status(500).send('Error loading page')
+      }
     }
   })

@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom'
 import { ChevronLeft, ChevronRight, Calendar, Play } from 'lucide-react'
 import PageLayout from '../components/PageLayout'
 import { getPublishedBlogs } from '../lib/firestore'
+import { Helmet } from 'react-helmet-async'
 
 export default function Blogs() {
   const [blogs, setBlogs] = useState([])
@@ -89,97 +90,104 @@ export default function Blogs() {
   }
 
   return (
-    <PageLayout>
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
-        <div className="mb-8">
-          <h1 className="text-3xl font-bold text-slate-900 mb-2">บทความทั้งหมด</h1>
-          <p className="text-slate-600">อ่านบทความที่น่าสนใจเกี่ยวกับอสังหาริมทรัพย์</p>
-        </div>
-
-        {blogs.length === 0 ? (
-          <div className="text-center py-12">
-            <p className="text-slate-500 text-lg">ยังไม่มีบทความ</p>
+    <>
+      <Helmet>
+        <title>บทความอสังหาริมทรัพย์และบ้าน | SPS Property Solution</title>
+        <meta name="description" content="อ่านบทความและสาระน่ารู้เกี่ยวกับอสังหาริมทรัพย์ บ้าน ทาวน์โฮม คอนโด การกู้สินเชื่อ และเคล็ดลับการลงทุนจาก SPS Property Solution" />
+        <link rel="canonical" href="https://spspropertysolutions.com/blogs" />
+      </Helmet>
+      <PageLayout>
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
+          <div className="mb-8">
+            <h1 className="text-3xl font-bold text-slate-900 mb-2">บทความทั้งหมด</h1>
+            <p className="text-slate-600">อ่านบทความที่น่าสนใจเกี่ยวกับอสังหาริมทรัพย์</p>
           </div>
-        ) : (
-          <>
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
-              {blogs.map((blog) => {
-                const coverImage = blog.images?.[0] || getYouTubeThumbnail(blog.youtubeUrl)
-                const hasVideo = !!blog.youtubeUrl
 
-                return (
-                  <Link
-                    key={blog.id}
-                    to={`/blogs/${blog.id}`}
-                    className="group bg-white rounded-lg shadow-sm border border-slate-200 overflow-hidden hover:shadow-md transition-all duration-300"
-                  >
-                    {/* Cover Image */}
-                    <div className="relative aspect-video bg-slate-200 overflow-hidden">
-                      {coverImage ? (
-                        <>
-                          <img
-                            src={coverImage}
-                            alt={blog.title}
-                            className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-                          />
-                          {hasVideo && (
-                            <div className="absolute inset-0 flex items-center justify-center bg-black/30">
-                              <div className="bg-white/90 rounded-full p-3">
-                                <Play className="h-6 w-6 text-blue-900" fill="currentColor" />
+          {blogs.length === 0 ? (
+            <div className="text-center py-12">
+              <p className="text-slate-500 text-lg">ยังไม่มีบทความ</p>
+            </div>
+          ) : (
+            <>
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
+                {blogs.map((blog) => {
+                  const coverImage = blog.images?.[0] || getYouTubeThumbnail(blog.youtubeUrl)
+                  const hasVideo = !!blog.youtubeUrl
+
+                  return (
+                    <Link
+                      key={blog.id}
+                      to={`/blogs/${blog.id}`}
+                      className="group bg-white rounded-lg shadow-sm border border-slate-200 overflow-hidden hover:shadow-md transition-all duration-300"
+                    >
+                      {/* Cover Image */}
+                      <div className="relative aspect-video bg-slate-200 overflow-hidden">
+                        {coverImage ? (
+                          <>
+                            <img
+                              src={coverImage}
+                              alt={blog.title}
+                              className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                            />
+                            {hasVideo && (
+                              <div className="absolute inset-0 flex items-center justify-center bg-black/30">
+                                <div className="bg-white/90 rounded-full p-3">
+                                  <Play className="h-6 w-6 text-blue-900" fill="currentColor" />
+                                </div>
                               </div>
-                            </div>
-                          )}
-                        </>
-                      ) : (
-                        <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-blue-100 to-blue-200">
-                          <span className="text-blue-600 text-sm font-medium">ไม่มีรูปภาพ</span>
-                        </div>
-                      )}
-                    </div>
-
-                    {/* Content */}
-                    <div className="p-5">
-                      <h2 className="text-lg font-bold text-slate-900 mb-2 line-clamp-2 group-hover:text-blue-900 transition">
-                        {blog.title}
-                      </h2>
-                      <p className="text-sm text-slate-600 mb-4 line-clamp-3">
-                        {blog.content?.substring(0, 150)}...
-                      </p>
-                      <div className="flex items-center gap-2 text-xs text-slate-500">
-                        <Calendar className="h-4 w-4" />
-                        <span>{formatDate(blog.createdAt)}</span>
+                            )}
+                          </>
+                        ) : (
+                          <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-blue-100 to-blue-200">
+                            <span className="text-blue-600 text-sm font-medium">ไม่มีรูปภาพ</span>
+                          </div>
+                        )}
                       </div>
-                    </div>
-                  </Link>
-                )
-              })}
-            </div>
 
-            {/* Pagination */}
-            <div className="flex items-center justify-center gap-2">
-              <button
-                onClick={() => handlePageChange(currentPage - 1)}
-                disabled={currentPage === 1 || loading}
-                className="px-4 py-2 border border-slate-300 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed hover:bg-slate-50 transition"
-              >
-                <ChevronLeft className="h-5 w-5" />
-              </button>
+                      {/* Content */}
+                      <div className="p-5">
+                        <h2 className="text-lg font-bold text-slate-900 mb-2 line-clamp-2 group-hover:text-blue-900 transition">
+                          {blog.title}
+                        </h2>
+                        <p className="text-sm text-slate-600 mb-4 line-clamp-3">
+                          {blog.content?.substring(0, 150)}...
+                        </p>
+                        <div className="flex items-center gap-2 text-xs text-slate-500">
+                          <Calendar className="h-4 w-4" />
+                          <span>{formatDate(blog.createdAt)}</span>
+                        </div>
+                      </div>
+                    </Link>
+                  )
+                })}
+              </div>
 
-              <span className="px-4 py-2 text-slate-700">
-                หน้า {currentPage}
-              </span>
+              {/* Pagination */}
+              <div className="flex items-center justify-center gap-2">
+                <button
+                  onClick={() => handlePageChange(currentPage - 1)}
+                  disabled={currentPage === 1 || loading}
+                  className="px-4 py-2 border border-slate-300 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed hover:bg-slate-50 transition"
+                >
+                  <ChevronLeft className="h-5 w-5" />
+                </button>
 
-              <button
-                onClick={() => handlePageChange(currentPage + 1)}
-                disabled={!hasMore || loading}
-                className="px-4 py-2 border border-slate-300 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed hover:bg-slate-50 transition"
-              >
-                <ChevronRight className="h-5 w-5" />
-              </button>
-            </div>
-          </>
-        )}
-      </div>
-    </PageLayout>
+                <span className="px-4 py-2 text-slate-700">
+                  หน้า {currentPage}
+                </span>
+
+                <button
+                  onClick={() => handlePageChange(currentPage + 1)}
+                  disabled={!hasMore || loading}
+                  className="px-4 py-2 border border-slate-300 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed hover:bg-slate-50 transition"
+                >
+                  <ChevronRight className="h-5 w-5" />
+                </button>
+              </div>
+            </>
+          )}
+        </div>
+      </PageLayout>
+    </>
   )
 }
