@@ -132,9 +132,7 @@ export default function Home() {
       }
     }
     loadHomeData()
-    return () => {
-      mounted = false
-    }
+    return () => { mounted = false }
   }, [])
 
   // Resolve properties for each section (จำกัดสูงสุด 5 รายการต่อ section)
@@ -169,8 +167,22 @@ export default function Home() {
   }
 
   const available = properties.filter((p) => p.status === 'available')
-  const featured = available.filter((p) => p.featured === true).slice(0, 5) // จำกัดสูงสุด 5 รายการ
+  const featured = available.filter((p) => p.featured === true).slice(0, 5)
   const hasSections = homepageSections.length > 0
+
+  // ─── Skeleton card สำหรับ property section ขณะโหลด ───────────────────────
+  const PropertySectionSkeleton = () => (
+    <section className="py-8 bg-slate-50 animate-pulse">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        <div className="h-6 w-40 bg-slate-200 rounded-lg mb-6" />
+        <div className="flex gap-5 overflow-hidden">
+          {[1, 2, 3].map((i) => (
+            <div key={i} className="shrink-0 w-[300px] rounded-2xl bg-slate-200 h-64" />
+          ))}
+        </div>
+      </div>
+    </section>
+  )
 
   return (
     <PageLayout
@@ -312,24 +324,32 @@ export default function Home() {
         </section>
       )}
 
-      {/* Dynamic Sections from homepage_sections, or fallback to Featured */}
-      {hasSections ? (
-        homepageSections.map((section, idx) => (
-          <DynamicPropertySection
-            key={section.id}
-            title={section.title}
-            subtitle={section.subtitle}
-            properties={sectionPropertiesMap[section.id] || []}
-            targetTag={(section.targetTag && section.targetTag.trim()) || section.title || ''}
-            titleColor={section.titleColor || 'text-blue-900'}
-            isHighlighted={section.isHighlighted || false}
-            isBlinking={section.isBlinking || false}
-            sectionIndex={idx}
-          />
-        ))
-      ) : featured.length > 0 ? (
-        <DynamicPropertySection title="ทรัพย์เด่น" properties={featured} sectionIndex={0} />
-      ) : null}
+      {/* Dynamic Sections — แสดง skeleton ขณะโหลด แล้ว fade-in เมื่อข้อมูลมาถึง */}
+      <div className={`transition-opacity duration-500 ${isLoading ? 'opacity-0' : 'opacity-100'}`}>
+        {isLoading ? (
+          // Skeleton placeholders จองพื้นที่ไว้ก่อน ป้องกัน layout shift
+          <>
+            <PropertySectionSkeleton />
+            <PropertySectionSkeleton />
+          </>
+        ) : hasSections ? (
+          homepageSections.map((section, idx) => (
+            <DynamicPropertySection
+              key={section.id}
+              title={section.title}
+              subtitle={section.subtitle}
+              properties={sectionPropertiesMap[section.id] || []}
+              targetTag={(section.targetTag && section.targetTag.trim()) || section.title || ''}
+              titleColor={section.titleColor || 'text-blue-900'}
+              isHighlighted={section.isHighlighted || false}
+              isBlinking={section.isBlinking || false}
+              sectionIndex={idx}
+            />
+          ))
+        ) : featured.length > 0 ? (
+          <DynamicPropertySection title="ทรัพย์เด่น" properties={featured} sectionIndex={0} />
+        ) : null}
+      </div>
 
       {/* ── CTA Banner ── */}
       <section className="relative overflow-hidden bg-blue-900 py-12 sm:py-16">

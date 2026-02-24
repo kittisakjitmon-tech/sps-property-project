@@ -68,12 +68,30 @@ img.protected-image {
 
 /* Scrollbar Hide Utility */
 .scrollbar-hide {
-  -ms-overflow-style: none; /* IE and Edge */
-  scrollbar-width: none; /* Firefox */
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+.scrollbar-hide::-webkit-scrollbar {
+  display: none;
 }
 
-.scrollbar-hide::-webkit-scrollbar {
-  display: none; /* Chrome, Safari, Opera */
+/* ── Admin Sidebar — Modern Slim Scrollbar ────────────────────────────── */
+.admin-scrollbar {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(148, 163, 184, 0.35) transparent;
+}
+.admin-scrollbar::-webkit-scrollbar {
+  width: 4px;
+}
+.admin-scrollbar::-webkit-scrollbar-track {
+  background: transparent;
+}
+.admin-scrollbar::-webkit-scrollbar-thumb {
+  background: rgba(148, 163, 184, 0.30);
+  border-radius: 999px;
+}
+.admin-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: rgba(250, 204, 21, 0.65);
 }
 
 @media print {
