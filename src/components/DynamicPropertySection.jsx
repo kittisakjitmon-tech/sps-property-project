@@ -2,10 +2,10 @@ import { Link } from 'react-router-dom'
 import { ChevronRight } from 'lucide-react'
 import PropertySlider from './PropertySlider'
 
-export default function DynamicPropertySection({ 
-  title, 
-  subtitle, 
-  properties, 
+export default function DynamicPropertySection({
+  title,
+  subtitle,
+  properties,
   targetTag,
   titleColor = 'text-blue-900',
   isHighlighted = false,
@@ -23,14 +23,14 @@ export default function DynamicPropertySection({
   // สร้าง className และ style สำหรับชื่อหัวข้อตามสไตล์
   const getTitleStyle = () => {
     let baseClasses = 'text-xl sm:text-2xl font-bold tracking-tight'
-    
+
     // ถ้า isHighlighted ให้ใช้ gradient effect
     if (isHighlighted) {
       // แปลง Tailwind color class เป็น gradient colors
       let gradientFrom = 'from-blue-900'
       let gradientVia = 'via-blue-700'
       let gradientTo = 'to-blue-900'
-      
+
       if (titleColor.includes('red')) {
         gradientFrom = 'from-red-600'
         gradientVia = 'via-red-500'
@@ -52,18 +52,18 @@ export default function DynamicPropertySection({
         gradientVia = 'via-orange-500'
         gradientTo = 'to-orange-600'
       }
-      
+
       baseClasses += ` bg-gradient-to-r ${gradientFrom} ${gradientVia} ${gradientTo} bg-clip-text text-transparent`
     } else {
       // ถ้าไม่ highlight ให้ใช้สีปกติ
       baseClasses += ` ${titleColor || 'text-blue-900'}`
     }
-    
+
     // ถ้า isBlinking ให้เพิ่ม pulse animation
     if (isBlinking) {
       baseClasses += ' animate-pulse'
     }
-    
+
     return {
       className: baseClasses,
     }
@@ -74,7 +74,7 @@ export default function DynamicPropertySection({
   const bgClass = sectionIndex % 2 === 0 ? 'bg-slate-50' : 'bg-white'
 
   return (
-    <section className={`py-10 sm:py-12 ${bgClass}`}>
+    <section className={`py-4 sm:py-4 ${bgClass}`}>
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         {/* Header: Title + View All */}
         <div className="flex flex-wrap items-center justify-between gap-3 mb-6">
