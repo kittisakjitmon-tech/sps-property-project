@@ -55,7 +55,7 @@ export default function ProtectedImageContainer({
           style={{ textShadow: '0 1px 2px rgba(0,0,0,0.9), 0 0 4px rgba(0,0,0,0.8)' }}
         >
           <span className="text-[10px] sm:text-xs text-white font-semibold">
-            SPS Property Solution {propertyId ? ` | ${propertyId}` : ''}
+            SPS Property Solution
           </span>
         </div>
       </div>

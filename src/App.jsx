@@ -6,6 +6,8 @@ import { PublicAuthProvider } from './context/PublicAuthContext'
 import { AdminAuthProvider } from './context/AdminAuthContext'
 import AdminProtectedRoute from './components/AdminProtectedRoute'
 import PublicProtectedRoute from './components/PublicProtectedRoute'
+import MaintenancePage from './components/MaintenancePage'
+import { useSystemSettings } from './hooks/useSystemSettings'
 
 // ─── Public Pages ────────────────────────────────────────────────────────────
 const Home = lazy(() => import('./pages/Home'))
@@ -44,13 +46,59 @@ const AdminBlogs = lazy(() => import('./admin/AdminBlogs'))
 function RouteLoading() {
   return (
     <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center gap-3">
-      {/* Spinner */}
       <div className="relative w-12 h-12">
         <div className="absolute inset-0 rounded-full border-4 border-blue-100" />
         <div className="absolute inset-0 rounded-full border-4 border-blue-900 border-t-transparent animate-spin" />
       </div>
       <p className="text-slate-500 text-sm font-medium">กำลังโหลด...</p>
     </div>
+  )
+}
+
+// ─── Public Routes Wrapper (Maintenance Mode Guard) ───────────────────────────
+function PublicRoutesWrapper() {
+  const { settings, loading } = useSystemSettings()
+
+  if (loading) return <RouteLoading />
+
+  // Maintenance Mode เปิดอยู่ → แสดงหน้าปิดปรับปรุง (admin /admin/* ไม่ถูกบล็อก)
+  if (settings.maintenanceMode) {
+    return <MaintenancePage siteName={settings.siteName} />
+  }
+
+  return (
+    <PublicAuthProvider>
+      <Routes>
+        <Route path="/" element={<Home />} />
+        <Route path="/properties" element={<Properties />} />
+        <Route path="/properties/:id" element={<PropertyDetail />} />
+        <Route path="/share/:id" element={<SharePage />} />
+        <Route path="/contact" element={<Contact />} />
+        <Route path="/loan-services" element={<LoanService />} />
+        <Route path="/post" element={<PostProperty />} />
+        <Route path="/favorites" element={<Favorites />} />
+        <Route path="/blogs" element={<Blogs />} />
+        <Route path="/blogs/:id" element={<BlogDetail />} />
+        <Route path="/login" element={<PublicLogin />} />
+        <Route
+          path="/profile"
+          element={
+            <PublicProtectedRoute>
+              <Profile />
+            </PublicProtectedRoute>
+          }
+        />
+        <Route
+          path="/profile-settings"
+          element={
+            <PublicProtectedRoute>
+              <ProfileSettings />
+            </PublicProtectedRoute>
+          }
+        />
+        <Route path="*" element={<Navigate to="/" replace />} />
+      </Routes>
+    </PublicAuthProvider>
   )
 }
 
@@ -61,7 +109,7 @@ export default function App() {
       <SearchProvider>
         <Suspense fallback={<RouteLoading />}>
           <Routes>
-            {/* ── Admin routes (with AdminAuthProvider) ─────────────── */}
+            {/* ── Admin routes (ไม่ถูก maintenanceMode บล็อก) ── */}
             <Route
               path="/admin/*"
               element={
@@ -97,45 +145,8 @@ export default function App() {
               }
             />
 
-            {/* ── Public routes (with PublicAuthProvider) ────────────── */}
-            <Route
-              path="/*"
-              element={
-                <PublicAuthProvider>
-                  <Routes>
-                    <Route path="/" element={<Home />} />
-                    <Route path="/properties" element={<Properties />} />
-                    <Route path="/properties/:id" element={<PropertyDetail />} />
-                    <Route path="/share/:id" element={<SharePage />} />
-                    <Route path="/contact" element={<Contact />} />
-                    <Route path="/loan-services" element={<LoanService />} />
-                    <Route path="/post" element={<PostProperty />} />
-                    <Route path="/favorites" element={<Favorites />} />
-                    <Route path="/blogs" element={<Blogs />} />
-                    <Route path="/blogs/:id" element={<BlogDetail />} />
-                    <Route path="/login" element={<PublicLogin />} />
-                    <Route
-                      path="/profile"
-                      element={
-                        <PublicProtectedRoute>
-                          <Profile />
-                        </PublicProtectedRoute>
-                      }
-                    />
-                    <Route
-                      path="/profile-settings"
-                      element={
-                        <PublicProtectedRoute>
-                          <ProfileSettings />
-                        </PublicProtectedRoute>
-                      }
-                    />
-                    {/* Catch-all → หน้าแรก */}
-                    <Route path="*" element={<Navigate to="/" replace />} />
-                  </Routes>
-                </PublicAuthProvider>
-              }
-            />
+            {/* ── Public routes (ครอบด้วย maintenance guard) ── */}
+            <Route path="/*" element={<PublicRoutesWrapper />} />
           </Routes>
         </Suspense>
       </SearchProvider>

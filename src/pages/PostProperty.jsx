@@ -1,11 +1,12 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { usePublicAuth } from '../context/PublicAuthContext'
-import { ChevronLeft, ChevronRight, Upload, X, Check, AlertCircle, Target, Zap, Shield, Phone } from 'lucide-react'
+import { ChevronLeft, ChevronRight, Upload, X, Check, AlertCircle, Target, Zap, Shield, Phone, Lock } from 'lucide-react'
 import PageLayout from '../components/PageLayout'
 import LocationAutocomplete from '../components/LocationAutocomplete'
-import { createPendingProperty, uploadPendingPropertyImage } from '../lib/firestore'
+import { createPendingProperty, uploadPendingPropertyImage, createProperty, getPropertiesOnce } from '../lib/firestore'
 import { compressImages } from '../lib/imageCompressor'
+import { useSystemSettings } from '../hooks/useSystemSettings'
 
 const CATEGORIES = [
   { value: 'บ้านเดี่ยว', label: 'บ้านเดี่ยว' },
@@ -28,6 +29,7 @@ const SUGGESTED_TAGS = [
 export default function PostProperty() {
   const navigate = useNavigate()
   const { user } = usePublicAuth()
+  const { settings } = useSystemSettings()
   const [step, setStep] = useState(1)
   const [submitting, setSubmitting] = useState(false)
   const [success, setSuccess] = useState(false)
@@ -165,6 +167,29 @@ export default function PostProperty() {
   const handleSubmit = async () => {
     if (!validateStep(3)) return
 
+    // ── Check: allowPublicRegistration ───────────────────────────────────────
+    if (!settings.allowPublicRegistration) {
+      setError('ขณะนี้ระบบปิดรับการลงประกาศชั่วคราว กรุณาติดต่อเจ้าหน้าที่')
+      return
+    }
+
+    // ── Check: maxPropertiesPerUser ──────────────────────────────────────────
+    if (user?.uid) {
+      try {
+        const allProps = await getPropertiesOnce(false)
+        const userCount = allProps.filter(
+          (p) => p.createdBy === user.uid || p.userId === user.uid
+        ).length
+        const limit = Number(settings.maxPropertiesPerUser) || 10
+        if (userCount >= limit) {
+          setError(`คุณมีประกาศในระบบครบ ${limit} รายการแล้ว ไม่สามารถเพิ่มได้อีก`)
+          return
+        }
+      } catch {
+        // ถ้าโหลดไม่สำเร็จ ให้ผ่านไปก่อน (fail open)
+      }
+    }
+
     setSubmitting(true)
     setError(null)
 
@@ -179,8 +204,7 @@ export default function PostProperty() {
         }
       }
 
-      // Create pending property
-      await createPendingProperty({
+      const propertyPayload = {
         title: form.title.trim(),
         type: form.type,
         price: Number(form.price) || 0,
@@ -202,7 +226,14 @@ export default function PostProperty() {
         hotDeal: form.hotDeal,
         userId: user?.uid || null,
         createdBy: user?.uid || null,
-      })
+      }
+
+      // ── autoApproveProperties: ข้ามคิวอนุมัติ ───────────────────────────
+      if (settings.autoApproveProperties) {
+        await createProperty({ ...propertyPayload, status: 'available' })
+      } else {
+        await createPendingProperty(propertyPayload)
+      }
 
       setSuccess(true)
       setTimeout(() => {
@@ -226,7 +257,9 @@ export default function PostProperty() {
             </div>
             <h2 className="text-2xl font-bold text-blue-900 mb-4">ส่งประกาศสำเร็จ!</h2>
             <p className="text-slate-600 mb-6">
-              ระบบได้รับข้อมูลแล้ว เจ้าหน้าที่จะตรวจสอบและอนุมัติภายใน 24 ชม.
+              {settings.autoApproveProperties
+                ? 'ประกาศของคุณได้รับการเผยแพร่แล้ว'
+                : 'ระบบได้รับข้อมูลแล้ว เจ้าหน้าที่จะตรวจสอบและอนุมัติภายใน 24 ชม.'}
             </p>
             <button
               onClick={() => navigate('/')}
@@ -234,6 +267,26 @@ export default function PostProperty() {
             >
               กลับหน้าหลัก
             </button>
+          </div>
+        </div>
+      </PageLayout>
+    )
+  }
+
+  // ── allowPublicRegistration = false → ปิดรับประกาศ ──────────────────────
+  if (!settings.allowPublicRegistration) {
+    return (
+      <PageLayout heroTitle="ลงประกาศฟรี" heroSubtitle="" showHero={false}>
+        <div className="min-h-screen bg-slate-50 flex items-center justify-center px-4 py-16">
+          <div className="bg-white rounded-xl shadow-lg p-8 max-w-md text-center">
+            <div className="w-16 h-16 bg-slate-100 rounded-full flex items-center justify-center mx-auto mb-4">
+              <Lock className="h-8 w-8 text-slate-500" />
+            </div>
+            <h2 className="text-2xl font-bold text-slate-800 mb-3">ปิดรับประกาศชั่วคราว</h2>
+            <p className="text-slate-500 mb-6">ขณะนี้ระบบไม่เปิดรับการลงประกาศใหม่<br />กรุณาติดต่อเจ้าหน้าที่เพื่อสอบถามข้อมูลเพิ่มเติม</p>
+            <a href="tel:0955520801" className="px-6 py-3 bg-blue-900 text-white font-semibold rounded-lg hover:bg-blue-800 transition inline-block">
+              ติดต่อเจ้าหน้าที่
+            </a>
           </div>
         </div>
       </PageLayout>
@@ -263,13 +316,12 @@ export default function PostProperty() {
                           <div key={s} className="flex-1 flex items-center">
                             <div className="relative flex flex-col items-center flex-1">
                               <div
-                                className={`w-12 h-12 rounded-full flex items-center justify-center font-bold transition-all duration-300 relative z-10 ${
-                                  isActive
+                                className={`w-12 h-12 rounded-full flex items-center justify-center font-bold transition-all duration-300 relative z-10 ${isActive
                                     ? 'bg-blue-900 text-white shadow-lg shadow-blue-900/40 ring-4 ring-blue-900/20'
                                     : isCompleted
-                                    ? 'bg-blue-900 text-white shadow-md'
-                                    : 'bg-gray-200 text-gray-600'
-                                }`}
+                                      ? 'bg-blue-900 text-white shadow-md'
+                                      : 'bg-gray-200 text-gray-600'
+                                  }`}
                               >
                                 {isCompleted ? (
                                   <Check className="h-6 w-6 text-white" />
@@ -280,11 +332,10 @@ export default function PostProperty() {
                             </div>
                             {s < 3 && (
                               <div
-                                className={`flex-1 h-1 mx-3 rounded-full transition-all duration-300 ${
-                                  isCompleted || step > s
+                                className={`flex-1 h-1 mx-3 rounded-full transition-all duration-300 ${isCompleted || step > s
                                     ? 'bg-blue-900'
                                     : 'bg-gray-200'
-                                }`}
+                                  }`}
                               />
                             )}
                           </div>
@@ -295,35 +346,32 @@ export default function PostProperty() {
                     {/* Step Labels */}
                     <div className="flex justify-between w-full text-sm">
                       <span
-                        className={`text-center transition-all ${
-                          step >= 1
+                        className={`text-center transition-all ${step >= 1
                             ? step === 1
                               ? 'font-bold text-blue-900'
                               : 'font-semibold text-blue-900'
                             : 'font-normal text-gray-400'
-                        }`}
+                          }`}
                       >
                         ข้อมูลทรัพย์สิน
                       </span>
                       <span
-                        className={`text-center transition-all ${
-                          step >= 2
+                        className={`text-center transition-all ${step >= 2
                             ? step === 2
                               ? 'font-bold text-blue-900'
                               : 'font-semibold text-blue-900'
                             : 'font-normal text-gray-400'
-                        }`}
+                          }`}
                       >
                         รูปภาพ
                       </span>
                       <span
-                        className={`text-center transition-all ${
-                          step >= 3
+                        className={`text-center transition-all ${step >= 3
                             ? step === 3
                               ? 'font-bold text-blue-900'
                               : 'font-semibold text-blue-900'
                             : 'font-normal text-gray-400'
-                        }`}
+                          }`}
                       >
                         ข้อมูลติดต่อ
                       </span>
@@ -333,365 +381,365 @@ export default function PostProperty() {
 
                 {/* Form Content */}
                 <div className="p-6 sm:p-8">
-              {/* Error Message */}
-              {error && (
-                <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-lg flex items-start gap-3">
-                  <AlertCircle className="h-5 w-5 text-red-600 flex-shrink-0 mt-0.5" />
-                  <p className="text-red-800 flex-1">{error}</p>
-                  <button
-                    type="button"
-                    onClick={() => setError(null)}
-                    className="p-1 hover:bg-red-100 rounded transition"
-                  >
-                    <X className="h-4 w-4 text-red-600" />
-                  </button>
-                </div>
-              )}
-
-              {/* Step 1: Property Info */}
-              {step === 1 && (
-                <div className="space-y-6">
-
-                <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-2">
-                    ชื่อประกาศ <span className="text-red-500">*</span>
-                  </label>
-                  <input
-                    type="text"
-                    value={form.title}
-                    onChange={(e) => updateForm({ title: e.target.value })}
-                    className="w-full px-4 py-3 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-900/20"
-                    placeholder="เช่น คอนโดหรู ใกล้ BTS อารีย์"
-                  />
-                </div>
-
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-sm font-medium text-slate-700 mb-2">
-                      ประเภท <span className="text-red-500">*</span>
-                    </label>
-                    <select
-                      value={form.type}
-                      onChange={(e) =>
-                        updateForm({
-                          type: e.target.value,
-                          isRental: e.target.value === 'บ้านเช่า',
-                        })
-                      }
-                      className="w-full px-4 py-3 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-900/20"
-                    >
-                      {CATEGORIES.map((c) => (
-                        <option key={c.value} value={c.value}>
-                          {c.label}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-medium text-slate-700 mb-2">
-                      ราคา (บาท) <span className="text-red-500">*</span>
-                    </label>
-                    <input
-                      type="number"
-                      value={form.price}
-                      onChange={(e) => updateForm({ price: e.target.value })}
-                      min="0"
-                      className="w-full px-4 py-3 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-900/20"
-                      placeholder="เช่น 5000000"
-                    />
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-3 gap-4">
-                  <div>
-                    <label className="block text-sm font-medium text-slate-700 mb-2">พื้นที่ (ตร.ว.)</label>
-                    <input
-                      type="number"
-                      value={form.area !== '' && form.area != null ? String(Number(form.area) / 4) : ''}
-                      onChange={(e) => updateForm({ area: e.target.value ? String(Math.round(Number(e.target.value) * 4)) : '' })}
-                      min="0"
-                      step="0.5"
-                      placeholder="เช่น 25"
-                      className="w-full px-4 py-3 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-900/20"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-medium text-slate-700 mb-2">ห้องนอน</label>
-                    <input
-                      type="number"
-                      value={form.bedrooms}
-                      onChange={(e) => updateForm({ bedrooms: e.target.value })}
-                      min="0"
-                      className="w-full px-4 py-3 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-900/20"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-medium text-slate-700 mb-2">ห้องน้ำ</label>
-                    <input
-                      type="number"
-                      value={form.bathrooms}
-                      onChange={(e) => updateForm({ bathrooms: e.target.value })}
-                      min="0"
-                      className="w-full px-4 py-3 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-900/20"
-                    />
-                  </div>
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-2">
-                    พื้นที่ (จังหวัด/อำเภอ/ตำบล) <span className="text-red-500">*</span>
-                  </label>
-                  <LocationAutocomplete
-                    value={form.locationDisplay}
-                    onChange={(v, loc) =>
-                      updateForm({
-                        locationDisplay: v,
-                        location: loc || form.location,
-                      })
-                    }
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-2">รายละเอียด</label>
-                  <textarea
-                    value={form.description}
-                    onChange={(e) => updateForm({ description: e.target.value })}
-                    rows={5}
-                    className="w-full px-4 py-3 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-900/20"
-                    placeholder="อธิบายรายละเอียดทรัพย์สิน..."
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-2">แท็กที่เกี่ยวข้อง</label>
-                  <div className="relative">
-                    <input
-                      type="text"
-                      value={tagInput}
-                      onChange={(e) => {
-                        setTagInput(e.target.value)
-                        setShowTagSuggestions(true)
-                      }}
-                      onFocus={() => setShowTagSuggestions(true)}
-                      className="w-full px-4 py-3 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-900/20"
-                      placeholder="พิมพ์เพื่อค้นหาแท็ก..."
-                    />
-                    {showTagSuggestions && filteredTags.length > 0 && (
-                      <div className="absolute z-10 w-full mt-1 bg-white border border-slate-200 rounded-lg shadow-lg max-h-48 overflow-y-auto">
-                        {filteredTags.map((tag) => (
-                          <button
-                            key={tag}
-                            type="button"
-                            onClick={() => addTag(tag)}
-                            className="w-full px-4 py-2 text-left hover:bg-blue-50 transition"
-                          >
-                            {tag}
-                          </button>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                  {form.tags.length > 0 && (
-                    <div className="flex flex-wrap gap-2 mt-3">
-                      {form.tags.map((tag) => (
-                        <span
-                          key={tag}
-                          className="inline-flex items-center gap-1 px-3 py-1 bg-blue-100 text-blue-900 rounded-full text-sm"
-                        >
-                          {tag}
-                          <button
-                            type="button"
-                            onClick={() => removeTag(tag)}
-                            className="hover:text-blue-700"
-                          >
-                            <X className="h-3 w-3" />
-                          </button>
-                        </span>
-                      ))}
+                  {/* Error Message */}
+                  {error && (
+                    <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-lg flex items-start gap-3">
+                      <AlertCircle className="h-5 w-5 text-red-600 flex-shrink-0 mt-0.5" />
+                      <p className="text-red-800 flex-1">{error}</p>
+                      <button
+                        type="button"
+                        onClick={() => setError(null)}
+                        className="p-1 hover:bg-red-100 rounded transition"
+                      >
+                        <X className="h-4 w-4 text-red-600" />
+                      </button>
                     </div>
                   )}
-                </div>
 
-                <div className="flex gap-3">
-                  <label className="flex items-center gap-2 cursor-pointer">
-                    <input
-                      type="checkbox"
-                      checked={form.directInstallment}
-                      onChange={(e) => updateForm({ directInstallment: e.target.checked })}
-                      className="w-4 h-4 text-blue-900 rounded focus:ring-blue-900"
-                    />
-                    <span className="text-sm text-slate-700">ผ่อนตรง</span>
-                  </label>
-                  <label className="flex items-center gap-2 cursor-pointer">
-                    <input
-                      type="checkbox"
-                      checked={form.hotDeal}
-                      onChange={(e) => updateForm({ hotDeal: e.target.checked })}
-                      className="w-4 h-4 text-blue-900 rounded focus:ring-blue-900"
-                    />
-                    <span className="text-sm text-slate-700">ดีลร้อน</span>
-                  </label>
-                </div>
-              </div>
-            )}
+                  {/* Step 1: Property Info */}
+                  {step === 1 && (
+                    <div className="space-y-6">
 
-            {/* Step 2: Images */}
-            {step === 2 && (
-              <div className="space-y-6">
-                <h2 className="text-xl font-bold text-blue-900 mb-6">อัปโหลดรูปภาพ</h2>
+                      <div>
+                        <label className="block text-sm font-medium text-slate-700 mb-2">
+                          ชื่อประกาศ <span className="text-red-500">*</span>
+                        </label>
+                        <input
+                          type="text"
+                          value={form.title}
+                          onChange={(e) => updateForm({ title: e.target.value })}
+                          className="w-full px-4 py-3 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-900/20"
+                          placeholder="เช่น คอนโดหรู ใกล้ BTS อารีย์"
+                        />
+                      </div>
 
-                <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-2">
-                    เลือกรูปภาพ (สูงสุด 10 รูป)
-                  </label>
-                  <input
-                    type="file"
-                    accept="image/*"
-                    multiple
-                    onChange={handleImageSelect}
-                    disabled={uploadingImages || previewFiles.length >= 10}
-                    className="w-full px-4 py-3 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-900/20 disabled:opacity-50"
-                  />
-                </div>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        <div>
+                          <label className="block text-sm font-medium text-slate-700 mb-2">
+                            ประเภท <span className="text-red-500">*</span>
+                          </label>
+                          <select
+                            value={form.type}
+                            onChange={(e) =>
+                              updateForm({
+                                type: e.target.value,
+                                isRental: e.target.value === 'บ้านเช่า',
+                              })
+                            }
+                            className="w-full px-4 py-3 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-900/20"
+                          >
+                            {CATEGORIES.map((c) => (
+                              <option key={c.value} value={c.value}>
+                                {c.label}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
 
-                {previewFiles.length > 0 && (
-                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
-                    {previewFiles.map((preview, index) => (
-                      <div key={index} className="relative group">
-                        <div className="aspect-square rounded-lg overflow-hidden bg-slate-100">
-                          <img
-                            src={preview.preview}
-                            alt={`Preview ${index + 1}`}
-                            className="w-full h-full object-cover"
+                        <div>
+                          <label className="block text-sm font-medium text-slate-700 mb-2">
+                            ราคา (บาท) <span className="text-red-500">*</span>
+                          </label>
+                          <input
+                            type="number"
+                            value={form.price}
+                            onChange={(e) => updateForm({ price: e.target.value })}
+                            min="0"
+                            className="w-full px-4 py-3 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-900/20"
+                            placeholder="เช่น 5000000"
                           />
                         </div>
-                        <button
-                          type="button"
-                          onClick={() => removeImage(index)}
-                          className="absolute top-2 right-2 p-1.5 bg-red-500 text-white rounded-full opacity-0 group-hover:opacity-100 transition"
-                        >
-                          <X className="h-4 w-4" />
-                        </button>
                       </div>
-                    ))}
-                  </div>
-                )}
 
-                {previewFiles.length === 0 && (
-                  <div className="text-center py-12 text-slate-400">
-                    <Upload className="h-12 w-12 mx-auto mb-3 opacity-50" />
-                    <p>ยังไม่มีรูปภาพ</p>
-                    <p className="text-sm mt-1">อัปโหลดรูปภาพเพื่อให้ประกาศของคุณน่าสนใจยิ่งขึ้น</p>
-                  </div>
-                )}
-              </div>
-            )}
+                      <div className="grid grid-cols-3 gap-4">
+                        <div>
+                          <label className="block text-sm font-medium text-slate-700 mb-2">พื้นที่ (ตร.ว.)</label>
+                          <input
+                            type="number"
+                            value={form.area !== '' && form.area != null ? String(Number(form.area) / 4) : ''}
+                            onChange={(e) => updateForm({ area: e.target.value ? String(Math.round(Number(e.target.value) * 4)) : '' })}
+                            min="0"
+                            step="0.5"
+                            placeholder="เช่น 25"
+                            className="w-full px-4 py-3 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-900/20"
+                          />
+                        </div>
 
-            {/* Step 3: Contact Info */}
-            {step === 3 && (
-              <div className="space-y-6">
-                <h2 className="text-xl font-bold text-blue-900 mb-6">ข้อมูลติดต่อ</h2>
+                        <div>
+                          <label className="block text-sm font-medium text-slate-700 mb-2">ห้องนอน</label>
+                          <input
+                            type="number"
+                            value={form.bedrooms}
+                            onChange={(e) => updateForm({ bedrooms: e.target.value })}
+                            min="0"
+                            className="w-full px-4 py-3 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-900/20"
+                          />
+                        </div>
 
-                <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-2">
-                    ชื่อผู้ติดต่อ <span className="text-red-500">*</span>
-                  </label>
-                  <input
-                    type="text"
-                    value={form.contactName}
-                    onChange={(e) => updateForm({ contactName: e.target.value })}
-                    className="w-full px-4 py-3 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-900/20"
-                    placeholder="ชื่อของคุณ"
-                  />
-                </div>
+                        <div>
+                          <label className="block text-sm font-medium text-slate-700 mb-2">ห้องน้ำ</label>
+                          <input
+                            type="number"
+                            value={form.bathrooms}
+                            onChange={(e) => updateForm({ bathrooms: e.target.value })}
+                            min="0"
+                            className="w-full px-4 py-3 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-900/20"
+                          />
+                        </div>
+                      </div>
 
-                <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-2">
-                    เบอร์โทรศัพท์ <span className="text-red-500">*</span>
-                  </label>
-                  <input
-                    type="tel"
-                    value={form.contactPhone}
-                    onChange={(e) => updateForm({ contactPhone: e.target.value })}
-                    className="w-full px-4 py-3 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-900/20"
-                    placeholder="0812345678"
-                  />
-                </div>
+                      <div>
+                        <label className="block text-sm font-medium text-slate-700 mb-2">
+                          พื้นที่ (จังหวัด/อำเภอ/ตำบล) <span className="text-red-500">*</span>
+                        </label>
+                        <LocationAutocomplete
+                          value={form.locationDisplay}
+                          onChange={(v, loc) =>
+                            updateForm({
+                              locationDisplay: v,
+                              location: loc || form.location,
+                            })
+                          }
+                        />
+                      </div>
 
-                <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-2">LINE ID</label>
-                  <input
-                    type="text"
-                    value={form.contactLineId}
-                    onChange={(e) => updateForm({ contactLineId: e.target.value })}
-                    className="w-full px-4 py-3 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-900/20"
-                    placeholder="@lineid หรือ ID"
-                  />
-                </div>
+                      <div>
+                        <label className="block text-sm font-medium text-slate-700 mb-2">รายละเอียด</label>
+                        <textarea
+                          value={form.description}
+                          onChange={(e) => updateForm({ description: e.target.value })}
+                          rows={5}
+                          className="w-full px-4 py-3 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-900/20"
+                          placeholder="อธิบายรายละเอียดทรัพย์สิน..."
+                        />
+                      </div>
 
-                <div className="p-4 bg-blue-50 border border-blue-200 rounded-lg">
-                  <label className="flex items-start gap-3 cursor-pointer">
-                    <input
-                      type="checkbox"
-                      checked={form.acceptedTerms}
-                      onChange={(e) => updateForm({ acceptedTerms: e.target.checked })}
-                      className="w-5 h-5 mt-0.5 text-blue-900 rounded focus:ring-blue-900"
-                    />
-                    <span className="text-sm text-slate-700">
-                      <span className="text-red-500">*</span> ข้าพเจ้ายืนยันว่าข้อมูลที่ลงประกาศเป็นความจริง
-                      และขอสงวนสิทธิ์ในการพิจารณาอนุมัติหรือลบประกาศที่ไม่เป็นไปตามมาตรฐานของคุณภาพจากระบบ
-                    </span>
-                  </label>
-                </div>
-              </div>
-            )}
+                      <div>
+                        <label className="block text-sm font-medium text-slate-700 mb-2">แท็กที่เกี่ยวข้อง</label>
+                        <div className="relative">
+                          <input
+                            type="text"
+                            value={tagInput}
+                            onChange={(e) => {
+                              setTagInput(e.target.value)
+                              setShowTagSuggestions(true)
+                            }}
+                            onFocus={() => setShowTagSuggestions(true)}
+                            className="w-full px-4 py-3 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-900/20"
+                            placeholder="พิมพ์เพื่อค้นหาแท็ก..."
+                          />
+                          {showTagSuggestions && filteredTags.length > 0 && (
+                            <div className="absolute z-10 w-full mt-1 bg-white border border-slate-200 rounded-lg shadow-lg max-h-48 overflow-y-auto">
+                              {filteredTags.map((tag) => (
+                                <button
+                                  key={tag}
+                                  type="button"
+                                  onClick={() => addTag(tag)}
+                                  className="w-full px-4 py-2 text-left hover:bg-blue-50 transition"
+                                >
+                                  {tag}
+                                </button>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                        {form.tags.length > 0 && (
+                          <div className="flex flex-wrap gap-2 mt-3">
+                            {form.tags.map((tag) => (
+                              <span
+                                key={tag}
+                                className="inline-flex items-center gap-1 px-3 py-1 bg-blue-100 text-blue-900 rounded-full text-sm"
+                              >
+                                {tag}
+                                <button
+                                  type="button"
+                                  onClick={() => removeTag(tag)}
+                                  className="hover:text-blue-700"
+                                >
+                                  <X className="h-3 w-3" />
+                                </button>
+                              </span>
+                            ))}
+                          </div>
+                        )}
+                      </div>
 
-              {/* Navigation Buttons */}
-              <div className="flex items-center justify-between mt-8 pt-6 border-t border-slate-200">
-              <button
-                type="button"
-                onClick={prevStep}
-                disabled={step === 1}
-                className="flex items-center gap-2 px-6 py-3 border border-slate-300 text-slate-700 rounded-lg hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed transition"
-              >
-                <ChevronLeft className="h-5 w-5" />
-                ย้อนกลับ
-              </button>
-
-              {step < 3 ? (
-                <button
-                  type="button"
-                  onClick={nextStep}
-                  className="flex items-center gap-2 px-6 py-3 bg-blue-900 text-white font-semibold rounded-lg hover:bg-blue-800 transition"
-                >
-                  ถัดไป
-                  <ChevronRight className="h-5 w-5" />
-                </button>
-              ) : (
-                <button
-                  type="button"
-                  onClick={handleSubmit}
-                  disabled={submitting}
-                  className="flex items-center gap-2 px-6 py-3 bg-yellow-400 text-yellow-900 font-semibold rounded-lg hover:bg-yellow-500 disabled:opacity-50 disabled:cursor-not-allowed transition"
-                >
-                  {submitting ? (
-                    <>
-                      <span className="inline-block w-4 h-4 border-2 border-yellow-900 border-t-transparent rounded-full animate-spin" />
-                      กำลังส่ง...
-                    </>
-                  ) : (
-                    <>
-                      <Check className="h-5 w-5" />
-                      ส่งประกาศ
-                    </>
+                      <div className="flex gap-3">
+                        <label className="flex items-center gap-2 cursor-pointer">
+                          <input
+                            type="checkbox"
+                            checked={form.directInstallment}
+                            onChange={(e) => updateForm({ directInstallment: e.target.checked })}
+                            className="w-4 h-4 text-blue-900 rounded focus:ring-blue-900"
+                          />
+                          <span className="text-sm text-slate-700">ผ่อนตรง</span>
+                        </label>
+                        <label className="flex items-center gap-2 cursor-pointer">
+                          <input
+                            type="checkbox"
+                            checked={form.hotDeal}
+                            onChange={(e) => updateForm({ hotDeal: e.target.checked })}
+                            className="w-4 h-4 text-blue-900 rounded focus:ring-blue-900"
+                          />
+                          <span className="text-sm text-slate-700">ดีลร้อน</span>
+                        </label>
+                      </div>
+                    </div>
                   )}
-                </button>
-              )}
-              </div>
+
+                  {/* Step 2: Images */}
+                  {step === 2 && (
+                    <div className="space-y-6">
+                      <h2 className="text-xl font-bold text-blue-900 mb-6">อัปโหลดรูปภาพ</h2>
+
+                      <div>
+                        <label className="block text-sm font-medium text-slate-700 mb-2">
+                          เลือกรูปภาพ (สูงสุด 10 รูป)
+                        </label>
+                        <input
+                          type="file"
+                          accept="image/*"
+                          multiple
+                          onChange={handleImageSelect}
+                          disabled={uploadingImages || previewFiles.length >= 10}
+                          className="w-full px-4 py-3 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-900/20 disabled:opacity-50"
+                        />
+                      </div>
+
+                      {previewFiles.length > 0 && (
+                        <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
+                          {previewFiles.map((preview, index) => (
+                            <div key={index} className="relative group">
+                              <div className="aspect-square rounded-lg overflow-hidden bg-slate-100">
+                                <img
+                                  src={preview.preview}
+                                  alt={`Preview ${index + 1}`}
+                                  className="w-full h-full object-cover"
+                                />
+                              </div>
+                              <button
+                                type="button"
+                                onClick={() => removeImage(index)}
+                                className="absolute top-2 right-2 p-1.5 bg-red-500 text-white rounded-full opacity-0 group-hover:opacity-100 transition"
+                              >
+                                <X className="h-4 w-4" />
+                              </button>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+
+                      {previewFiles.length === 0 && (
+                        <div className="text-center py-12 text-slate-400">
+                          <Upload className="h-12 w-12 mx-auto mb-3 opacity-50" />
+                          <p>ยังไม่มีรูปภาพ</p>
+                          <p className="text-sm mt-1">อัปโหลดรูปภาพเพื่อให้ประกาศของคุณน่าสนใจยิ่งขึ้น</p>
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Step 3: Contact Info */}
+                  {step === 3 && (
+                    <div className="space-y-6">
+                      <h2 className="text-xl font-bold text-blue-900 mb-6">ข้อมูลติดต่อ</h2>
+
+                      <div>
+                        <label className="block text-sm font-medium text-slate-700 mb-2">
+                          ชื่อผู้ติดต่อ <span className="text-red-500">*</span>
+                        </label>
+                        <input
+                          type="text"
+                          value={form.contactName}
+                          onChange={(e) => updateForm({ contactName: e.target.value })}
+                          className="w-full px-4 py-3 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-900/20"
+                          placeholder="ชื่อของคุณ"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="block text-sm font-medium text-slate-700 mb-2">
+                          เบอร์โทรศัพท์ <span className="text-red-500">*</span>
+                        </label>
+                        <input
+                          type="tel"
+                          value={form.contactPhone}
+                          onChange={(e) => updateForm({ contactPhone: e.target.value })}
+                          className="w-full px-4 py-3 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-900/20"
+                          placeholder="0812345678"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="block text-sm font-medium text-slate-700 mb-2">LINE ID</label>
+                        <input
+                          type="text"
+                          value={form.contactLineId}
+                          onChange={(e) => updateForm({ contactLineId: e.target.value })}
+                          className="w-full px-4 py-3 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-900/20"
+                          placeholder="@lineid หรือ ID"
+                        />
+                      </div>
+
+                      <div className="p-4 bg-blue-50 border border-blue-200 rounded-lg">
+                        <label className="flex items-start gap-3 cursor-pointer">
+                          <input
+                            type="checkbox"
+                            checked={form.acceptedTerms}
+                            onChange={(e) => updateForm({ acceptedTerms: e.target.checked })}
+                            className="w-5 h-5 mt-0.5 text-blue-900 rounded focus:ring-blue-900"
+                          />
+                          <span className="text-sm text-slate-700">
+                            <span className="text-red-500">*</span> ข้าพเจ้ายืนยันว่าข้อมูลที่ลงประกาศเป็นความจริง
+                            และขอสงวนสิทธิ์ในการพิจารณาอนุมัติหรือลบประกาศที่ไม่เป็นไปตามมาตรฐานของคุณภาพจากระบบ
+                          </span>
+                        </label>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Navigation Buttons */}
+                  <div className="flex items-center justify-between mt-8 pt-6 border-t border-slate-200">
+                    <button
+                      type="button"
+                      onClick={prevStep}
+                      disabled={step === 1}
+                      className="flex items-center gap-2 px-6 py-3 border border-slate-300 text-slate-700 rounded-lg hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed transition"
+                    >
+                      <ChevronLeft className="h-5 w-5" />
+                      ย้อนกลับ
+                    </button>
+
+                    {step < 3 ? (
+                      <button
+                        type="button"
+                        onClick={nextStep}
+                        className="flex items-center gap-2 px-6 py-3 bg-blue-900 text-white font-semibold rounded-lg hover:bg-blue-800 transition"
+                      >
+                        ถัดไป
+                        <ChevronRight className="h-5 w-5" />
+                      </button>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={handleSubmit}
+                        disabled={submitting}
+                        className="flex items-center gap-2 px-6 py-3 bg-yellow-400 text-yellow-900 font-semibold rounded-lg hover:bg-yellow-500 disabled:opacity-50 disabled:cursor-not-allowed transition"
+                      >
+                        {submitting ? (
+                          <>
+                            <span className="inline-block w-4 h-4 border-2 border-yellow-900 border-t-transparent rounded-full animate-spin" />
+                            กำลังส่ง...
+                          </>
+                        ) : (
+                          <>
+                            <Check className="h-5 w-5" />
+                            ส่งประกาศ
+                          </>
+                        )}
+                      </button>
+                    )}
+                  </div>
                 </div>
               </div>
             </div>
