@@ -274,6 +274,8 @@ export default function Home() {
                           <img
                             src={thumbnail}
                             alt={blog.title}
+                            loading="lazy"
+                            decoding="async"
                             className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
                           />
                           {hasVideo && (

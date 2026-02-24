@@ -7,6 +7,7 @@ import { AdminAuthProvider } from './context/AdminAuthContext'
 import AdminProtectedRoute from './components/AdminProtectedRoute'
 import PublicProtectedRoute from './components/PublicProtectedRoute'
 
+// ─── Public Pages ────────────────────────────────────────────────────────────
 const Home = lazy(() => import('./pages/Home'))
 const Properties = lazy(() => import('./pages/Properties'))
 const PropertyDetail = lazy(() => import('./pages/PropertyDetail'))
@@ -21,6 +22,7 @@ const PublicLogin = lazy(() => import('./pages/PublicLogin'))
 const Blogs = lazy(() => import('./pages/Blogs'))
 const BlogDetail = lazy(() => import('./pages/BlogDetail'))
 
+// ─── Admin Pages ─────────────────────────────────────────────────────────────
 const AdminLayout = lazy(() => import('./admin/AdminLayout'))
 const Dashboard = lazy(() => import('./admin/Dashboard'))
 const PropertyForm = lazy(() => import('./admin/PropertyForm'))
@@ -38,98 +40,103 @@ const ActivityLogsPage = lazy(() => import('./admin/ActivityLogsPage'))
 const Login = lazy(() => import('./admin/Login'))
 const AdminBlogs = lazy(() => import('./admin/AdminBlogs'))
 
+// ─── Route Loading Fallback ───────────────────────────────────────────────────
 function RouteLoading() {
   return (
-    <div className="min-h-screen bg-slate-50 flex items-center justify-center">
-      <p className="text-slate-600">กำลังโหลด...</p>
+    <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center gap-3">
+      {/* Spinner */}
+      <div className="relative w-12 h-12">
+        <div className="absolute inset-0 rounded-full border-4 border-blue-100" />
+        <div className="absolute inset-0 rounded-full border-4 border-blue-900 border-t-transparent animate-spin" />
+      </div>
+      <p className="text-slate-500 text-sm font-medium">กำลังโหลด...</p>
     </div>
   )
 }
 
+// ─── App ─────────────────────────────────────────────────────────────────────
 export default function App() {
   return (
     <HelmetProvider>
       <SearchProvider>
         <Suspense fallback={<RouteLoading />}>
           <Routes>
-          {/* Admin routes with AdminAuthProvider */}
-          <Route
-            path="/admin/*"
-            element={
-              <AdminAuthProvider>
-                <Routes>
-                  {/* Public: no navbar for admin login */}
-                  <Route path="login" element={<Login />} />
-                  {/* Admin protected */}
-                  <Route
-                    path="*"
-                    element={
-                      <AdminProtectedRoute>
-                        <AdminLayout />
-                      </AdminProtectedRoute>
-                    }
-                  >
-                    <Route index element={<Dashboard />} />
-                    <Route path="properties" element={<PropertyListPage />} />
-                    <Route path="properties/new" element={<PropertyForm />} />
-                    <Route path="properties/edit/:id" element={<PropertyForm />} />
-                    <Route path="hero-slides" element={<HeroSlidesAdmin />} />
-                    <Route path="homepage-sections" element={<HomepageSectionsAdmin />} />
-                    <Route path="popular-locations" element={<PopularLocationsAdmin />} />
-                    <Route path="pending-properties" element={<PendingProperties />} />
-                    <Route path="users" element={<UserManagement />} />
-                    <Route path="settings" element={<Settings />} />
-                    <Route path="my-properties" element={<MyProperties />} />
-                    <Route path="leads" element={<LeadsInbox />} />
-                    <Route path="loan-requests" element={<AdminLoanRequests />} />
-                    <Route path="activities" element={<ActivityLogsPage />} />
-                    <Route path="blogs" element={<AdminBlogs />} />
-                  </Route>
-                </Routes>
-              </AdminAuthProvider>
-            }
-          />
+            {/* ── Admin routes (with AdminAuthProvider) ─────────────── */}
+            <Route
+              path="/admin/*"
+              element={
+                <AdminAuthProvider>
+                  <Routes>
+                    <Route path="login" element={<Login />} />
+                    <Route
+                      path="*"
+                      element={
+                        <AdminProtectedRoute>
+                          <AdminLayout />
+                        </AdminProtectedRoute>
+                      }
+                    >
+                      <Route index element={<Dashboard />} />
+                      <Route path="properties" element={<PropertyListPage />} />
+                      <Route path="properties/new" element={<PropertyForm />} />
+                      <Route path="properties/edit/:id" element={<PropertyForm />} />
+                      <Route path="hero-slides" element={<HeroSlidesAdmin />} />
+                      <Route path="homepage-sections" element={<HomepageSectionsAdmin />} />
+                      <Route path="popular-locations" element={<PopularLocationsAdmin />} />
+                      <Route path="pending-properties" element={<PendingProperties />} />
+                      <Route path="users" element={<UserManagement />} />
+                      <Route path="settings" element={<Settings />} />
+                      <Route path="my-properties" element={<MyProperties />} />
+                      <Route path="leads" element={<LeadsInbox />} />
+                      <Route path="loan-requests" element={<AdminLoanRequests />} />
+                      <Route path="activities" element={<ActivityLogsPage />} />
+                      <Route path="blogs" element={<AdminBlogs />} />
+                    </Route>
+                  </Routes>
+                </AdminAuthProvider>
+              }
+            />
 
-          {/* Public routes with PublicAuthProvider */}
-          <Route
-            path="/*"
-            element={
-              <PublicAuthProvider>
-                <Routes>
-                  <Route path="/" element={<Home />} />
-                  <Route path="/properties" element={<Properties />} />
-                  <Route path="/properties/:id" element={<PropertyDetail />} />
-                  <Route path="/share/:id" element={<SharePage />} />
-                  <Route path="/contact" element={<Contact />} />
-                  <Route path="/loan-services" element={<LoanService />} />
-                  <Route path="/post" element={<PostProperty />} />
-                  <Route path="/favorites" element={<Favorites />} />
-                  <Route path="/blogs" element={<Blogs />} />
-                  <Route path="/blogs/:id" element={<BlogDetail />} />
-                  <Route path="/login" element={<PublicLogin />} />
-                  <Route
-                    path="/profile"
-                    element={
-                      <PublicProtectedRoute>
-                        <Profile />
-                      </PublicProtectedRoute>
-                    }
-                  />
-                  <Route
-                    path="/profile-settings"
-                    element={
-                      <PublicProtectedRoute>
-                        <ProfileSettings />
-                      </PublicProtectedRoute>
-                    }
-                  />
-                  {/* Catch-all: หน้าที่ไม่พบ -> กลับหน้าแรก */}
-                  <Route path="*" element={<Navigate to="/" replace />} />
-                </Routes>
-              </PublicAuthProvider>
-            }
-          />
-        </Routes>
+            {/* ── Public routes (with PublicAuthProvider) ────────────── */}
+            <Route
+              path="/*"
+              element={
+                <PublicAuthProvider>
+                  <Routes>
+                    <Route path="/" element={<Home />} />
+                    <Route path="/properties" element={<Properties />} />
+                    <Route path="/properties/:id" element={<PropertyDetail />} />
+                    <Route path="/share/:id" element={<SharePage />} />
+                    <Route path="/contact" element={<Contact />} />
+                    <Route path="/loan-services" element={<LoanService />} />
+                    <Route path="/post" element={<PostProperty />} />
+                    <Route path="/favorites" element={<Favorites />} />
+                    <Route path="/blogs" element={<Blogs />} />
+                    <Route path="/blogs/:id" element={<BlogDetail />} />
+                    <Route path="/login" element={<PublicLogin />} />
+                    <Route
+                      path="/profile"
+                      element={
+                        <PublicProtectedRoute>
+                          <Profile />
+                        </PublicProtectedRoute>
+                      }
+                    />
+                    <Route
+                      path="/profile-settings"
+                      element={
+                        <PublicProtectedRoute>
+                          <ProfileSettings />
+                        </PublicProtectedRoute>
+                      }
+                    />
+                    {/* Catch-all → หน้าแรก */}
+                    <Route path="*" element={<Navigate to="/" replace />} />
+                  </Routes>
+                </PublicAuthProvider>
+              }
+            />
+          </Routes>
         </Suspense>
       </SearchProvider>
     </HelmetProvider>

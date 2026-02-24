@@ -309,38 +309,40 @@ export default function Dashboard() {
   }
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-6">
       {/* Header */}
-      <div className="flex flex-wrap items-center justify-between gap-4">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
         <h1 className="text-2xl sm:text-3xl font-bold text-blue-900 tracking-tight">
           แดชบอร์ด
         </h1>
-        <div className="flex items-center gap-3">
+        <div className="flex flex-wrap items-center gap-2">
           {!migrationDone && (
             <button
               onClick={handleMigration}
               disabled={migrating}
-              className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-slate-800 text-white font-semibold hover:bg-slate-700 transition-colors shadow-sm disabled:opacity-50"
+              className="inline-flex items-center gap-2 px-3 sm:px-4 py-2 rounded-xl bg-slate-800 text-white text-sm font-semibold hover:bg-slate-700 transition-colors shadow-sm disabled:opacity-50"
             >
               {migrating ? <Loader2 className="h-4 w-4 animate-spin" /> : <DatabaseZap className="h-4 w-4" />}
-              เริ่มการปรับปรุงระบบ ID (Migration)
+              <span className="hidden sm:inline">ปรับปรุงระบบ ID</span>
+              <span className="sm:hidden">Migration</span>
             </button>
           )}
           {!tagsDone ? (
             <button
               onClick={handleRegenerateTags}
               disabled={tagsRegenerating}
-              className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-amber-600 text-white font-semibold hover:bg-amber-700 transition-colors shadow-sm disabled:opacity-50"
+              className="inline-flex items-center gap-2 px-3 sm:px-4 py-2 rounded-xl bg-amber-600 text-white text-sm font-semibold hover:bg-amber-700 transition-colors shadow-sm disabled:opacity-50"
             >
               {tagsRegenerating ? <Loader2 className="h-4 w-4 animate-spin" /> : <DatabaseZap className="h-4 w-4" />}
-              รีเซ็ต Custom Tags
+              <span className="hidden sm:inline">รีเซ็ต Custom Tags</span>
+              <span className="sm:hidden">Reset Tags</span>
             </button>
           ) : (
             <span className="text-sm text-emerald-600 font-medium">✓ Tags อัปเดตแล้ว</span>
           )}
           <Link
             to="/admin/properties/new"
-            className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-yellow-400 text-yellow-900 font-semibold hover:bg-yellow-500 transition-colors shadow-sm"
+            className="inline-flex items-center gap-2 px-3 sm:px-5 py-2 rounded-xl bg-yellow-400 text-yellow-900 text-sm font-semibold hover:bg-yellow-500 transition-colors shadow-sm"
           >
             <Plus className="h-4 w-4" />
             เพิ่มทรัพย์
@@ -472,7 +474,7 @@ export default function Dashboard() {
         {/* Recent Leads Table */}
         <div className="lg:col-span-2 bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
           <div className="px-6 py-4 border-b border-gray-100 flex items-center justify-between">
-            <h2 className="text-lg font-bold text-blue-900">ลูกค้าล่าสุด (Recent Leads)</h2>
+            <h2 className="text-base sm:text-lg font-bold text-blue-900 truncate">ลูกค้าล่าสุด</h2>
             <Link
               to="/admin/leads"
               className="text-sm font-medium text-blue-600 hover:text-blue-800 flex items-center gap-1"

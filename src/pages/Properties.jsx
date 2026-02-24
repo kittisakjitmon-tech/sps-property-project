@@ -245,20 +245,18 @@ export default function Properties() {
   // Button Action: ฟังก์ชันการกดปุ่มค้นหาหรือกด Enter
   const handleSearchButton = useCallback(() => {
     const trimmedQuery = searchQuery.trim()
-    setDebouncedKeyword(trimmedQuery) // อัปเดต debouncedKeyword เพื่อ trigger การค้นหา
+    setDebouncedKeyword(trimmedQuery)
 
-    // Update URL Parameters
     const params = new URLSearchParams(searchParams)
     if (trimmedQuery) {
       params.set('q', trimmedQuery)
     } else {
-      //params.delete('q')
+      params.delete('q')
     }
     if (typeParam) params.set('type', typeParam)
 
-    // อัปเดต prevSearchParamsRef ก่อน navigate เพื่อป้องกัน useEffect sync กลับ
+    // อัปเดต ref ก่อน navigate เพื่อป้องกัน useEffect sync กลับ
     prevSearchParamsRef.current = params.toString()
-
     navigate(`/properties?${params.toString()}`, { replace: false })
   }, [searchQuery, searchParams, navigate, typeParam])
 
@@ -406,7 +404,7 @@ export default function Properties() {
 
   const pageTitle = isRentalFilter === true ? 'ทรัพย์สินให้เช่า' : isRentalFilter === false ? 'ทรัพย์สินขาย' : 'รายการประกาศ'
   const heroTitle = isRentalFilter === true ? 'ทรัพย์สินให้เช่า' : isRentalFilter === false ? 'ทรัพย์สินขาย' : 'SPS Property Solution'
-  const heroSubtitle = isRentalFilter === true ? 'ค้นหาบ้านที่ใช่สำหรับคุณ' : isRentalFilter === false ? 'ค้นหาบ้านที่ใช่สำหรับคุณ' : 'บ้านคอนโดสวย อมตะซิตี้ ชลบุรี'
+  const heroSubtitle = 'ค้นหาบ้านที่ใช่สำหรับคุณ'
 
   // Safety check: Ensure filtered is always an array
   const safeFiltered = Array.isArray(filtered) ? filtered : []
@@ -539,14 +537,7 @@ export default function Properties() {
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
                 {paginatedProperties.map((p) => {
                   if (!p || !p.id) return null
-                  try {
-                    return <PropertyCard key={p.id} property={p} searchQuery={debouncedKeyword} />
-                  } catch (error) {
-                    if (process.env.NODE_ENV === 'development') {
-                      console.error('Error rendering PropertyCard:', error, p)
-                    }
-                    return null
-                  }
+                  return <PropertyCard key={p.id} property={p} searchQuery={debouncedKeyword} />
                 })}
               </div>
 

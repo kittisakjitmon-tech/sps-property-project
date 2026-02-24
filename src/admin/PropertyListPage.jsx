@@ -475,16 +475,16 @@ export default function PropertyListPage() {
     return (
       <div className="max-w-6xl mx-auto p-4 sm:p-6">
         {/* Header */}
-        <div className="mb-6 flex items-center justify-between">
-          <div>
-            <h1 className="text-3xl font-bold text-blue-900 mb-2">จัดการทรัพย์</h1>
-            <p className="text-slate-600">
+        <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
+          <div className="min-w-0">
+            <h1 className="text-2xl sm:text-3xl font-bold text-blue-900 mb-1 truncate">จัดการทรัพย์</h1>
+            <p className="text-slate-600 text-sm">
               รายการประกาศทั้งหมด ({safeProperties.length} รายการ)
             </p>
           </div>
           <Link
             to="/admin/properties/new"
-            className="flex items-center gap-2 px-4 py-2 bg-blue-900 text-white font-semibold rounded-lg hover:bg-blue-800 transition"
+            className="flex items-center gap-2 px-4 py-2 bg-blue-900 text-white text-sm font-semibold rounded-lg hover:bg-blue-800 transition shrink-0"
           >
             <Plus className="h-5 w-5" />
             เพิ่มประกาศใหม่

@@ -85,12 +85,12 @@ export default function UserManagement() {
   const [deletingId, setDeletingId] = useState(null)
   const [suspendingId, setSuspendingId] = useState(null)
   const [isAddMemberOpen, setIsAddMemberOpen] = useState(false)
-  
+
   // Search and Filter
   const [searchQuery, setSearchQuery] = useState('')
   const [roleFilter, setRoleFilter] = useState('all')
   const [statusFilter, setStatusFilter] = useState('all')
-  
+
   // Confirmation Modals
   const [confirmModal, setConfirmModal] = useState({
     isOpen: false,
@@ -212,7 +212,7 @@ export default function UserManagement() {
         `Changed from ${ROLE_LABELS[oldRole] || oldRole} to ${ROLE_LABELS[newRole]}`
       )
       setSuccessMessage(`เปลี่ยนระดับสิทธิ์เป็น "${ROLE_LABELS[newRole]}" สำเร็จ`)
-      
+
       // If this is initial setup, reload page to refresh auth context
       if (confirmModal.type === 'initial_setup') {
         setTimeout(() => {
@@ -352,7 +352,7 @@ export default function UserManagement() {
           message: '',
           confirmText: 'ยืนยัน',
           confirmColor: 'bg-blue-900',
-          onConfirm: () => {},
+          onConfirm: () => { },
         }
     }
   }
@@ -386,10 +386,10 @@ export default function UserManagement() {
     <div className="max-w-7xl mx-auto">
       {/* Header */}
       <div className="mb-6">
-        <div className="flex items-center justify-between gap-3 mb-2">
+        <div className="flex flex-wrap items-center justify-between gap-3 mb-2">
           <div className="flex items-center gap-3">
-            <Shield className="h-8 w-8 text-blue-900" />
-            <h1 className="text-3xl font-bold text-blue-900">จัดการสมาชิก</h1>
+            <Shield className="h-7 w-7 text-blue-900" />
+            <h1 className="text-2xl sm:text-3xl font-bold text-blue-900">จัดการสมาชิก</h1>
           </div>
           {hasSuperAdmin && (
             <button
@@ -458,7 +458,7 @@ export default function UserManagement() {
       )}
 
       {/* Stats */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 mb-6">
         <div className="bg-white rounded-xl border border-slate-200 p-4 shadow-sm">
           <div className="flex items-center gap-3">
             <div className="w-12 h-12 rounded-lg bg-purple-100 flex items-center justify-center">
@@ -580,13 +580,12 @@ export default function UserManagement() {
               {filteredUsers.map((u) => {
                 const isSuspended = u.status === 'suspended'
                 const currentRole = u.role || 'member'
-                
+
                 return (
                   <tr
                     key={u.id}
-                    className={`hover:bg-slate-50 transition ${
-                      isSuspended ? 'bg-red-50/30' : ''
-                    }`}
+                    className={`hover:bg-slate-50 transition ${isSuspended ? 'bg-red-50/30' : ''
+                      }`}
                   >
                     <td className="px-6 py-4">
                       <p className="font-medium text-slate-900">{u.email || '-'}</p>
@@ -599,9 +598,8 @@ export default function UserManagement() {
                           handleRoleChangeClick(u.id, u.email, currentRole, e.target.value)
                         }
                         disabled={changingRole === u.id || isSuspended || (!hasSuperAdmin && u.id !== user?.uid)}
-                        className={`px-3 py-1.5 rounded-lg text-sm font-semibold border-2 transition ${
-                          ROLE_COLORS[currentRole]
-                        } disabled:opacity-50 disabled:cursor-not-allowed`}
+                        className={`px-3 py-1.5 rounded-lg text-sm font-semibold border-2 transition ${ROLE_COLORS[currentRole]
+                          } disabled:opacity-50 disabled:cursor-not-allowed`}
                       >
                         <option value="member">สมาชิก</option>
                         <option value="admin">Admin</option>
@@ -617,11 +615,10 @@ export default function UserManagement() {
                     </td>
                     <td className="px-6 py-4">
                       <span
-                        className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-semibold border-2 ${
-                          isSuspended
+                        className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-semibold border-2 ${isSuspended
                             ? STATUS_COLORS.suspended
                             : STATUS_COLORS.active
-                        }`}
+                          }`}
                       >
                         {isSuspended ? (
                           <>
@@ -639,10 +636,10 @@ export default function UserManagement() {
                     <td className="px-6 py-4 text-sm text-slate-600">
                       {u.createdAt?.toDate
                         ? u.createdAt.toDate().toLocaleDateString('th-TH', {
-                            year: 'numeric',
-                            month: 'short',
-                            day: 'numeric',
-                          })
+                          year: 'numeric',
+                          month: 'short',
+                          day: 'numeric',
+                        })
                         : '-'}
                     </td>
                     <td className="px-6 py-4">
@@ -653,11 +650,10 @@ export default function UserManagement() {
                               type="button"
                               onClick={() => handleSuspendClick(u.id, u.email, isSuspended)}
                               disabled={suspendingId === u.id}
-                              className={`p-2 rounded-lg transition disabled:opacity-50 disabled:cursor-not-allowed ${
-                                isSuspended
+                              className={`p-2 rounded-lg transition disabled:opacity-50 disabled:cursor-not-allowed ${isSuspended
                                   ? 'text-green-600 hover:bg-green-50'
                                   : 'text-orange-600 hover:bg-orange-50'
-                              }`}
+                                }`}
                               title={isSuspended ? 'ยกเลิกการระงับ' : 'ระงับการใช้งาน'}
                             >
                               {isSuspended ? (
