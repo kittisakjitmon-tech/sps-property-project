@@ -570,18 +570,16 @@ exports.dynamicMeta = functions
       }
     } else {
       // Not a bot. Serve the standard SPA React index file.
-      // Since Firebase Hosting will redirect to index.html anyway, we can just fetch the index.html from hosting and return it,
-      // OR technically in firebase.json rewrites, the function returning a standard response is okay.
-      // For simplicity, we can fetch the origin index.html, but a common pattern is to just let Firebase Hosting handle non-bot traffic by rewriting back to index.html using another rule, but since rewrites stop at the first match, we must serve index.html here.
-
-      const fetch = require('node-fetch')
+      // Fetch index.html from the current hosting origin (root path),
+      // which is rewritten to /index.html by Firebase Hosting (no infinite loop).
       try {
-        // Fetch the index.html from your own domain (ensure it doesn't cause an infinite loop by fetching the root URL, which hits the fallback rewrite)
-        const response = await fetch('https://spspropertysolutions.com/')
+        const origin = req.headers.host ? `https://${req.headers.host}` : 'https://sps-property.web.app'
+        const response = await fetch(`${origin}/`)
         const html = await response.text()
         res.set('Cache-Control', 'public, max-age=300, s-maxage=600')
         return res.status(200).send(html)
       } catch (error) {
+        functions.logger.error('Error loading page from hosting', error)
         return res.status(500).send('Error loading page')
       }
     }

@@ -18,8 +18,8 @@
         "function": "sitemap"
       },
       {
-        "source": "/properties/**",
-        "function": "dynamicMeta"
+      "source": "/properties/**",
+      "destination": "/index.html"
       },
       {
         "source": "**",
