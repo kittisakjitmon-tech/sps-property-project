@@ -49,7 +49,26 @@ export function PublicAuthProvider({ children }) {
   }, [])
 
   const login = async (email, password) => {
-    await signInWithEmailAndPassword(publicAuth, email, password)
+    const cred = await signInWithEmailAndPassword(publicAuth, email, password)
+
+    // อนุญาตให้ล็อกอินฝั่งหน้าบ้านเฉพาะ role = 'agent'
+    try {
+      const userDoc = await getDoc(doc(publicDb, 'users', cred.user.uid))
+      const role = userDoc.exists() ? (userDoc.data().role || 'member') : 'member'
+      if (role !== 'agent') {
+        await signOut(publicAuth)
+        const error = new Error('อนุญาตให้เข้าสู่ระบบเฉพาะ Agent เท่านั้น')
+        error.code = 'auth/not-agent'
+        throw error
+      }
+    } catch (err) {
+      // ถ้าดึง role ไม่ได้ ให้ปิด session ทิ้งและแจ้งว่าไม่อนุญาต
+      await signOut(publicAuth)
+      if (!err.code) {
+        err.code = 'auth/not-agent'
+      }
+      throw err
+    }
   }
 
   const logout = async () => {

@@ -69,6 +69,7 @@ const SALE_AVAILABILITY_OPTIONS = [
 const defaultForm = {
   title: '',
   price: '',
+  propertyId: '',
   displayId: '',
   type: 'SPS-CD-ID',
   locationDisplay: '',
@@ -177,6 +178,7 @@ export default function PropertyForm() {
       setForm({
         title: p.title ?? '',
         price: p.price ?? '',
+        propertyId: p.propertyId ?? '',
         displayId: p.displayId ?? p.propertyId ?? '',
         type: p.type ?? 'SPS-CD-ID',
         locationDisplay: p.locationDisplay ?? `${loc.district || ''} ${loc.province || ''}`.trim(),

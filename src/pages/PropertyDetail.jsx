@@ -930,7 +930,7 @@ export default function PropertyDetail() {
                   <div className="pt-4 border-slate-100">
                     <p className="text-sm font-medium text-slate-700 mb-2">จองเยี่ยมชม (ส่งข้อความ)</p>
                     <LeadForm
-                      propertyId={property.propertyId || property.id}
+                      propertyId={property.displayId || property.propertyId || property.id}
                       propertyTitle={property.title}
                       propertyPrice={property.price}
                       isRental={property.isRental}
