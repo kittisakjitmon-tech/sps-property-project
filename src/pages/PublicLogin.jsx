@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { useNavigate, useLocation, Link } from 'react-router-dom'
 import { usePublicAuth } from '../context/PublicAuthContext'
+import { getAuthErrorMessage } from '../lib/authErrorMessages'
 import { LogIn } from 'lucide-react'
 import PageLayout from '../components/PageLayout'
 
@@ -22,7 +23,7 @@ export default function PublicLogin() {
       await login(email, password)
       navigate(from, { replace: true })
     } catch (err) {
-      setError(err?.message?.includes('auth/') ? 'อีเมลหรือรหัสผ่านไม่ถูกต้อง' : 'เกิดข้อผิดพลาด กรุณาลองใหม่')
+      setError(getAuthErrorMessage(err))
     } finally {
       setSubmitting(false)
     }

@@ -1,29 +1,22 @@
 import { useEffect, useRef, useState } from 'react'
-import { MarkerClusterer } from '@googlemaps/markerclusterer'
-import { Link } from 'react-router-dom'
 import { MapPin } from 'lucide-react'
 import { formatPrice } from '../lib/priceFormat'
-import { loadGoogleMapsApi } from '../lib/googleMapsLoader'
-
-const DEFAULT_MAP_ID = import.meta.env.VITE_GOOGLE_MAP_ID || 'DEMO_MAP_ID'
+import { loadLongdoMap } from '../lib/longdoMapLoader'
 
 export default function PropertiesMap({ properties, className = '' }) {
   const mapRef = useRef(null)
   const mapInstanceRef = useRef(null)
   const markersRef = useRef([])
-  const infoWindowsRef = useRef([])
-  const clustererRef = useRef(null)
   const [isMapReady, setIsMapReady] = useState(false)
   const [mapLoadError, setMapLoadError] = useState('')
 
-  // Filter properties that have coordinates
   const propertiesWithCoords = properties.filter(
     (p) => p.lat != null && p.lng != null && !isNaN(p.lat) && !isNaN(p.lng)
   )
 
   useEffect(() => {
     let mounted = true
-    loadGoogleMapsApi()
+    loadLongdoMap()
       .then(() => {
         if (!mounted) return
         setMapLoadError('')
@@ -31,8 +24,11 @@ export default function PropertiesMap({ properties, className = '' }) {
       })
       .catch((error) => {
         if (!mounted) return
-        console.error('PropertiesMap: failed to load Google Maps API', error)
-        setMapLoadError('ไม่สามารถโหลด Google Maps ได้')
+        console.error('PropertiesMap: failed to load Longdo Map API', error)
+        const msg = error?.message?.includes('VITE_LONGDO_MAP_KEY') || !import.meta.env.VITE_LONGDO_MAP_KEY
+          ? 'ไม่สามารถโหลดแผนที่ได้ (กรุณาตั้งค่า VITE_LONGDO_MAP_KEY ใน .env)'
+          : 'ไม่สามารถโหลดแผนที่ได้'
+        setMapLoadError(msg)
       })
     return () => {
       mounted = false
@@ -42,138 +38,91 @@ export default function PropertiesMap({ properties, className = '' }) {
   useEffect(() => {
     if (!isMapReady || !mapRef.current || propertiesWithCoords.length === 0) return
     let disposed = false
+    const longdo = window.longdo
 
-    const initMap = async () => {
-      const { AdvancedMarkerElement, PinElement } = await window.google.maps.importLibrary('marker')
-      if (disposed || !mapRef.current) return
-      // Initialize map centered on Thailand
-      const map = new window.google.maps.Map(mapRef.current, {
-        center: { lat: 13.7563, lng: 100.5018 }, // Bangkok default
-        zoom: 6,
-        mapTypeControl: true,
-        streetViewControl: true,
-        fullscreenControl: true,
-        mapId: DEFAULT_MAP_ID,
-      })
-
-      mapInstanceRef.current = map
-
-      // Clear existing markers and info windows
-      markersRef.current.forEach((marker) => { marker.map = null })
-      infoWindowsRef.current.forEach((iw) => iw.close())
-      markersRef.current = []
-      infoWindowsRef.current = []
-
-      // Create bounds to fit all markers
-      const bounds = new window.google.maps.LatLngBounds()
-
-      // Create markers for each property
-      const markers = propertiesWithCoords.map((property) => {
-        const position = { lat: Number(property.lat), lng: Number(property.lng) }
-        bounds.extend(position)
-
-        const pin = new PinElement({
-          background: '#ef4444',
-          borderColor: '#ffffff',
-          glyphColor: '#ffffff',
+    const map = mapInstanceRef.current
+      ? mapInstanceRef.current
+      : new longdo.Map({
+          placeholder: mapRef.current,
+          language: 'th',
+          lastView: false,
+          location: { lon: 100.5018, lat: 13.7563 },
+          zoom: 6,
         })
+    if (!mapInstanceRef.current) mapInstanceRef.current = map
 
-        // Create marker (PinElement extends HTMLElement, pass directly as content)
-        const marker = new AdvancedMarkerElement({
-          position,
-          map,
-          title: property.title || 'ทรัพย์สิน',
-          content: pin,
-          gmpClickable: true,
-        })
+    if (disposed) return
+    map.Overlays.clear()
+    markersRef.current = []
 
-        // Create info window content
-        const priceText = formatPrice(property.price, property.isRental, property.showPrice)
+    const locationList = propertiesWithCoords.map((p) => ({
+      lon: Number(p.lng),
+      lat: Number(p.lat),
+    }))
 
-        const locationText = property.location
-          ? `${property.location.district || ''}, ${property.location.province || ''}`.trim()
-          : ''
-
-        const infoContent = `
+    propertiesWithCoords.forEach((property) => {
+      if (disposed) return
+      const lon = Number(property.lng)
+      const lat = Number(property.lat)
+      const priceText = formatPrice(property.price, property.isRental, property.showPrice)
+      const locationText = property.location
+        ? `${property.location.district || ''}, ${property.location.province || ''}`.trim()
+        : ''
+      const infoContent = `
         <div style="min-width: 200px; padding: 8px;">
           <h3 style="margin: 0 0 8px 0; font-size: 16px; font-weight: bold; color: #1e3a8a;">
-            ${property.title || 'ทรัพย์สิน'}
+            ${(property.title || 'ทรัพย์สิน').replace(/</g, '&lt;')}
           </h3>
           <p style="margin: 4px 0; font-size: 18px; font-weight: bold; color: #dc2626;">
             ${priceText}
           </p>
           ${locationText ? `<p style="margin: 4px 0; font-size: 14px; color: #64748b;">📍 ${locationText}</p>` : ''}
           ${property.bedrooms ? `<p style="margin: 4px 0; font-size: 14px; color: #64748b;">🛏️ ${property.bedrooms} ห้องนอน</p>` : ''}
-          <a 
-            href="/properties/${property.id}" 
-            style="display: inline-block; margin-top: 8px; padding: 6px 12px; background: #fbbf24; color: #78350f; text-decoration: none; border-radius: 4px; font-weight: 600; font-size: 14px;"
-            onmouseover="this.style.background='#f59e0b'"
-            onmouseout="this.style.background='#fbbf24'"
-          >
+          <a href="/properties/${property.id}" style="display: inline-block; margin-top: 8px; padding: 6px 12px; background: #fbbf24; color: #78350f; text-decoration: none; border-radius: 4px; font-weight: 600; font-size: 14px;">
             ดูรายละเอียด →
           </a>
         </div>
       `
 
-        const infoWindow = new window.google.maps.InfoWindow({
-          content: infoContent,
-        })
-
-        // Add click listener to marker (use gmp-click with addEventListener)
-        marker.addEventListener('gmp-click', () => {
-          // Close all other info windows
-          infoWindowsRef.current.forEach((iw) => iw.close())
-          // Open this info window
-          infoWindow.open({
-            map,
-            anchor: marker,
-          })
-        })
-
-        infoWindowsRef.current.push(infoWindow)
-        return marker
-      })
-
-      markersRef.current = markers
-
-      // Create marker clusterer
-      if (window.google && window.google.maps && MarkerClusterer) {
-        if (clustererRef.current) {
-          clustererRef.current.clearMarkers()
+      const marker = new longdo.Marker(
+        { lon, lat },
+        {
+          title: property.title || 'ทรัพย์สิน',
+          popup: { html: infoContent },
+          clickable: true,
         }
-        clustererRef.current = new MarkerClusterer({ map, markers })
-      }
-
-      // Fit bounds to show all markers
-      if (propertiesWithCoords.length > 0) {
-        map.fitBounds(bounds)
-        // Set minimum zoom level to prevent zooming too far out
-        map.addListener('bounds_changed', () => {
-          if (map.getZoom() > 15) {
-            map.setZoom(15)
-          }
-        })
-      } else {
-        // If no properties with coordinates, center on Thailand
-        map.setCenter({ lat: 13.7563, lng: 100.5018 })
-        map.setZoom(6)
-      }
-    }
-
-    initMap().catch((error) => {
-      console.error('PropertiesMap: failed to initialize map', error)
-      setMapLoadError('ไม่สามารถเริ่มต้น Google Maps ได้')
+      )
+      map.Overlays.add(marker)
+      markersRef.current.push(marker)
     })
+
+    if (locationList.length > 0 && longdo.Util && longdo.Util.locationBound) {
+      try {
+        const bound = longdo.Util.locationBound(locationList)
+        map.bound(bound, undefined, true)
+      } catch {
+        map.location({ lon: 100.5018, lat: 13.7563 }, false)
+        map.zoom(6, false)
+      }
+    } else {
+      map.location({ lon: 100.5018, lat: 13.7563 }, false)
+      map.zoom(6, false)
+    }
 
     return () => {
       disposed = true
-      markersRef.current.forEach((marker) => { marker.map = null })
-      infoWindowsRef.current.forEach((iw) => iw.close())
-      if (clustererRef.current) {
-        clustererRef.current.clearMarkers()
+      if (mapInstanceRef.current && mapInstanceRef.current.Overlays) {
+        mapInstanceRef.current.Overlays.clear()
       }
+      markersRef.current = []
     }
   }, [isMapReady, propertiesWithCoords])
+
+  useEffect(() => {
+    return () => {
+      mapInstanceRef.current = null
+    }
+  }, [])
 
   if (mapLoadError) {
     return (

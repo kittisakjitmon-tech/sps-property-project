@@ -1,8 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { MapPin } from 'lucide-react'
-import { loadGoogleMapsApi } from '../lib/googleMapsLoader'
-
-const DEFAULT_MAP_ID = import.meta.env.VITE_GOOGLE_MAP_ID || 'DEMO_MAP_ID'
+import { loadLongdoMap } from '../lib/longdoMapLoader'
 
 export default function MapPicker({ lat, lng, onLocationSelect, className = '' }) {
   const mapRef = useRef(null)
@@ -13,7 +11,7 @@ export default function MapPicker({ lat, lng, onLocationSelect, className = '' }
 
   useEffect(() => {
     let mounted = true
-    loadGoogleMapsApi()
+    loadLongdoMap()
       .then(() => {
         if (!mounted) return
         setMapLoadError('')
@@ -21,8 +19,8 @@ export default function MapPicker({ lat, lng, onLocationSelect, className = '' }
       })
       .catch((error) => {
         if (!mounted) return
-        console.error('MapPicker: failed to load Google Maps API', error)
-        setMapLoadError('ไม่สามารถโหลด Google Maps ได้')
+        console.error('MapPicker: failed to load Longdo Map API', error)
+        setMapLoadError('ไม่สามารถโหลดแผนที่ได้')
       })
     return () => {
       mounted = false
@@ -31,118 +29,83 @@ export default function MapPicker({ lat, lng, onLocationSelect, className = '' }
 
   useEffect(() => {
     if (!isMapReady || !mapRef.current) return
-    let disposed = false
-    let mapClickListener = null
+    const longdo = window.longdo
 
-    const initMap = async () => {
-      const { AdvancedMarkerElement } = await window.google.maps.importLibrary('marker')
-      if (disposed || !mapRef.current) return
+    const initialLat = lat != null && lat !== '' ? Number(lat) : 13.7563
+    const initialLng = lng != null && lng !== '' ? Number(lng) : 100.5018
+    const hasInitial = lat != null && lat !== '' && lng != null && lng !== ''
 
-      const initialLat = lat != null && lat !== '' ? Number(lat) : 13.7563 // Bangkok default
-      const initialLng = lng != null && lng !== '' ? Number(lng) : 100.5018
+    const map = new longdo.Map({
+      placeholder: mapRef.current,
+      language: 'th',
+      lastView: false,
+      location: { lon: initialLng, lat: initialLat },
+      zoom: hasInitial ? 15 : 10,
+    })
+    mapInstanceRef.current = map
 
-      // Initialize map
-      const map = new window.google.maps.Map(mapRef.current, {
-        center: { lat: initialLat, lng: initialLng },
-        zoom: (lat != null && lat !== '' && lng != null && lng !== '') ? 15 : 10,
-        mapTypeControl: true,
-        streetViewControl: true,
-        fullscreenControl: true,
-        mapId: DEFAULT_MAP_ID,
-      })
-
-      mapInstanceRef.current = map
-
-      // Create marker if coordinates exist
-      const numLat = lat != null && lat !== '' ? Number(lat) : null
-      const numLng = lng != null && lng !== '' ? Number(lng) : null
-      if (numLat != null && numLng != null && !isNaN(numLat) && !isNaN(numLng)) {
-        const marker = new AdvancedMarkerElement({
-          position: { lat: numLat, lng: numLng },
-          map,
-          title: 'คลิกเพื่อย้ายตำแหน่ง',
-          gmpDraggable: true,
-        })
-        markerRef.current = marker
-
-        // Update coordinates when marker is dragged
-        marker.addListener('dragend', () => {
-          const position = marker.position
-          if (position && onLocationSelect) {
-            onLocationSelect({
-              lat: Number(position.lat),
-              lng: Number(position.lng),
-            })
-          }
-        })
+    const addOrUpdateMarker = (lon, lat) => {
+      if (markerRef.current) {
+        map.Overlays.remove(markerRef.current)
       }
-
-      // Add click listener to map
-      mapClickListener = map.addListener('click', (e) => {
-        const clickedLat = e.latLng.lat()
-        const clickedLng = e.latLng.lng()
-
-        // Remove existing marker
-        if (markerRef.current) {
-          markerRef.current.map = null
-        }
-
-        // Create new marker at clicked position
-        const marker = new AdvancedMarkerElement({
-          position: { lat: clickedLat, lng: clickedLng },
-          map,
+      const marker = new longdo.Marker(
+        { lon, lat },
+        {
           title: 'คลิกเพื่อย้ายตำแหน่ง',
-          gmpDraggable: true,
-        })
-        markerRef.current = marker
-
-        // Update coordinates
-        if (onLocationSelect) {
-          onLocationSelect({
-            lat: clickedLat,
-            lng: clickedLng,
-          })
+          draggable: true,
+          clickable: true,
         }
-
-        // Update marker position on drag
-        marker.addListener('dragend', () => {
-          const position = marker.position
-          if (position && onLocationSelect) {
-            onLocationSelect({
-              lat: Number(position.lat),
-              lng: Number(position.lng),
-            })
-          }
-        })
-      })
+      )
+      map.Overlays.add(marker)
+      markerRef.current = marker
     }
 
-    initMap().catch((error) => {
-      console.error('MapPicker: failed to initialize map', error)
-      setMapLoadError('ไม่สามารถเริ่มต้น Google Maps ได้')
-    })
+    const handleOverlayDrag = (overlay) => {
+      if (overlay !== markerRef.current) return
+      const loc = overlay.location()
+      if (loc && onLocationSelect) {
+        onLocationSelect({ lat: loc.lat, lng: loc.lon })
+      }
+    }
+
+    const handleMapClick = (point) => {
+      const loc = map.location(point)
+      if (!loc) return
+      addOrUpdateMarker(loc.lon, loc.lat)
+      if (onLocationSelect) {
+        onLocationSelect({ lat: loc.lat, lng: loc.lon })
+      }
+    }
+
+    map.Event.bind('overlayDrag', handleOverlayDrag)
+    map.Event.bind('click', handleMapClick)
+
+    if (hasInitial && !isNaN(initialLat) && !isNaN(initialLng)) {
+      addOrUpdateMarker(initialLng, initialLat)
+    }
 
     return () => {
-      disposed = true
-      if (mapClickListener) {
-        window.google.maps.event.removeListener(mapClickListener)
-      }
+      map.Event.unbind('overlayDrag', handleOverlayDrag)
+      map.Event.unbind('click', handleMapClick)
       if (markerRef.current) {
-        markerRef.current.map = null
+        map.Overlays.remove(markerRef.current)
+        markerRef.current = null
       }
+      map.Overlays.clear()
+      mapInstanceRef.current = null
     }
   }, [isMapReady, lat, lng, onLocationSelect])
 
-  // Update marker position when lat/lng changes externally
   useEffect(() => {
     if (!isMapReady || !mapInstanceRef.current || !markerRef.current) return
     const numLat = lat != null && lat !== '' ? Number(lat) : null
     const numLng = lng != null && lng !== '' ? Number(lng) : null
-    if (numLat != null && numLng != null && !isNaN(numLat) && !isNaN(numLng)) {
-      const newPosition = { lat: numLat, lng: numLng }
-      markerRef.current.position = newPosition
-      mapInstanceRef.current.setCenter(newPosition)
+    if (numLat == null || numLng == null || isNaN(numLat) || isNaN(numLng)) return
+    const marker = markerRef.current
+    if (marker && marker.move) {
+      marker.move({ lon: numLng, lat: numLat }, false)
     }
+    mapInstanceRef.current.location({ lon: numLng, lat: numLat }, false)
   }, [lat, lng, isMapReady])
 
   if (mapLoadError) {

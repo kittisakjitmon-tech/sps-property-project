@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { useNavigate, useLocation } from 'react-router-dom'
 import { useAdminAuth } from '../context/AdminAuthContext'
+import { getAuthErrorMessage } from '../lib/authErrorMessages'
 import { LogIn } from 'lucide-react'
 
 export default function Login() {
@@ -21,7 +22,7 @@ export default function Login() {
       await login(email, password)
       navigate(from, { replace: true })
     } catch (err) {
-      setError(err?.message?.includes('auth/') ? 'อีเมลหรือรหัสผ่านไม่ถูกต้อง' : 'เกิดข้อผิดพลาด กรุณาลองใหม่')
+      setError(getAuthErrorMessage(err))
     } finally {
       setSubmitting(false)
     }
