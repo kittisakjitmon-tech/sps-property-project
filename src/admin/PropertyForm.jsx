@@ -20,6 +20,7 @@ import { generateAutoTags, mergeTags } from '../lib/autoTags'
 import { ImagePlus, X, ArrowLeft, RefreshCw, Plus, Star } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import GoogleMapsInputWithPreview from '../components/GoogleMapsInputWithPreview'
+import PropertyExporter from './components/PropertyExporter'
 import { PROPERTY_TYPES, getPropertyLabel } from '../constants/propertyTypes'
 
 // CATEGORIES removed, using PROPERTY_TYPES from constants
@@ -1021,8 +1022,17 @@ export default function PropertyForm() {
 
           {/* Images */}
           <div className="bg-white rounded-xl border border-slate-200 p-6">
-            <label className="block text-sm font-medium text-slate-700 mb-3">รูปภาพทรัพย์</label>
-            <p className="text-xs text-slate-500 mb-3">คลิกที่ไอคอน ⭐ เพื่อตั้งเป็นภาพหน้าปก</p>
+            <div className="flex flex-wrap items-center justify-between gap-4 mb-3">
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">รูปภาพทรัพย์</label>
+                <p className="text-xs text-slate-500">คลิกที่ไอคอน ⭐ เพื่อตั้งเป็นภาพหน้าปก</p>
+              </div>
+              {/* ปุ่มดาวน์โหลด ZIP รวมรูปภาพและ Text */}
+              {isEdit && (
+                <PropertyExporter property={form} />
+              )}
+            </div>
+
             <div className="flex flex-wrap gap-3 mb-4">
               {form.images.map((url, i) => {
                 const isCoverImage = form.coverImageUrl === url || (!form.coverImageUrl && i === 0)
