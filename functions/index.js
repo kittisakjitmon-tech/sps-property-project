@@ -584,3 +584,107 @@ exports.dynamicMeta = functions
       }
     }
   })
+
+/**
+ * ==================== AI BLOG AUTOMATION ====================
+ * ระบบสร้างบทความอัตโนมัติด้วย Google Vertex AI
+ * ทำงานทุกวัน เวลา 08:00 น. (เวลาไทย)
+ */
+const { VertexAI } = require('@google-cloud/vertexai')
+
+// หัวข้อที่ต้องการให้ AI สุ่มเขียน
+const BLOG_TOPICS = [
+  'ข่าวสารการกู้เงินซื้อบ้านในไทย อัปเดตดอกเบี้ยและนโยบายรัฐ',
+  'เทคนิคการเลือกซื้อบ้านและคอนโดสำหรับมือใหม่',
+  'สิ่งที่ควรรู้ก่อนกู้ซื้อบ้าน การเตรียมเอกสารและการเดินบัญชี',
+  'ไอเดียการแต่งบ้านสไตล์มินิมอลและโมเดิร์นที่ประหยัดงบ',
+  'เทรนด์อสังหาริมทรัพย์ไทยในปีนี้ พื้นที่ไหนน่าลงทุน',
+  'ความรู้เรื่องกฎหมายบ้านและที่ดินที่เจ้าของบ้านควรรู้'
+]
+
+exports.scheduledDailyBlog = functions
+  .runWith({
+    timeoutSeconds: 300,
+    memory: '512MB',
+  })
+  .pubsub.schedule('0 8 * * *')
+  .timeZone('Asia/Bangkok')
+  .onRun(async (context) => {
+    try {
+      // 1. Initialize Vertex AI (Singapore region)
+      const projectId = admin.app().options.projectId || 'sps-property'
+      const vertex_ai = new VertexAI({ project: projectId, location: 'asia-southeast1' })
+      const model = vertex_ai.getGenerativeModel({ model: 'gemini-1.5-flash-001' })
+
+      const topic = BLOG_TOPICS[Math.floor(Math.random() * BLOG_TOPICS.length)]
+      const prompt = `คุณเป็นนักเขียนบล็อกอสังหาริมทรัพย์มืออาชีพในประเทศไทย เขียนบทความคุณภาพสูงเกี่ยวกับ: ${topic} 
+        ต้องส่งกลับมาเป็นรูปแบบ JSON เท่านั้น: { "title": "...", "content": "...", "summary": "..." } 
+        ห้ามมีข้อความอื่นปนเด็ดขาด`
+
+      const resp = await model.generateContent({
+        contents: [{ role: 'user', parts: [{ text: prompt }] }],
+      })
+
+      const resultText = resp.response.candidates[0].content.parts[0].text
+      const blogData = JSON.parse(resultText.replace(/```json/g, '').replace(/```/g, '').trim())
+
+      const db = admin.firestore()
+      const newBlog = {
+        ...blogData,
+        published: true,
+        isFeatured: false,
+        images: [],
+        createdAt: admin.firestore.FieldValue.serverTimestamp(),
+        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+        author: 'AI Assistant (Vertex)',
+        topic: topic
+      }
+
+      const docRef = await db.collection('blogs').add(newBlog)
+      functions.logger.info(`สร้างบทความ AI สำเร็จ: ${docRef.id}`)
+      return null
+    } catch (error) {
+      functions.logger.error('การสร้างบทความ AI ล้มเหลว (Vertex)', error)
+      return null
+    }
+  })
+
+/**
+ * ฟังก์ชันสำหรับทดสอบสร้าง Blog ทันที (รันผ่าน HTTP) - Vertex AI version
+ */
+exports.manualTestAIBlog = functions
+  .runWith({
+    timeoutSeconds: 300,
+    memory: '512MB',
+  })
+  .https.onRequest(async (req, res) => {
+    try {
+      const projectId = admin.app().options.projectId || 'sps-property'
+      const vertex_ai = new VertexAI({ project: projectId, location: 'asia-southeast1' })
+      const model = vertex_ai.getGenerativeModel({ model: 'gemini-1.5-flash-001' })
+      
+      const topic = BLOG_TOPICS[Math.floor(Math.random() * BLOG_TOPICS.length)]
+      const prompt = `เขียนบทความอสังหาฯ ไทยเกี่ยวกับ: ${topic} ในรูปแบบ JSON {title, content, summary} ห้ามมีข้อความอื่น`
+
+      const resp = await model.generateContent({
+        contents: [{ role: 'user', parts: [{ text: prompt }] }],
+      })
+
+      let resultText = resp.response.candidates[0].content.parts[0].text
+      resultText = resultText.replace(/```json/g, '').replace(/```/g, '').trim()
+      const blogData = JSON.parse(resultText)
+
+      const db = admin.firestore()
+      await db.collection('blogs').add({
+        ...blogData,
+        published: true,
+        createdAt: admin.firestore.FieldValue.serverTimestamp(),
+        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+        author: 'AI Tester (Vertex)'
+      })
+
+      res.status(200).send(`✅ สำเร็จผ่าน Vertex AI! ระบบคุยกับ AI ได้แล้วโดยไม่ต้องใช้ API Key`)
+    } catch (error) {
+      res.status(500).send(`❌ ล้มเหลว (Vertex AI): ${error.message}`)
+    }
+  })
