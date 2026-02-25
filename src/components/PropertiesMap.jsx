@@ -60,6 +60,14 @@ export default function PropertiesMap({ properties, className = '' }) {
       lat: Number(p.lat),
     }))
 
+    // เมื่อแตะ/คลิกมุด → ไปหน้ารายละเอียดทันที (รองรับมือถือ)
+    const unbindOverlayClick = map.Event?.bind?.('overlayClick', (overlay) => {
+      const entry = markersRef.current.find((e) => e.marker === overlay)
+      if (entry?.propertyId) {
+        window.location.href = `/properties/${entry.propertyId}`
+      }
+    })
+
     propertiesWithCoords.forEach((property) => {
       if (disposed) return
       const lon = Number(property.lng)
@@ -68,8 +76,10 @@ export default function PropertiesMap({ properties, className = '' }) {
       const locationText = property.location
         ? `${property.location.district || ''}, ${property.location.province || ''}`.trim()
         : ''
+      const detailUrl = `/properties/${property.id}`
+      // ปุ่มใหญ่ ง่ายต่อการแตะบนมือถือ: min-height 44px, touch-action: manipulation
       const infoContent = `
-        <div style="min-width: 200px; padding: 8px;">
+        <div style="min-width: 200px; padding: 10px;">
           <h3 style="margin: 0 0 8px 0; font-size: 16px; font-weight: bold; color: #1e3a8a;">
             ${(property.title || 'ทรัพย์สิน').replace(/</g, '&lt;')}
           </h3>
@@ -78,7 +88,7 @@ export default function PropertiesMap({ properties, className = '' }) {
           </p>
           ${locationText ? `<p style="margin: 4px 0; font-size: 14px; color: #64748b;">📍 ${locationText}</p>` : ''}
           ${property.bedrooms ? `<p style="margin: 4px 0; font-size: 14px; color: #64748b;">🛏️ ${property.bedrooms} ห้องนอน</p>` : ''}
-          <a href="/properties/${property.id}" style="display: inline-block; margin-top: 8px; padding: 6px 12px; background: #fbbf24; color: #78350f; text-decoration: none; border-radius: 4px; font-weight: 600; font-size: 14px;">
+          <a href="${detailUrl}" style="display: block; margin-top: 12px; padding: 12px 16px; min-height: 44px; box-sizing: border-box; background: #fbbf24; color: #78350f; text-decoration: none; border-radius: 8px; font-weight: 600; font-size: 15px; text-align: center; touch-action: manipulation; -webkit-tap-highlight-color: transparent;">
             ดูรายละเอียด →
           </a>
         </div>
@@ -93,7 +103,7 @@ export default function PropertiesMap({ properties, className = '' }) {
         }
       )
       map.Overlays.add(marker)
-      markersRef.current.push(marker)
+      markersRef.current.push({ marker, propertyId: property.id })
     })
 
     if (locationList.length > 0 && longdo.Util && longdo.Util.locationBound) {
@@ -111,6 +121,7 @@ export default function PropertiesMap({ properties, className = '' }) {
 
     return () => {
       disposed = true
+      if (typeof unbindOverlayClick === 'function') unbindOverlayClick()
       if (mapInstanceRef.current && mapInstanceRef.current.Overlays) {
         mapInstanceRef.current.Overlays.clear()
       }

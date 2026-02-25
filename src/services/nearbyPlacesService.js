@@ -19,6 +19,21 @@ const CATEGORY_META = {
   education: { label: 'การศึกษา', tags: ['school', 'university', 'college'] },
 }
 
+/** Cache ในหน่วยความจำ (TTL 5 นาที) ลดการอ่าน Firestore / เรียก Longdo POI ซ้ำใน session เดียวกัน */
+const MEMORY_CACHE_TTL_MS = 5 * 60 * 1000
+const memoryCache = new Map()
+
+function getCachedNearby(propertyId) {
+  const entry = propertyId ? memoryCache.get(propertyId) : null
+  if (!entry || Date.now() > entry.expiresAt) return null
+  return entry.places
+}
+
+function setCachedNearby(propertyId, places) {
+  if (!propertyId) return
+  memoryCache.set(propertyId, { places, expiresAt: Date.now() + MEMORY_CACHE_TTL_MS })
+}
+
 /** Haversine – ระยะเส้นตรง (กม.) */
 export function haversineDistance(lat1, lng1, lat2, lng2) {
   const R = 6371
@@ -125,7 +140,12 @@ export async function fetchAndCacheNearbyPlaces(property, options = {}) {
     return []
   }
   if (!forceRefresh && Array.isArray(property.nearbyPlaces) && property.nearbyPlaces.length > 0) {
+    if (property.id) setCachedNearby(property.id, property.nearbyPlaces)
     return property.nearbyPlaces
+  }
+  if (!forceRefresh && property.id) {
+    const cached = getCachedNearby(property.id)
+    if (cached) return cached
   }
 
   const { lat, lng } = coords
@@ -147,6 +167,7 @@ export async function fetchAndCacheNearbyPlaces(property, options = {}) {
   const formatted = formatOutputByCategory(candidatesByCategory)
 
   if (property.id) {
+    setCachedNearby(property.id, formatted)
     try {
       await updatePropertyById(property.id, {
         nearbyPlaces: formatted,

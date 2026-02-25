@@ -6,8 +6,11 @@ export default function MapPicker({ lat, lng, onLocationSelect, className = '' }
   const mapRef = useRef(null)
   const mapInstanceRef = useRef(null)
   const markerRef = useRef(null)
+  const onLocationSelectRef = useRef(onLocationSelect)
   const [isMapReady, setIsMapReady] = useState(false)
   const [mapLoadError, setMapLoadError] = useState('')
+
+  onLocationSelectRef.current = onLocationSelect
 
   useEffect(() => {
     let mounted = true
@@ -63,8 +66,8 @@ export default function MapPicker({ lat, lng, onLocationSelect, className = '' }
     const handleOverlayDrag = (overlay) => {
       if (overlay !== markerRef.current) return
       const loc = overlay.location()
-      if (loc && onLocationSelect) {
-        onLocationSelect({ lat: loc.lat, lng: loc.lon })
+      if (loc && onLocationSelectRef.current) {
+        onLocationSelectRef.current({ lat: loc.lat, lng: loc.lon })
       }
     }
 
@@ -72,8 +75,8 @@ export default function MapPicker({ lat, lng, onLocationSelect, className = '' }
       const loc = map.location(point)
       if (!loc) return
       addOrUpdateMarker(loc.lon, loc.lat)
-      if (onLocationSelect) {
-        onLocationSelect({ lat: loc.lat, lng: loc.lon })
+      if (onLocationSelectRef.current) {
+        onLocationSelectRef.current({ lat: loc.lat, lng: loc.lon })
       }
     }
 
@@ -94,19 +97,27 @@ export default function MapPicker({ lat, lng, onLocationSelect, className = '' }
       map.Overlays.clear()
       mapInstanceRef.current = null
     }
-  }, [isMapReady, lat, lng, onLocationSelect])
+  }, [isMapReady])
 
+  // อัปเดตเฉพาะตำแหน่งหมุดและมุมมองเมื่อ lat/lng เปลี่ยน (ไม่สร้างแผนที่ใหม่ – ลดการโหลด tile ซ้ำ)
   useEffect(() => {
-    if (!isMapReady || !mapInstanceRef.current || !markerRef.current) return
+    if (!isMapReady || !mapInstanceRef.current) return
     const numLat = lat != null && lat !== '' ? Number(lat) : null
     const numLng = lng != null && lng !== '' ? Number(lng) : null
     if (numLat == null || numLng == null || isNaN(numLat) || isNaN(numLng)) return
-    const marker = markerRef.current
-    if (marker && marker.move) {
-      marker.move({ lon: numLng, lat: numLat }, false)
+    const map = mapInstanceRef.current
+    const longdo = window.longdo
+    if (markerRef.current) {
+      map.Overlays.remove(markerRef.current)
     }
-    mapInstanceRef.current.location({ lon: numLng, lat: numLat }, false)
-  }, [lat, lng, isMapReady])
+    const marker = new longdo.Marker(
+      { lon: numLng, lat: numLat },
+      { title: 'คลิกเพื่อย้ายตำแหน่ง', draggable: true, clickable: true }
+    )
+    map.Overlays.add(marker)
+    markerRef.current = marker
+    map.location({ lon: numLng, lat: numLat }, false)
+  }, [isMapReady, lat, lng])
 
   if (mapLoadError) {
     return (

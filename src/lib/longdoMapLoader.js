@@ -1,5 +1,11 @@
 /**
- * Longdo Map loader – โหลดสคริปต์ครั้งเดียวและ cache Promise เพื่อลดการเรียกใช้
+ * Longdo Map loader – โหลดสคริปต์ครั้งเดียวและ cache เพื่อลดค่าใช้จ่าย
+ *
+ * Cache ที่ทำอยู่:
+ * - โหลดสคริปต์จาก api.longdo.com แค่ครั้งเดียวต่อ session (longdoLoadingPromise)
+ * - ถ้า window.longdo มีอยู่แล้ว (เช่น กลับมาเปิดแผนที่อีก) ไม่โหลดซ้ำ
+ * - ไม่ใส่ query cache-bust ให้ browser ใช้ HTTP cache ตาม URL ได้
+ *
  * ใช้กับ PropertiesMap และ MapPicker
  */
 
