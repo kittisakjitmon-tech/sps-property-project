@@ -686,6 +686,41 @@ export function getActivitiesSnapshot(callback, limitCount = 20) {
   })
 }
 
+/** Property Views - บันทึกการเข้าชมหน้ารายละเอียดทรัพย์ (แบบ A: 1 doc ต่อ 1 view) */
+const PROPERTY_VIEWS = 'property_views'
+const VIEWS_DAYS_LIMIT = 30
+
+export async function recordPropertyView({ propertyId, type }) {
+  if (!propertyId) return
+  const now = new Date()
+  const date = now.toISOString().slice(0, 10)
+  await addDoc(collection(db, PROPERTY_VIEWS), {
+    propertyId,
+    type: type || 'อื่นๆ',
+    date,
+    timestamp: serverTimestamp(),
+  })
+}
+
+/** ดึง property_views ย้อนหลัง VIEWS_DAYS_LIMIT วัน สำหรับ Dashboard (realtime) */
+export function getPropertyViewsSnapshot(callback) {
+  const q = query(
+    collection(db, PROPERTY_VIEWS),
+    orderBy('timestamp', 'desc'),
+    limit(5000)
+  )
+  return onSnapshot(q, (snap) => {
+    const list = snap.docs.map((d) => ({ id: d.id, ...d.data() }))
+    const cutoff = new Date()
+    cutoff.setDate(cutoff.getDate() - VIEWS_DAYS_LIMIT)
+    const filtered = list.filter((v) => {
+      const ts = v.timestamp?.toMillis?.()
+      return ts && ts >= cutoff.getTime()
+    })
+    callback(filtered)
+  })
+}
+
 export async function createAuditLog(data) {
   await addDoc(collection(db, AUDIT_LOGS), {
     ...data,

@@ -3,7 +3,7 @@ import { useParams, Link, useSearchParams, useNavigate } from 'react-router-dom'
 import { Helmet } from 'react-helmet-async'
 import { MapPin, Bed, Bath, Maximize2, Phone, MessageCircle, Share2, CheckCircle2, Copy } from 'lucide-react'
 import NeighborhoodData from '../components/NeighborhoodData'
-import { getPropertyByIdOnce, createAppointment, createOrReuseShareLink } from '../lib/firestore'
+import { getPropertyByIdOnce, createAppointment, createOrReuseShareLink, recordPropertyView } from '../lib/firestore'
 import PageLayout from '../components/PageLayout'
 import Toast from '../components/Toast'
 import ProtectedImageContainer from '../components/ProtectedImageContainer'
@@ -486,7 +486,10 @@ export default function PropertyDetail() {
   useEffect(() => {
     let cancelled = false
     getPropertyByIdOnce(id).then((p) => {
-      if (!cancelled) setProperty(p)
+      if (!cancelled) {
+        setProperty(p)
+        if (p?.id) recordPropertyView({ propertyId: p.id, type: p.type }).catch(() => {})
+      }
     }).finally(() => { if (!cancelled) setLoading(false) })
     return () => { cancelled = true }
   }, [id])

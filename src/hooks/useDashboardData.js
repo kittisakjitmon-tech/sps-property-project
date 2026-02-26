@@ -9,6 +9,7 @@ import {
   getViewingRequestsSnapshot,
   getActivitiesSnapshot,
   getPendingPropertiesSnapshot,
+  getPropertyViewsSnapshot,
 } from '../lib/firestore'
 import { getPropertyLabel } from '../constants/propertyTypes'
 
@@ -52,51 +53,61 @@ function mergeContacts(leads, viewingRequests) {
 }
 
 /**
- * สร้างข้อมูลกราฟ Leads 7 วันย้อนหลัง
+ * สร้างข้อมูลกราฟการเข้าชม 7 วันย้อนหลัง (จาก property_views)
  */
-function buildLeadsChartData(contacts) {
+function buildViewsByDay(views) {
   const now = new Date()
   const days = []
   for (let i = CHART_DAYS - 1; i >= 0; i--) {
     const d = new Date(now)
     d.setDate(d.getDate() - i)
     d.setHours(0, 0, 0, 0)
-    const next = new Date(d)
-    next.setDate(next.getDate() + 1)
-    const count = (contacts || []).filter((c) => {
-      const ts = c.createdAt?.toMillis?.()
-      if (!ts) return false
-      const created = new Date(ts)
-      return created >= d && created < next
+    const dateStr = d.toISOString().slice(0, 10)
+    const count = (views || []).filter((v) => {
+      const vDate = v.date || (v.timestamp?.toMillis?.() ? new Date(v.timestamp.toMillis()).toISOString().slice(0, 10) : '')
+      return vDate === dateStr
     }).length
     days.push({
       name: DAY_NAMES[d.getDay()],
-      leads: count,
-      date: d.toISOString().slice(0, 10),
+      views: count,
+      date: dateStr,
     })
   }
   return days
 }
 
 /**
- * สร้างข้อมูล Pie Chart ตาม type ของทรัพย์สิน
- * ใช้ getPropertyLabel เพื่อแสดงชื่อชนิดทรัพย์ (คอนโด, บ้านเดี่ยว 1 ชั้น ฯลฯ) แทน type id
+ * สร้างข้อมูล Bar + ตาราง: ประเภททรัพย์ | จำนวนประกาศ | จำนวนการเข้าชม
+ * รวม type จาก properties และ views
  */
-function buildPropertyTypeData(properties) {
-  const colors = ['#1e3a8a', '#3b82f6', '#60a5fa', '#93c5fd', '#bfdbfe']
+function buildPropertyTypeDataWithViews(properties, views) {
   const countByType = {}
   ;(properties || []).forEach((p) => {
     const t = p.type || 'อื่นๆ'
-    countByType[t] = (countByType[t] || 0) + 1
+    countByType[t] = { count: (countByType[t]?.count || 0) + 1, views: countByType[t]?.views || 0 }
   })
-  const entries = Object.entries(countByType)
-    .map(([typeKey, value], i) => ({
+  const viewsByType = {}
+  ;(views || []).forEach((v) => {
+    const t = v.type || 'อื่นๆ'
+    viewsByType[t] = (viewsByType[t] || 0) + 1
+  })
+  Object.keys(viewsByType).forEach((t) => {
+    if (!countByType[t]) countByType[t] = { count: 0, views: 0 }
+    countByType[t].views = viewsByType[t]
+  })
+  Object.keys(countByType).forEach((t) => {
+    if (countByType[t].views === undefined) countByType[t].views = 0
+  })
+  const colors = ['#1e3a8a', '#3b82f6', '#60a5fa', '#93c5fd', '#bfdbfe']
+  return Object.entries(countByType)
+    .map(([typeKey, { count, views }], i) => ({
+      typeKey,
       name: getPropertyLabel(typeKey) || typeKey,
-      value,
+      count,
+      views: views || 0,
       color: colors[i % colors.length],
     }))
-    .sort((a, b) => b.value - a.value)
-  return entries
+    .sort((a, b) => b.count - a.count)
 }
 
 export function useDashboardData() {
@@ -105,6 +116,7 @@ export function useDashboardData() {
   const [viewingRequests, setViewingRequests] = useState([])
   const [activities, setActivities] = useState([])
   const [pendingProperties, setPendingProperties] = useState([])
+  const [views, setViews] = useState([])
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
@@ -126,6 +138,9 @@ export function useDashboardData() {
     const unsubPending = getPendingPropertiesSnapshot((list) => {
       if (mounted) setPendingProperties(list)
     })
+    const unsubViews = getPropertyViewsSnapshot((list) => {
+      if (mounted) setViews(list)
+    })
 
     // ใช้ timeout สั้นเพื่อให้ snapshot ครั้งแรกโหลดเสร็จก่อนปิด loading
     const timer = setTimeout(() => {
@@ -143,6 +158,7 @@ export function useDashboardData() {
       unsubV()
       unsubA()
       unsubPending()
+      unsubViews()
     }
   }, [])
 
@@ -166,8 +182,11 @@ export function useDashboardData() {
     return { totalProperties, totalAssetValue, activeLeads, closedThisMonth }
   }, [properties, contacts])
 
-  const leadsChartData = useMemo(() => buildLeadsChartData(contacts), [contacts])
-  const propertyTypeData = useMemo(() => buildPropertyTypeData(properties), [properties])
+  const viewsByDay = useMemo(() => buildViewsByDay(views), [views])
+  const propertyTypeDataWithViews = useMemo(
+    () => buildPropertyTypeDataWithViews(properties, views),
+    [properties, views]
+  )
   const recentLeads = useMemo(() => contacts.slice(0, DASHBOARD_LEADS_LIMIT), [contacts])
   const recentActivities = useMemo(() => activities.slice(0, DASHBOARD_ACTIVITY_LIMIT), [activities])
 
@@ -178,8 +197,8 @@ export function useDashboardData() {
     activities,
     pendingProperties,
     stats,
-    leadsChartData,
-    propertyTypeData,
+    viewsByDay,
+    propertyTypeDataWithViews,
     recentLeads,
     recentActivities,
   }

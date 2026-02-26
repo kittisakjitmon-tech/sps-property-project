@@ -14,14 +14,13 @@ import {
 import {
   AreaChart,
   Area,
+  BarChart,
+  Bar,
   XAxis,
   YAxis,
   CartesianGrid,
   Tooltip,
   ResponsiveContainer,
-  PieChart,
-  Pie,
-  Cell,
   Legend,
 } from 'recharts'
 import { useDashboardData } from '../hooks/useDashboardData'
@@ -106,7 +105,7 @@ function DashboardSkeleton() {
         <div className="bg-white rounded-xl border border-gray-100 p-6 h-[380px]">
           <div className="h-5 w-36 bg-slate-200 rounded mb-2" />
           <div className="h-4 w-28 bg-slate-100 rounded mb-6" />
-          <div className="h-64 bg-slate-100 rounded-full mx-auto max-w-[200px]" />
+          <div className="h-64 bg-slate-100 rounded" />
         </div>
       </div>
 
@@ -153,8 +152,8 @@ export default function Dashboard() {
   const {
     loading,
     stats,
-    leadsChartData,
-    propertyTypeData,
+    viewsByDay,
+    propertyTypeDataWithViews,
     recentLeads,
     recentActivities,
     pendingProperties,
@@ -398,19 +397,19 @@ export default function Dashboard() {
         </Link>
       )}
 
-      {/* Row 2: Analytics Section */}
+      {/* Row 2: การเข้าชมเว็บ (รายวัน) */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Leads Chart - 7 วันย้อนหลัง */}
+        {/* การเข้าชมหน้ารายละเอียดทรัพย์ - 7 วันย้อนหลัง */}
         <div className="lg:col-span-2 bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
           <div className="px-6 py-4 border-b border-gray-100">
-            <h2 className="text-lg font-bold text-blue-900">Leads Overview</h2>
-            <p className="text-sm text-slate-600 mt-0.5">จำนวนคนติดต่อ 7 วันย้อนหลัง</p>
+            <h2 className="text-lg font-bold text-blue-900">การเข้าชมเว็บ</h2>
+            <p className="text-sm text-slate-600 mt-0.5">จำนวนการเข้าชมหน้ารายละเอียดทรัพย์ 7 วันย้อนหลัง</p>
           </div>
           <div className="p-4 h-[340px]">
             <ResponsiveContainer width="100%" height="100%">
-              <AreaChart data={leadsChartData}>
+              <AreaChart data={viewsByDay}>
                 <defs>
-                  <linearGradient id="colorLeads" x1="0" y1="0" x2="0" y2="1">
+                  <linearGradient id="colorViews" x1="0" y1="0" x2="0" y2="1">
                     <stop offset="5%" stopColor="#1e3a8a" stopOpacity={0.5} />
                     <stop offset="95%" stopColor="#1e3a8a" stopOpacity={0} />
                   </linearGradient>
@@ -420,48 +419,63 @@ export default function Dashboard() {
                 <YAxis stroke="#64748b" fontSize={12} tickLine={false} axisLine={false} />
                 <Tooltip
                   contentStyle={{ borderRadius: '12px', border: '1px solid #e2e8f0' }}
-                  formatter={(value) => [value.toLocaleString('th-TH'), 'จำนวน Lead']}
+                  formatter={(value) => [value.toLocaleString('th-TH'), 'จำนวนการเข้าชม']}
                   labelFormatter={(label) => `วัน${label}`}
                 />
-                <Area type="monotone" dataKey="leads" stroke="#1e3a8a" strokeWidth={2} fill="url(#colorLeads)" name="Leads" />
+                <Area type="monotone" dataKey="views" stroke="#1e3a8a" strokeWidth={2} fill="url(#colorViews)" name="การเข้าชม" />
               </AreaChart>
             </ResponsiveContainer>
           </div>
         </div>
 
-        {/* Property Distribution */}
-        <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
+        {/* Property Distribution: Bar + ตาราง */}
+        <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden flex flex-col">
           <div className="px-6 py-4 border-b border-gray-100">
             <h2 className="text-lg font-bold text-blue-900">Property Distribution</h2>
-            <p className="text-sm text-slate-600 mt-0.5">สัดส่วนประเภททรัพย์</p>
+            <p className="text-sm text-slate-600 mt-0.5">ประเภททรัพย์ vs จำนวนประกาศ และการเข้าชม</p>
           </div>
-          <div className="p-4 h-[340px]">
-            {propertyTypeData.length > 0 ? (
-              <ResponsiveContainer width="100%" height="100%">
-                <PieChart>
-                  <Pie
-                    data={propertyTypeData}
-                    cx="50%"
-                    cy="45%"
-                    innerRadius={60}
-                    outerRadius={100}
-                    paddingAngle={2}
-                    dataKey="value"
-                  >
-                    {propertyTypeData.map((entry, index) => (
-                      <Cell key={`cell-${index}`} fill={entry.color} />
-                    ))}
-                  </Pie>
-                  <Tooltip formatter={(value) => [`${value} รายการ`, '']} />
-                  <Legend
-                    verticalAlign="bottom"
-                    height={36}
-                    formatter={(value) => <span className="text-sm text-slate-700">{value}</span>}
-                  />
-                </PieChart>
-              </ResponsiveContainer>
+          <div className="p-4 flex-1 min-h-0 flex flex-col gap-4">
+            {propertyTypeDataWithViews.length > 0 ? (
+              <>
+                <div className="h-[200px] shrink-0">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <BarChart data={propertyTypeDataWithViews} layout="vertical" margin={{ left: 0, right: 12 }}>
+                      <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" horizontal={false} />
+                      <XAxis type="number" stroke="#64748b" fontSize={11} tickLine={false} allowDecimals={false} />
+                      <YAxis type="category" dataKey="name" stroke="#64748b" fontSize={11} tickLine={false} width={90} />
+                      <Tooltip
+                        contentStyle={{ borderRadius: '12px', border: '1px solid #e2e8f0' }}
+                        formatter={(value, name) => [value.toLocaleString('th-TH'), name === 'count' ? 'จำนวนประกาศ' : 'จำนวนการเข้าชม']}
+                        labelFormatter={(label) => label}
+                      />
+                      <Bar dataKey="count" name="จำนวนประกาศ" fill="#1e3a8a" radius={[0, 4, 4, 0]} />
+                      <Bar dataKey="views" name="จำนวนการเข้าชม" fill="#3b82f6" radius={[0, 4, 4, 0]} />
+                    </BarChart>
+                  </ResponsiveContainer>
+                </div>
+                <div className="border-t border-gray-100 pt-3 overflow-auto flex-1 min-h-0">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="text-left text-xs font-medium text-slate-600 uppercase tracking-wider">
+                        <th className="py-2 pr-2">ประเภททรัพย์</th>
+                        <th className="py-2 text-right whitespace-nowrap">จำนวนประกาศ</th>
+                        <th className="py-2 text-right whitespace-nowrap">การเข้าชม</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-50">
+                      {propertyTypeDataWithViews.map((row, i) => (
+                        <tr key={row.typeKey || i} className="text-slate-700">
+                          <td className="py-2 pr-2 font-medium">{row.name}</td>
+                          <td className="py-2 text-right">{row.count.toLocaleString('th-TH')}</td>
+                          <td className="py-2 text-right">{row.views.toLocaleString('th-TH')}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </>
             ) : (
-              <div className="h-full flex items-center justify-center text-slate-500">
+              <div className="flex-1 flex items-center justify-center text-slate-500 text-sm">
                 ยังไม่มีข้อมูลทรัพย์สิน
               </div>
             )}
