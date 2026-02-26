@@ -103,7 +103,7 @@ export default function BlogDetail() {
       <Helmet>
         <title>{title}</title>
         <meta name="description" content={description} />
-        <link rel="canonical" href={`https://spspropertysolutions.com/blogs/${blog.id}`} />
+        <link rel="canonical" href={`https://spspropertysolution.com/blogs/${blog.id}`} />
       </Helmet>
       <PageLayout>
         <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-12">

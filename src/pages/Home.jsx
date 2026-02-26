@@ -190,15 +190,15 @@ export default function Home() {
       <Helmet>
         <title>SPS Property Solution | บ้านคอนโดสวย อมตะซิตี้ ชลบุรี</title>
         <meta name="description" content="SPS Property Solution บ้านคอนโดสวย อมตะซิตี้ ชลบุรี - ค้นหาบ้านและคอนโดที่ใช่สำหรับคุณในอมตะซิตี้ ชลบุรี" />
-        <link rel="canonical" href="https://spspropertysolutions.com/" />
+        <link rel="canonical" href="https://spspropertysolution.com/" />
         <script type="application/ld+json">
           {JSON.stringify({
             "@context": "https://schema.org",
             "@type": "RealEstateAgent",
             "name": "SPS Property Solution",
-            "image": "https://spspropertysolutions.com/icon.png",
+            "image": "https://spspropertysolution.com/icon.png",
             "description": "SPS Property Solution ให้บริการรับฝาก ซื้อ-ขาย-เช่า-จำนอง-ขายฝาก อสังหาริมทรัพย์ทุกประเภทในเขตพื้นที่ ชลบุรี ฉะเชิงเทรา ระยอง ปทุมธานี กทม.",
-            "url": "https://spspropertysolutions.com",
+            "url": "https://spspropertysolution.com",
             "telephone": "0955520801",
             "address": {
               "@type": "PostalAddress",

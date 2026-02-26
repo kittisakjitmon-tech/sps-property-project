@@ -61,7 +61,7 @@
    - ต้องเปิด **Email/Password** (และถ้าใช้อยู่ต้องเปิด “Email link” ถ้ามีใช้) ใน Authentication → Sign-in method
 
 3. **Authorized domains**
-   - ใน Firebase Console → Authentication → Settings → Authorized domains ต้องมีโดเมนที่รันแอป (เช่น `localhost`, `sps-property.web.app`)
+   - ใน Firebase Console → Authentication → Settings → Authorized domains ต้องมีโดเมนที่รันแอป (เช่น `localhost`, `spspropertysolution.com`)
 
 4. **บัญชีที่เป็น Agent (เฉพาะหลังบ้าน)**
    - ใน `AdminAuthContext.jsx` ถ้า user มี `role === 'agent'` จะถูก **signOut ทันที** และไม่ให้เข้า admin  

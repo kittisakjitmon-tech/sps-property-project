@@ -94,7 +94,7 @@ export default function Blogs() {
       <Helmet>
         <title>บทความอสังหาริมทรัพย์และบ้าน | SPS Property Solution</title>
         <meta name="description" content="อ่านบทความและสาระน่ารู้เกี่ยวกับอสังหาริมทรัพย์ บ้าน ทาวน์โฮม คอนโด การกู้สินเชื่อ และเคล็ดลับการลงทุนจาก SPS Property Solution" />
-        <link rel="canonical" href="https://spspropertysolutions.com/blogs" />
+        <link rel="canonical" href="https://spspropertysolution.com/blogs" />
       </Helmet>
       <PageLayout>
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">

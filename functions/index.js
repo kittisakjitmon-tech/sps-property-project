@@ -418,7 +418,7 @@ exports.sitemap = functions
       let sitemap = '<?xml version="1.0" encoding="UTF-8"?>\n'
       sitemap += '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n'
 
-      const baseUrl = 'https://spspropertysolutions.com'
+      const baseUrl = 'https://spspropertysolution.com'
 
       // 1. หน้า Static หลักๆ
       const staticPages = [
@@ -528,8 +528,8 @@ exports.dynamicMeta = functions
         const property = docSnap.data()
         const title = `${property.title || 'อสังหาริมทรัพย์'} | SPS Property Solution`
         const description = property.description ? property.description.substring(0, 150) + '...' : 'รายละเอียดอสังหาริมทรัพย์ SPS Property Solution ชลบุรี'
-        const imageUrl = property.images && property.images.length > 0 ? property.images[0] : 'https://spspropertysolutions.com/icon.png'
-        const url = `https://spspropertysolutions.com/properties/${propertyId}`
+        const imageUrl = property.images && property.images.length > 0 ? property.images[0] : 'https://spspropertysolution.com/icon.png'
+        const url = `https://spspropertysolution.com/properties/${propertyId}`
 
         // Return a basic HTML structure with only the meta tags bots care about
         const htmlContent = `
@@ -573,7 +573,7 @@ exports.dynamicMeta = functions
       // Fetch index.html from the current hosting origin (root path),
       // which is rewritten to /index.html by Firebase Hosting (no infinite loop).
       try {
-        const origin = req.headers.host ? `https://${req.headers.host}` : 'https://sps-property.web.app'
+        const origin = req.headers.host ? `https://${req.headers.host}` : 'https://spspropertysolution.com'
         const response = await fetch(`${origin}/`)
         const html = await response.text()
         res.set('Cache-Control', 'public, max-age=300, s-maxage=600')

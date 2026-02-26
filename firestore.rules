@@ -143,6 +143,12 @@ service cloud.firestore {
       allow read: if isAdmin();
       allow update, delete: if isSuperAdmin();
     }
+    // property_views: บันทึกการเข้าชมหน้ารายละเอียดทรัพย์ (สร้างได้ทุกคน), อ่านได้เฉพาะ Admin (Dashboard)
+    match /property_views/{id} {
+      allow create: if true;
+      allow read: if isAdmin();
+      allow update, delete: if false;
+    }
     // system_settings: อ่านได้ทุกคน, เขียนได้เฉพาะ Super Admin
     match /system_settings/{id} {
       allow read: if true;

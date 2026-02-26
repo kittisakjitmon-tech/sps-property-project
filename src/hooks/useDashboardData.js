@@ -19,6 +19,8 @@ const CHART_DAYS = 7
 
 /** วันในสัปดาห์ (ไทย) */
 const DAY_NAMES = ['อา.', 'จ.', 'อ.', 'พ.', 'พฤ.', 'ศ.', 'ส.']
+const MONTH_NAMES = ['ม.ค.', 'ก.พ.', 'มี.ค.', 'เม.ย.', 'พ.ค.', 'มิ.ย.', 'ก.ค.', 'ส.ค.', 'ก.ย.', 'ต.ค.', 'พ.ย.', 'ธ.ค.']
+const TOP_VIEWS_LIMIT = 10
 
 /**
  * ผสาน leads + viewing_requests เป็น contacts  unified
@@ -52,28 +54,106 @@ function mergeContacts(leads, viewingRequests) {
   return merged
 }
 
-/**
- * สร้างข้อมูลกราฟการเข้าชม 7 วันย้อนหลัง (จาก property_views)
- */
-function buildViewsByDay(views) {
+/** ได้ timestamp (ms) จาก view doc */
+function getViewTime(v) {
+  const ts = v.timestamp?.toMillis?.()
+  if (ts) return ts
+  if (v.date) return new Date(v.date).getTime()
+  return 0
+}
+
+/** กรอง views ตามช่วงเวลา */
+function filterViewsByRange(views, rangeKey) {
+  if (!views || views.length === 0) return []
   const now = new Date()
-  const days = []
-  for (let i = CHART_DAYS - 1; i >= 0; i--) {
-    const d = new Date(now)
-    d.setDate(d.getDate() - i)
-    d.setHours(0, 0, 0, 0)
-    const dateStr = d.toISOString().slice(0, 10)
-    const count = (views || []).filter((v) => {
-      const vDate = v.date || (v.timestamp?.toMillis?.() ? new Date(v.timestamp.toMillis()).toISOString().slice(0, 10) : '')
-      return vDate === dateStr
-    }).length
-    days.push({
-      name: DAY_NAMES[d.getDay()],
-      views: count,
-      date: dateStr,
-    })
+  const cutoff = new Date(now)
+  if (rangeKey === '7d') cutoff.setDate(now.getDate() - 7)
+  else if (rangeKey === '30d') cutoff.setDate(now.getDate() - 30)
+  else if (rangeKey === '6m') cutoff.setMonth(now.getMonth() - 6)
+  else if (rangeKey === '1y') cutoff.setFullYear(now.getFullYear() - 1)
+  const cutoffTime = cutoff.getTime()
+  return views.filter((v) => getViewTime(v) >= cutoffTime)
+}
+
+/**
+ * สร้างข้อมูลกราฟการเข้าชม ตาม range: 7d/30d = รายวัน, 6m/1y = รายเดือน
+ */
+function buildViewsChartData(views, rangeKey) {
+  const filtered = filterViewsByRange(views, rangeKey)
+  const now = new Date()
+
+  if (rangeKey === '7d' || rangeKey === '30d') {
+    const days = rangeKey === '7d' ? 7 : 30
+    const result = []
+    for (let i = days - 1; i >= 0; i--) {
+      const d = new Date(now)
+      d.setDate(d.getDate() - i)
+      d.setHours(0, 0, 0, 0)
+      const dateStr = d.toISOString().slice(0, 10)
+      const count = filtered.filter((v) => {
+        const vDate = v.date || (getViewTime(v) ? new Date(getViewTime(v)).toISOString().slice(0, 10) : '')
+        return vDate === dateStr
+      }).length
+      result.push({
+        name: rangeKey === '7d' ? DAY_NAMES[d.getDay()] : `${d.getDate()}/${d.getMonth() + 1}`,
+        views: count,
+        date: dateStr,
+      })
+    }
+    return result
   }
-  return days
+
+  if (rangeKey === '6m' || rangeKey === '1y') {
+    const months = rangeKey === '6m' ? 6 : 12
+    const result = []
+    for (let i = months - 1; i >= 0; i--) {
+      const d = new Date(now.getFullYear(), now.getMonth() - i, 1)
+      const year = d.getFullYear()
+      const month = d.getMonth()
+      const count = filtered.filter((v) => {
+        const t = getViewTime(v)
+        if (!t) return false
+        const vd = new Date(t)
+        return vd.getFullYear() === year && vd.getMonth() === month
+      }).length
+      result.push({
+        name: `${MONTH_NAMES[month]} ${String(year).slice(-2)}`,
+        views: count,
+        year,
+        month,
+      })
+    }
+    return result
+  }
+
+  return []
+}
+
+/** Top N ทรัพย์ที่มีการเข้าชมสูงสุด (จาก views ที่กรองแล้ว) */
+function buildTopPropertiesByViews(views, properties, limit = TOP_VIEWS_LIMIT) {
+  const countByProperty = {}
+  ;(views || []).forEach((v) => {
+    const id = v.propertyId || 'unknown'
+    countByProperty[id] = (countByProperty[id] || 0) + 1
+  })
+  const metaById = {}
+  ;(properties || []).forEach((p) => {
+    metaById[p.id] = {
+      title: p.title || '(ไม่ระบุชื่อ)',
+      typeLabel: getPropertyLabel(p.type) || p.type || 'อื่นๆ',
+      province: (p.location && p.location.province) || '',
+    }
+  })
+  return Object.entries(countByProperty)
+    .map(([propertyId, viewsCount]) => ({
+      propertyId,
+      views: viewsCount,
+      title: (metaById[propertyId] && metaById[propertyId].title) || propertyId,
+      typeLabel: (metaById[propertyId] && metaById[propertyId].typeLabel) || '-',
+      province: (metaById[propertyId] && metaById[propertyId].province) || '-',
+    }))
+    .sort((a, b) => b.views - a.views)
+    .slice(0, limit)
 }
 
 /**
@@ -110,7 +190,7 @@ function buildPropertyTypeDataWithViews(properties, views) {
     .sort((a, b) => b.count - a.count)
 }
 
-export function useDashboardData() {
+export function useDashboardData(viewRange = '7d') {
   const [properties, setProperties] = useState([])
   const [leads, setLeads] = useState([])
   const [viewingRequests, setViewingRequests] = useState([])
@@ -182,7 +262,12 @@ export function useDashboardData() {
     return { totalProperties, totalAssetValue, activeLeads, closedThisMonth }
   }, [properties, contacts])
 
-  const viewsByDay = useMemo(() => buildViewsByDay(views), [views])
+  const filteredViews = useMemo(() => filterViewsByRange(views, viewRange), [views, viewRange])
+  const viewsChartData = useMemo(() => buildViewsChartData(views, viewRange), [views, viewRange])
+  const topPropertiesByViews = useMemo(
+    () => buildTopPropertiesByViews(filteredViews, properties, TOP_VIEWS_LIMIT),
+    [filteredViews, properties]
+  )
   const propertyTypeDataWithViews = useMemo(
     () => buildPropertyTypeDataWithViews(properties, views),
     [properties, views]
@@ -197,7 +282,8 @@ export function useDashboardData() {
     activities,
     pendingProperties,
     stats,
-    viewsByDay,
+    viewsChartData,
+    topPropertiesByViews,
     propertyTypeDataWithViews,
     recentLeads,
     recentActivities,

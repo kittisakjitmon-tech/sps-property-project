@@ -587,7 +587,7 @@ export default function PropertyDetail() {
       <Helmet>
         <title>{title}</title>
         <meta name="description" content={description} />
-        <link rel="canonical" href={`https://spspropertysolutions.com/properties/${property.id}`} />
+        <link rel="canonical" href={`https://spspropertysolution.com/properties/${property.id}`} />
         <script type="application/ld+json">
           {JSON.stringify({
             '@context': 'https://schema.org',

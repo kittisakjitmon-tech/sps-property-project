@@ -149,15 +149,17 @@ function DashboardSkeleton() {
 
 // ─── Main Dashboard ────────────────────────────────────────────────────────
 export default function Dashboard() {
+  const [viewRange, setViewRange] = useState('7d')
   const {
     loading,
     stats,
-    viewsByDay,
+    viewsChartData,
+    topPropertiesByViews,
     propertyTypeDataWithViews,
     recentLeads,
     recentActivities,
     pendingProperties,
-  } = useDashboardData()
+  } = useDashboardData(viewRange)
 
   const [migrating, setMigrating] = useState(false)
   const [migrationDone, setMigrationDone] = useState(false)
@@ -397,17 +399,40 @@ export default function Dashboard() {
         </Link>
       )}
 
-      {/* Row 2: การเข้าชมเว็บ (รายวัน) */}
+      {/* Row 2: การเข้าชมเว็บ (กราฟ + filter + Top 10) */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* การเข้าชมหน้ารายละเอียดทรัพย์ - 7 วันย้อนหลัง */}
+        {/* การเข้าชมหน้ารายละเอียดทรัพย์ */}
         <div className="lg:col-span-2 bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
-          <div className="px-6 py-4 border-b border-gray-100">
-            <h2 className="text-lg font-bold text-blue-900">การเข้าชมเว็บ</h2>
-            <p className="text-sm text-slate-600 mt-0.5">จำนวนการเข้าชมหน้ารายละเอียดทรัพย์ 7 วันย้อนหลัง</p>
+          <div className="px-6 py-4 border-b border-gray-100 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+            <div>
+              <h2 className="text-lg font-bold text-blue-900">การเข้าชมเว็บ</h2>
+              <p className="text-sm text-slate-600 mt-0.5">จำนวนการเข้าชมหน้ารายละเอียดทรัพย์</p>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              {[
+                { key: '7d', label: '7 วัน' },
+                { key: '30d', label: '30 วัน' },
+                { key: '6m', label: '6 เดือน' },
+                { key: '1y', label: '1 ปี' },
+              ].map(({ key, label }) => (
+                <button
+                  key={key}
+                  type="button"
+                  onClick={() => setViewRange(key)}
+                  className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
+                    viewRange === key
+                      ? 'bg-blue-900 text-white'
+                      : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                  }`}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
           </div>
           <div className="p-4 h-[340px]">
             <ResponsiveContainer width="100%" height="100%">
-              <AreaChart data={viewsByDay}>
+              <AreaChart data={viewsChartData}>
                 <defs>
                   <linearGradient id="colorViews" x1="0" y1="0" x2="0" y2="1">
                     <stop offset="5%" stopColor="#1e3a8a" stopOpacity={0.5} />
@@ -420,11 +445,53 @@ export default function Dashboard() {
                 <Tooltip
                   contentStyle={{ borderRadius: '12px', border: '1px solid #e2e8f0' }}
                   formatter={(value) => [value.toLocaleString('th-TH'), 'จำนวนการเข้าชม']}
-                  labelFormatter={(label) => `วัน${label}`}
+                  labelFormatter={(label) => String(label)}
                 />
                 <Area type="monotone" dataKey="views" stroke="#1e3a8a" strokeWidth={2} fill="url(#colorViews)" name="การเข้าชม" />
               </AreaChart>
             </ResponsiveContainer>
+          </div>
+          {/* ตาราง 10 อันดับทรัพย์ที่มีการเข้าชมสูงสุด */}
+          <div className="px-6 pb-4 border-t border-gray-100 pt-4">
+            <h3 className="text-sm font-semibold text-slate-700 mb-3">10 อันดับทรัพย์ที่มีการเข้าชมสูงสุด</h3>
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="text-left text-xs font-medium text-slate-600 uppercase tracking-wider">
+                    <th className="py-2 pr-2 w-10">#</th>
+                    <th className="py-2 pr-2">ชื่อทรัพย์</th>
+                    <th className="py-2 pr-2">ประเภท</th>
+                    <th className="py-2 text-right whitespace-nowrap">จำนวนการเข้าชม</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-50">
+                  {topPropertiesByViews.length > 0 ? (
+                    topPropertiesByViews.map((row, i) => (
+                      <tr key={row.propertyId} className="text-slate-700 hover:bg-slate-50/80">
+                        <td className="py-2 pr-2 font-medium text-slate-500">{i + 1}</td>
+                        <td className="py-2 pr-2">
+                          <Link
+                            to={`/sps-internal-admin/properties/${row.propertyId}`}
+                            className="font-medium text-blue-700 hover:underline truncate block max-w-[200px]"
+                            title={row.title}
+                          >
+                            {row.title}
+                          </Link>
+                        </td>
+                        <td className="py-2 pr-2 text-slate-600">{row.typeLabel}</td>
+                        <td className="py-2 text-right font-medium">{row.views.toLocaleString('th-TH')}</td>
+                      </tr>
+                    ))
+                  ) : (
+                    <tr>
+                      <td colSpan={4} className="py-4 text-center text-slate-500">
+                        ยังไม่มีข้อมูลการเข้าชมในช่วงนี้
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
           </div>
         </div>
 
