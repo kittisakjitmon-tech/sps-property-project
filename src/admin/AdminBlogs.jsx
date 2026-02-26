@@ -404,7 +404,7 @@ export default function AdminBlogs() {
                     <label className="flex items-center justify-center gap-2 px-4 py-3 border-2 border-dashed border-slate-300 rounded-lg cursor-pointer hover:border-blue-500 transition">
                       <ImagePlus className="h-5 w-5 text-slate-600" />
                       <span className="text-sm text-slate-600">
-                        {uploadingImages ? 'กำลังอัปโหลด...' : 'คลิกเพื่ออัปโหลดรูปภาพ'}
+                        {uploadingImages ? 'กำลังอัปโหลด…' : 'คลิกเพื่ออัปโหลดรูปภาพ'}
                       </span>
                       <input
                         type="file"

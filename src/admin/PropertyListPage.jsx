@@ -465,7 +465,7 @@ export default function PropertyListPage() {
   if (loading) {
     return (
       <div className="max-w-6xl mx-auto">
-        <p className="text-slate-600">กำลังโหลดข้อมูล...</p>
+        <p className="text-slate-600">กำลังโหลดข้อมูล…</p>
       </div>
     )
   }

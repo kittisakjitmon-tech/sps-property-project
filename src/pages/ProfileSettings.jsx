@@ -289,7 +289,7 @@ export default function ProfileSettings() {
     return (
       <PageLayout heroTitle="ตั้งค่าโปรไฟล์" heroSubtitle="" showHero={false}>
         <div className="min-h-[60vh] bg-slate-50 py-12 flex items-center justify-center">
-          <p className="text-slate-600">กำลังโหลดข้อมูล...</p>
+          <p className="text-slate-600">กำลังโหลดข้อมูล…</p>
         </div>
       </PageLayout>
     )
@@ -346,7 +346,7 @@ export default function ProfileSettings() {
                   <div>
                     <label className="inline-flex items-center gap-2 px-4 py-2 bg-blue-900 text-white rounded-lg hover:bg-blue-800 transition cursor-pointer">
                       <ImagePlus className="h-5 w-5" />
-                      {uploadingPhoto ? 'กำลังอัปโหลด...' : 'เลือกรูปภาพ'}
+                      {uploadingPhoto ? 'กำลังอัปโหลด…' : 'เลือกรูปภาพ'}
                       <input
                         type="file"
                         accept="image/*"
@@ -477,7 +477,7 @@ export default function ProfileSettings() {
                   className="inline-flex items-center gap-2 px-6 py-2 bg-blue-900 text-white rounded-lg hover:bg-blue-800 transition disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   <Save className="h-5 w-5" />
-                  {saving ? 'กำลังบันทึก...' : 'บันทึกข้อมูล'}
+                  {saving ? 'กำลังบันทึก…' : 'บันทึกข้อมูล'}
                 </button>
               </div>
             </form>
@@ -534,7 +534,7 @@ export default function ProfileSettings() {
                   className="inline-flex items-center gap-2 px-6 py-2 bg-blue-900 text-white rounded-lg hover:bg-blue-800 transition disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   <Lock className="h-5 w-5" />
-                  {changingPassword ? 'กำลังเปลี่ยนรหัสผ่าน...' : 'เปลี่ยนรหัสผ่าน'}
+                  {changingPassword ? 'กำลังเปลี่ยนรหัสผ่าน…' : 'เปลี่ยนรหัสผ่าน'}
                 </button>
               </div>
             </form>

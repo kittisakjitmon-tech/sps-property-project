@@ -97,7 +97,7 @@ export default function HomeSearch() {
           }}
           onKeyDown={handleKeyDown}
           placeholder="ค้นหาทำเล, ชื่อโครงการ..."
-          className="flex-1 min-w-0 text-sm sm:text-base md:text-lg py-2.5 sm:py-3 md:py-4 px-2 sm:px-3 border-none bg-transparent text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-0"
+          className="flex-1 min-w-0 text-sm sm:text-base md:text-lg py-2.5 sm:py-3 md:py-4 px-2 sm:px-3 border-none bg-transparent text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-900/20 focus:ring-inset"
         />
 
         {/* Search Button (Right) */}

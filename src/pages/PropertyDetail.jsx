@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useId } from 'react'
 import { useParams, Link, useSearchParams, useNavigate } from 'react-router-dom'
 import { Helmet } from 'react-helmet-async'
 import { MapPin, Bed, Bath, Maximize2, Phone, MessageCircle, Share2, CheckCircle2, Copy } from 'lucide-react'
@@ -177,17 +177,8 @@ function validatePhone(phone) {
 
 function LeadForm({ propertyId, propertyTitle, propertyPrice, isRental, onSuccess, onError }) {
   const { user, isAgent } = usePublicAuth()
-  // ถ้าไม่ได้ล็อกอิน ให้แสดง tab ลูกค้า, ถ้าล็อกอินแล้วให้แสดง tab Agent
-  const [activeTab, setActiveTab] = useState(user && isAgent() ? 'agent' : 'customer')
-
-  // อัปเดต activeTab เมื่อสถานะ login เปลี่ยน
-  useEffect(() => {
-    if (user && isAgent()) {
-      setActiveTab('agent')
-    } else {
-      setActiveTab('customer')
-    }
-  }, [user, isAgent])
+  const activeTab = (user && isAgent()) ? 'agent' : 'customer'
+  const baseId = useId()
 
   // Form fields for Customer tab
   const [customerName, setCustomerName] = useState('')
@@ -327,8 +318,9 @@ function LeadForm({ propertyId, propertyTitle, propertyPrice, isRental, onSucces
           <>
             {/* Customer Form Fields */}
             <div>
-              <label className="block text-sm font-medium text-slate-700 mb-1">ชื่อลูกค้า *</label>
+              <label htmlFor={`${baseId}-customerName`} className="block text-sm font-medium text-slate-700 mb-1">ชื่อลูกค้า *</label>
               <input
+                id={`${baseId}-customerName`}
                 type="text"
                 value={customerName}
                 onChange={(e) => { setCustomerName(e.target.value); setErrors((prev) => ({ ...prev, customerName: '' })) }}
@@ -338,8 +330,9 @@ function LeadForm({ propertyId, propertyTitle, propertyPrice, isRental, onSucces
               {errors.customerName && <p className="mt-1 text-xs text-amber-600">{errors.customerName}</p>}
             </div>
             <div>
-              <label className="block text-sm font-medium text-slate-700 mb-1">เบอร์โทร *</label>
+              <label htmlFor={`${baseId}-customerPhone`} className="block text-sm font-medium text-slate-700 mb-1">เบอร์โทร *</label>
               <input
+                id={`${baseId}-customerPhone`}
                 type="tel"
                 value={customerPhone}
                 onChange={(e) => { setCustomerPhone(e.target.value); setErrors((prev) => ({ ...prev, customerPhone: '' })) }}
@@ -349,8 +342,9 @@ function LeadForm({ propertyId, propertyTitle, propertyPrice, isRental, onSucces
               {errors.customerPhone && <p className="mt-1 text-xs text-amber-600">{errors.customerPhone}</p>}
             </div>
             <div>
-              <label className="block text-sm font-medium text-slate-700 mb-1">วันที่เข้าชม *</label>
+              <label htmlFor={`${baseId}-visitDate`} className="block text-sm font-medium text-slate-700 mb-1">วันที่เข้าชม *</label>
               <input
+                id={`${baseId}-visitDate`}
                 type="date"
                 value={visitDate}
                 onChange={(e) => { setVisitDate(e.target.value); setErrors((prev) => ({ ...prev, visitDate: '' })) }}
@@ -360,8 +354,9 @@ function LeadForm({ propertyId, propertyTitle, propertyPrice, isRental, onSucces
               {errors.visitDate && <p className="mt-1 text-xs text-amber-600">{errors.visitDate}</p>}
             </div>
             <div>
-              <label className="block text-sm font-medium text-slate-700 mb-1">เวลา *</label>
+              <label htmlFor={`${baseId}-visitTime`} className="block text-sm font-medium text-slate-700 mb-1">เวลา *</label>
               <input
+                id={`${baseId}-visitTime`}
                 type="time"
                 value={visitTime}
                 onChange={(e) => { setVisitTime(e.target.value); setErrors((prev) => ({ ...prev, visitTime: '' })) }}
@@ -370,8 +365,9 @@ function LeadForm({ propertyId, propertyTitle, propertyPrice, isRental, onSucces
               {errors.visitTime && <p className="mt-1 text-xs text-amber-600">{errors.visitTime}</p>}
             </div>
             <div>
-              <label className="block text-sm font-medium text-slate-700 mb-1">รหัสทรัพย์</label>
+              <label htmlFor={`${baseId}-propertyId`} className="block text-sm font-medium text-slate-700 mb-1">รหัสทรัพย์</label>
               <input
+                id={`${baseId}-propertyId`}
                 type="text"
                 value={propertyId || ''}
                 readOnly
@@ -383,8 +379,9 @@ function LeadForm({ propertyId, propertyTitle, propertyPrice, isRental, onSucces
           <>
             {/* Agent Form Fields */}
             <div>
-              <label className="block text-sm font-medium text-slate-700 mb-1">ชื่อลูกค้า *</label>
+              <label htmlFor={`${baseId}-agentCustomerName`} className="block text-sm font-medium text-slate-700 mb-1">ชื่อลูกค้า *</label>
               <input
+                id={`${baseId}-agentCustomerName`}
                 type="text"
                 value={agentCustomerName}
                 onChange={(e) => { setAgentCustomerName(e.target.value); setErrors((prev) => ({ ...prev, agentCustomerName: '' })) }}
@@ -394,8 +391,9 @@ function LeadForm({ propertyId, propertyTitle, propertyPrice, isRental, onSucces
               {errors.agentCustomerName && <p className="mt-1 text-xs text-amber-600">{errors.agentCustomerName}</p>}
             </div>
             <div>
-              <label className="block text-sm font-medium text-slate-700 mb-1">ชื่อเอเจ้นท์ที่ดูแล *</label>
+              <label htmlFor={`${baseId}-agentName`} className="block text-sm font-medium text-slate-700 mb-1">ชื่อเอเจ้นท์ที่ดูแล *</label>
               <input
+                id={`${baseId}-agentName`}
                 type="text"
                 value={agentName}
                 onChange={(e) => { setAgentName(e.target.value); setErrors((prev) => ({ ...prev, agentName: '' })) }}
@@ -405,8 +403,9 @@ function LeadForm({ propertyId, propertyTitle, propertyPrice, isRental, onSucces
               {errors.agentName && <p className="mt-1 text-xs text-amber-600">{errors.agentName}</p>}
             </div>
             <div>
-              <label className="block text-sm font-medium text-slate-700 mb-1">เบอร์โทรเอเจ้นท์ *</label>
+              <label htmlFor={`${baseId}-agentPhone`} className="block text-sm font-medium text-slate-700 mb-1">เบอร์โทรเอเจ้นท์ *</label>
               <input
+                id={`${baseId}-agentPhone`}
                 type="tel"
                 value={agentPhone}
                 onChange={(e) => { setAgentPhone(e.target.value); setErrors((prev) => ({ ...prev, agentPhone: '' })) }}
@@ -416,8 +415,9 @@ function LeadForm({ propertyId, propertyTitle, propertyPrice, isRental, onSucces
               {errors.agentPhone && <p className="mt-1 text-xs text-amber-600">{errors.agentPhone}</p>}
             </div>
             <div>
-              <label className="block text-sm font-medium text-slate-700 mb-1">วันที่เข้าชม *</label>
+              <label htmlFor={`${baseId}-agentVisitDate`} className="block text-sm font-medium text-slate-700 mb-1">วันที่เข้าชม *</label>
               <input
+                id={`${baseId}-agentVisitDate`}
                 type="date"
                 value={agentVisitDate}
                 onChange={(e) => { setAgentVisitDate(e.target.value); setErrors((prev) => ({ ...prev, agentVisitDate: '' })) }}
@@ -427,8 +427,9 @@ function LeadForm({ propertyId, propertyTitle, propertyPrice, isRental, onSucces
               {errors.agentVisitDate && <p className="mt-1 text-xs text-amber-600">{errors.agentVisitDate}</p>}
             </div>
             <div>
-              <label className="block text-sm font-medium text-slate-700 mb-1">เวลา *</label>
+              <label htmlFor={`${baseId}-agentVisitTime`} className="block text-sm font-medium text-slate-700 mb-1">เวลา *</label>
               <input
+                id={`${baseId}-agentVisitTime`}
                 type="time"
                 value={agentVisitTime}
                 onChange={(e) => { setAgentVisitTime(e.target.value); setErrors((prev) => ({ ...prev, agentVisitTime: '' })) }}
@@ -437,8 +438,9 @@ function LeadForm({ propertyId, propertyTitle, propertyPrice, isRental, onSucces
               {errors.agentVisitTime && <p className="mt-1 text-xs text-amber-600">{errors.agentVisitTime}</p>}
             </div>
             <div>
-              <label className="block text-sm font-medium text-slate-700 mb-1">รหัสทรัพย์</label>
+              <label htmlFor={`${baseId}-agentPropertyId`} className="block text-sm font-medium text-slate-700 mb-1">รหัสทรัพย์</label>
               <input
+                id={`${baseId}-agentPropertyId`}
                 type="text"
                 value={propertyId || ''}
                 readOnly
@@ -456,7 +458,7 @@ function LeadForm({ propertyId, propertyTitle, propertyPrice, isRental, onSucces
           {isLoading ? (
             <>
               <span className="inline-block w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-              กำลังส่งข้อมูล...
+              กำลังส่งข้อมูล…
             </>
           ) : (
             'ส่งคำขอนัดเยี่ยมชม'
@@ -492,7 +494,7 @@ export default function PropertyDetail() {
   if (loading) {
     return (
       <div className="min-h-screen bg-slate-50 flex items-center justify-center">
-        <p className="text-slate-600">กำลังโหลด...</p>
+        <p className="text-slate-600">กำลังโหลด…</p>
       </div>
     )
   }
@@ -935,7 +937,6 @@ export default function PropertyDetail() {
                       propertyPrice={property.price}
                       isRental={property.isRental}
                       onSuccess={() => {
-                        image.png
                         setToastMessage('ส่งข้อมูลสำเร็จ เจ้าหน้าที่จะติดต่อกลับ')
                         setShowToast(true)
                         setTimeout(() => setShowToast(false), 3000)

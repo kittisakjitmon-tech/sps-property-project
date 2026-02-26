@@ -126,7 +126,7 @@ export default function Navbar() {
           <Link to="/" className="flex items-center gap-2 shrink-0 min-w-0">
           <div className="flex items-center gap-3">
             {/* ส่วนของรูปภาพโลโก้ */}
-            <img src={logo} alt="SPS Logo" className="h-10 w-auto" />
+            <img src={logo} alt="SPS Logo" width={100} height={40} className="h-10 w-auto" />
 
             {/* ส่วนของข้อความที่จัดเรียงใหม่ */}
             <div className="flex flex-col leading-tight min-w-0">

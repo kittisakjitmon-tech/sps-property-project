@@ -370,7 +370,7 @@ export default function HeroSlidesAdmin() {
                 <p className="text-sm font-medium text-slate-700 mb-2">ตัวอย่างรูปภาพ</p>
                 <div className="relative inline-block max-w-2xl">
                   <div className="relative aspect-video rounded-lg overflow-hidden border-2 border-slate-200 shadow-lg">
-                    <img src={preview} alt="Preview" className="w-full h-full object-cover" />
+                    <img src={preview} alt="Preview" width={640} height={360} className="w-full h-full object-cover" />
                     <button
                       type="button"
                       onClick={() => {
@@ -406,12 +406,12 @@ export default function HeroSlidesAdmin() {
                     {uploading ? (
                       <>
                         <span className="inline-block w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                        กำลังอัปโหลด...
+                        กำลังอัปโหลด…
                       </>
                     ) : compressing ? (
                       <>
                         <span className="inline-block w-4 h-4 border-2 border-blue-900 border-t-transparent rounded-full animate-spin" />
-                        กำลังบีบอัด...
+                        กำลังบีบอัด…
                       </>
                     ) : (
                       <>

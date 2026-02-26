@@ -192,7 +192,7 @@ export default function ImageUploader16x9({
               <div className="absolute inset-0 bg-black/50 flex items-center justify-center">
                 <div className="text-white text-sm font-medium flex items-center gap-2">
                   <span className="inline-block w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                  กำลังประมวลผล...
+                  กำลังประมวลผล…
                 </div>
               </div>
             )}
@@ -226,7 +226,7 @@ export default function ImageUploader16x9({
             {uploading && (
               <div className="mt-3 flex items-center justify-center gap-2 text-sm text-slate-600">
                 <span className="inline-block w-4 h-4 border-2 border-blue-900 border-t-transparent rounded-full animate-spin" />
-                กำลังประมวลผล...
+                กำลังประมวลผล…
               </div>
             )}
           </div>

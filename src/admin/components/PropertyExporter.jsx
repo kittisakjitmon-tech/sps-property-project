@@ -142,7 +142,7 @@ export default function PropertyExporter({ property }) {
             ) : (
                 <Download className="h-4 w-4" />
             )}
-            {isExporting ? 'กำลังเตรียมไฟล์...' : 'โหลด ZIP นำไปแชร์'}
+            {isExporting ? 'กำลังเตรียมไฟล์…' : 'โหลด ZIP นำไปแชร์'}
         </button>
     )
 }

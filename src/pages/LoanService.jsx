@@ -396,7 +396,7 @@ export default function LoanService() {
                   disabled={isSubmitting}
                   className="w-full py-4 rounded-xl bg-blue-900 hover:bg-blue-800 text-white font-bold text-lg transition-all disabled:opacity-70 disabled:cursor-not-allowed"
                 >
-                  {isSubmitting ? 'กำลังส่ง...' : 'ส่งข้อมูลรับคำปรึกษา'}
+                  {isSubmitting ? 'กำลังส่ง…' : 'ส่งข้อมูลรับคำปรึกษา'}
                 </button>
               </form>
             </div>

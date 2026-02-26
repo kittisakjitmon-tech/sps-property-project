@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useId } from 'react'
 import { useNavigate, useLocation } from 'react-router-dom'
 import { useAdminAuth } from '../context/AdminAuthContext'
 import { getAuthErrorMessage } from '../lib/authErrorMessages'
@@ -13,6 +13,8 @@ export default function Login() {
   const navigate = useNavigate()
   const location = useLocation()
   const from = location.state?.from?.pathname ?? '/sps-internal-admin'
+  const idEmail = useId()
+  const idPassword = useId()
 
   const handleSubmit = async (e) => {
     e.preventDefault()
@@ -38,8 +40,9 @@ export default function Login() {
             <div className="p-3 rounded-lg bg-red-50 text-red-700 text-sm">{error}</div>
           )}
           <div>
-            <label className="block text-sm font-medium text-slate-700 mb-1">อีเมล</label>
+            <label htmlFor={idEmail} className="block text-sm font-medium text-slate-700 mb-1">อีเมล</label>
             <input
+              id={idEmail}
               type="email"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
@@ -49,8 +52,9 @@ export default function Login() {
             />
           </div>
           <div>
-            <label className="block text-sm font-medium text-slate-700 mb-1">รหัสผ่าน</label>
+            <label htmlFor={idPassword} className="block text-sm font-medium text-slate-700 mb-1">รหัสผ่าน</label>
             <input
+              id={idPassword}
               type="password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
@@ -64,7 +68,7 @@ export default function Login() {
             className="w-full flex items-center justify-center gap-2 py-3 rounded-lg bg-yellow-400 text-yellow-900 font-semibold hover:bg-yellow-500 transition disabled:opacity-50"
           >
             <LogIn className="h-5 w-5" />
-            {submitting ? 'กำลังเข้าสู่ระบบ...' : 'เข้าสู่ระบบ'}
+            {submitting ? 'กำลังเข้าสู่ระบบ…' : 'เข้าสู่ระบบ'}
           </button>
         </form>
       </div>

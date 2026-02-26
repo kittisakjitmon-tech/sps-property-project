@@ -134,19 +134,6 @@ export default function Properties() {
     prevSearchParamsRef.current = currentParams
   }, [searchParams, navigate])
 
-  // Strict Focus Logic: หยุด animation เมื่อ focus, เริ่มใหม่เมื่อ blur และไม่มีค่า
-  // ใช้ useRef เพื่อป้องกัน re-render บ่อย
-  const prevSearchQueryRef = useRef(searchQuery)
-  useEffect(() => {
-    if (isSearchFocused) {
-      stopTyping()
-    } else if (!searchQuery.trim() && prevSearchQueryRef.current !== searchQuery) {
-      // เริ่ม animation เฉพาะเมื่อ searchQuery เปลี่ยนจากมีค่าเป็นไม่มีค่า
-      startTyping()
-    }
-    prevSearchQueryRef.current = searchQuery
-  }, [isSearchFocused, searchQuery, stopTyping, startTyping])
-
   // Normalize propertySubStatus: แปลง 'มือ1' หรือ 'มือ2' จาก URL เป็น 'มือ 1' หรือ 'มือ 2'
   const normalizeSubStatusFromURL = (status) => {
     if (!status) return ''
@@ -240,7 +227,8 @@ export default function Properties() {
 
   // State Update Only: onChange ทำหน้าที่เพียงแค่อัปเดตค่า State
   const handleKeywordChange = (value) => {
-    setSearchQuery(value) // อัปเดต searchQuery เท่านั้น (ไม่ trigger การค้นหา)
+    setSearchQuery(value)
+    if (!value.trim()) startTyping()
   }
 
   // Button Action: ฟังก์ชันการกดปุ่มค้นหาหรือกด Enter
@@ -273,6 +261,7 @@ export default function Properties() {
   const handleClearSearch = () => {
     setSearchQuery('')
     setDebouncedKeyword('')
+    startTyping()
     // Update URL to remove both 'q' and 'search' parameters
     const params = new URLSearchParams(searchParams)
     params.delete('q')
@@ -453,7 +442,8 @@ export default function Properties() {
               <div className="relative flex-1">
                 <Search className="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-slate-400 pointer-events-none z-10" />
                 <input
-                  type="text"
+                  type="search"
+                  aria-label="ค้นหาทำเล รหัสทรัพย์ หรือคำสำคัญ"
                   value={searchQuery}
                   onChange={(e) => handleKeywordChange(e.target.value)}
                   onKeyDown={handleKeyDown}

@@ -135,7 +135,7 @@ export default function MapPicker({ lat, lng, onLocationSelect, className = '' }
       <div className={`bg-slate-100 rounded-lg flex items-center justify-center ${className}`} style={{ minHeight: '400px' }}>
         <div className="text-center">
           <MapPin className="h-8 w-8 text-slate-400 mx-auto mb-2" />
-          <p className="text-slate-600">กำลังโหลดแผนที่...</p>
+          <p className="text-slate-600">กำลังโหลดแผนที่…</p>
         </div>
       </div>
     )

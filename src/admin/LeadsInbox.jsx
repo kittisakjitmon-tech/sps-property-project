@@ -186,7 +186,7 @@ export default function LeadsInbox() {
       {/* Table */}
       <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
         {loading ? (
-          <div className="p-12 text-center text-slate-500">กำลังโหลด...</div>
+          <div className="p-12 text-center text-slate-500">กำลังโหลด…</div>
         ) : filteredAndSorted.length === 0 ? (
           <div className="p-12 text-center text-slate-500">ไม่พบนัดหมาย</div>
         ) : (

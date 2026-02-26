@@ -50,7 +50,7 @@ function RouteLoading() {
         <div className="absolute inset-0 rounded-full border-4 border-blue-100" />
         <div className="absolute inset-0 rounded-full border-4 border-blue-900 border-t-transparent animate-spin" />
       </div>
-      <p className="text-slate-500 text-sm font-medium">กำลังโหลด...</p>
+      <p className="text-slate-500 text-sm font-medium">กำลังโหลด…</p>
     </div>
   )
 }

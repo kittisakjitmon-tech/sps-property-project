@@ -372,7 +372,7 @@ export default function UserManagement() {
   if (loading) {
     return (
       <div className="max-w-6xl mx-auto">
-        <p className="text-slate-600">กำลังโหลดข้อมูล...</p>
+        <p className="text-slate-600">กำลังโหลดข้อมูล…</p>
       </div>
     )
   }
@@ -427,7 +427,7 @@ export default function UserManagement() {
                 className="px-6 py-2.5 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition font-semibold disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
               >
                 <Shield className="h-5 w-5" />
-                {changingRole === user.uid ? 'กำลังตั้งค่า...' : 'ตั้งค่าเป็น Super Admin'}
+                {changingRole === user.uid ? 'กำลังตั้งค่า…' : 'ตั้งค่าเป็น Super Admin'}
               </button>
             </div>
           </div>
@@ -607,7 +607,7 @@ export default function UserManagement() {
                         <option value="agent">Agent</option>
                       </select>
                       {changingRole === u.id && (
-                        <span className="ml-2 text-xs text-slate-500">กำลังอัปเดต...</span>
+                        <span className="ml-2 text-xs text-slate-500">กำลังอัปเดต…</span>
                       )}
                       {!hasSuperAdmin && u.id !== user?.uid && (
                         <span className="ml-2 text-xs text-yellow-600">รอตั้งค่า Super Admin ก่อน</span>

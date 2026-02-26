@@ -268,9 +268,11 @@ function PropertyCard({ property, featuredLabel = 'แนะนำ', searchQuery
 
             {/* Favorite Button */}
             <button
+              type="button"
               onClick={handleFavoriteClick}
-              className="p-2 bg-white/80 backdrop-blur-md rounded-full shadow-sm hover:bg-white/90 transition"
+              className="p-2 bg-white/80 backdrop-blur-md rounded-full shadow-sm hover:bg-white/90 transition min-w-[44px] min-h-[44px] [touch-action:manipulation]"
               title={favorited ? 'ลบออกจากรายการโปรด' : 'บันทึกเป็นรายการโปรด'}
+              aria-label={favorited ? 'ลบออกจากรายการโปรด' : 'บันทึกเป็นรายการโปรด'}
             >
 
               <Heart

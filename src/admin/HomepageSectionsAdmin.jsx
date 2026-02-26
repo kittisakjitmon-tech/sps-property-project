@@ -507,7 +507,7 @@ export default function HomepageSectionsAdmin() {
       )}
 
       {loading ? (
-        <p className="text-slate-600">กำลังโหลด...</p>
+        <p className="text-slate-600">กำลังโหลด…</p>
       ) : (
         <DndContext sensors={sensors} collisionDetection={closestCenter} onDragStart={() => setIsDragging(true)} onDragEnd={handleDragEnd}>
           <SortableContext items={sections.map((s) => s.id)} strategy={rectSortingStrategy}>

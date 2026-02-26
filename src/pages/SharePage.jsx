@@ -58,7 +58,7 @@ export default function SharePage() {
   if (loading) {
     return (
       <div className="min-h-screen bg-white flex items-center justify-center">
-        <p className="text-slate-600">กำลังโหลด...</p>
+        <p className="text-slate-600">กำลังโหลด…</p>
       </div>
     )
   }
@@ -187,7 +187,7 @@ export default function SharePage() {
                       onClick={() => setGalleryIndex(i)}
                       className={`shrink-0 w-20 h-14 rounded-lg overflow-hidden border-2 transition ${i === galleryIndex ? 'border-blue-900' : 'border-transparent'}`}
                     >
-                      <img src={img} alt="" className="w-full h-full object-cover protected-image" draggable={false} />
+                      <img src={img} alt="" width={80} height={56} className="w-full h-full object-cover protected-image" draggable={false} />
                     </button>
                   ))}
                 </div>

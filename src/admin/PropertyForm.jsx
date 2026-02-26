@@ -397,7 +397,7 @@ export default function PropertyForm() {
       return
     }
     setRefreshingNearby(true)
-    setNearbyStatusMessage('กำลังอัปเดตข้อมูลสถานที่สำคัญ...')
+    setNearbyStatusMessage('กำลังอัปเดตข้อมูลสถานที่สำคัญ…')
     try {
       const nearby = await fetchAndCacheNearbyPlaces(
         {
@@ -495,14 +495,14 @@ export default function PropertyForm() {
 
     try {
       // เริ่มแสดง Progress (Simulated 0% -> 70% สำหรับขั้นตอนบันทึกข้อมูล)
-      progressLoader.startLoading('กำลังบันทึกข้อมูล...', { simulated: true })
+      progressLoader.startLoading('กำลังบันทึกข้อมูล…', { simulated: true })
 
       if (isEdit) {
         if (totalNew > 0) {
-          progressLoader.setStatus('กำลังอัปโหลดรูปภาพ...', '')
+          progressLoader.setStatus('กำลังอัปโหลดรูปภาพ…', '')
           for (let i = 0; i < newFiles.length; i++) {
             const file = newFiles[i]
-            progressLoader.setStatus('กำลังอัปโหลดรูปภาพ...', `${i + 1}/${totalNew}`)
+            progressLoader.setStatus('กำลังอัปโหลดรูปภาพ…', `${i + 1}/${totalNew}`)
             const url = await uploadPropertyImageWithProgress(file, id, (p) => {
               const segment = 100 / totalNew
               const overall = 70 + (i * segment) + (p / 100) * segment
@@ -561,10 +561,10 @@ export default function PropertyForm() {
           createdBy: user?.uid || null,
         })
         if (totalNew > 0) {
-          progressLoader.setStatus('กำลังอัปโหลดรูปภาพ...', '')
+          progressLoader.setStatus('กำลังอัปโหลดรูปภาพ…', '')
           for (let i = 0; i < newFiles.length; i++) {
             const file = newFiles[i]
-            progressLoader.setStatus('กำลังอัปโหลดรูปภาพ...', `${i + 1}/${totalNew}`)
+            progressLoader.setStatus('กำลังอัปโหลดรูปภาพ…', `${i + 1}/${totalNew}`)
             const url = await uploadPropertyImageWithProgress(file, newId, (p) => {
               const segment = 100 / totalNew
               const overall = 70 + (i * segment) + (p / 100) * segment
@@ -624,7 +624,7 @@ export default function PropertyForm() {
   if (loading) {
     return (
       <div className="flex items-center justify-center py-12">
-        <p className="text-slate-600">กำลังโหลด...</p>
+        <p className="text-slate-600">กำลังโหลด…</p>
       </div>
     )
   }
@@ -1149,7 +1149,7 @@ export default function PropertyForm() {
             </div>
             <label className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-slate-100 text-slate-700 cursor-pointer hover:bg-slate-200 disabled:opacity-50 disabled:cursor-not-allowed">
               <ImagePlus className="h-5 w-5" />
-              {compressing ? 'กำลังบีบอัดรูปภาพ...' : 'เลือกไฟล์รูปจากเครื่อง'}
+              {compressing ? 'กำลังบีบอัดรูปภาพ…' : 'เลือกไฟล์รูปจากเครื่อง'}
               <input
                 type="file"
                 accept="image/*"
@@ -1160,7 +1160,7 @@ export default function PropertyForm() {
               />
             </label>
             {compressing && (
-              <p className="text-sm text-slate-500 mt-2">กำลังบีบอัดรูปภาพเพื่อลดขนาดไฟล์...</p>
+              <p className="text-sm text-slate-500 mt-2">กำลังบีบอัดรูปภาพเพื่อลดขนาดไฟล์…</p>
             )}
           </div>
 
@@ -1172,7 +1172,7 @@ export default function PropertyForm() {
               disabled={saving}
               className="px-6 py-3 rounded-lg bg-yellow-400 text-yellow-900 font-semibold hover:bg-yellow-500 disabled:opacity-50"
             >
-              {saving ? 'กำลังบันทึก...' : 'บันทึก'}
+              {saving ? 'กำลังบันทึก…' : 'บันทึก'}
             </button>
             <button
               type="button"

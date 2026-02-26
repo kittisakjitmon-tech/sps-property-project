@@ -250,7 +250,7 @@ export default function AdminLoanRequests() {
       {/* Table */}
       <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
         {loading ? (
-          <div className="p-12 text-center text-slate-500">กำลังโหลด...</div>
+          <div className="p-12 text-center text-slate-500">กำลังโหลด…</div>
         ) : filteredAndSorted.length === 0 ? (
           <div className="p-12 text-center text-slate-500">ไม่พบข้อมูล</div>
         ) : (
@@ -331,8 +331,9 @@ export default function AdminLoanRequests() {
                           <button
                             type="button"
                             onClick={() => setDetailModal(r)}
-                            className="p-2 rounded-lg hover:bg-slate-100 text-slate-600"
+                            className="p-2 rounded-lg hover:bg-slate-100 text-slate-600 min-w-[44px] min-h-[44px] [touch-action:manipulation]"
                             title="ดูรายละเอียด"
+                            aria-label="ดูรายละเอียด"
                           >
                             <Eye className="h-4 w-4" />
                           </button>
@@ -340,8 +341,9 @@ export default function AdminLoanRequests() {
                             type="button"
                             onClick={() => handleDelete(r.id)}
                             disabled={deletingId === r.id}
-                            className="p-2 rounded-lg hover:bg-red-50 text-red-600"
+                            className="p-2 rounded-lg hover:bg-red-50 text-red-600 min-w-[44px] min-h-[44px] [touch-action:manipulation]"
                             title="ลบ"
+                            aria-label="ลบคำขอนี้"
                           >
                             <Trash2 className="h-4 w-4" />
                           </button>
@@ -365,7 +367,8 @@ export default function AdminLoanRequests() {
               <button
                 type="button"
                 onClick={() => setDetailModal(null)}
-                className="p-2 rounded-lg hover:bg-slate-100"
+                className="p-2 rounded-lg hover:bg-slate-100 min-w-[44px] min-h-[44px] [touch-action:manipulation]"
+                aria-label="ปิด"
               >
                 <X className="h-5 w-5" />
               </button>

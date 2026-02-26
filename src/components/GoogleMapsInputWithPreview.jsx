@@ -133,7 +133,7 @@ export default function GoogleMapsInputWithPreview({ value, onChange, onCoordina
           {processing && (
             <p className="text-sm text-slate-500 mt-1.5 flex items-center gap-2">
               <span className="inline-block w-4 h-4 border-2 border-slate-300 border-t-blue-600 rounded-full animate-spin" />
-              กำลังตรวจสอบลิงก์...
+              กำลังตรวจสอบลิงก์…
             </p>
           )}
           {error && (

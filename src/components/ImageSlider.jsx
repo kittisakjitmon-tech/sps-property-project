@@ -51,7 +51,7 @@ export default function ImageSlider({
 
   if (imgs.length === 0) {
     const imgBlock = (
-      <img src={defaultImage} alt="" className="w-full h-full object-cover protected-image" draggable={false} />
+      <img src={defaultImage} alt="" width={400} height={300} className="w-full h-full object-cover protected-image" draggable={false} />
     )
     return (
       <div className={`relative aspect-[4/3] overflow-hidden bg-slate-200 ${className}`}>

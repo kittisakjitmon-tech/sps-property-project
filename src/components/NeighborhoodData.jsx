@@ -88,7 +88,7 @@ export default function NeighborhoodData({ property }) {
       {loading ? (
         <div className="flex flex-col items-center justify-center py-8 text-slate-500">
           <div className="w-8 h-8 border-2 border-slate-300 border-t-blue-600 rounded-full animate-spin mb-3" />
-          <p className="text-sm">กำลังค้นหาสถานที่ใกล้เคียง...</p>
+          <p className="text-sm">กำลังค้นหาสถานที่ใกล้เคียง…</p>
         </div>
       ) : error ? (
         <div className="py-6 text-center text-slate-500 text-sm">{error}</div>

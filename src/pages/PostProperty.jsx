@@ -729,7 +729,7 @@ export default function PostProperty() {
                         {submitting ? (
                           <>
                             <span className="inline-block w-4 h-4 border-2 border-yellow-900 border-t-transparent rounded-full animate-spin" />
-                            กำลังส่ง...
+                            กำลังส่ง…
                           </>
                         ) : (
                           <>

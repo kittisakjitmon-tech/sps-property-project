@@ -98,7 +98,7 @@ export default function Settings() {
   if (initialLoading) {
     return (
       <div className="max-w-5xl mx-auto">
-        <p className="text-slate-600">กำลังโหลดการตั้งค่า...</p>
+        <p className="text-slate-600">กำลังโหลดการตั้งค่า…</p>
       </div>
     )
   }
@@ -331,7 +331,7 @@ export default function Settings() {
             className="px-6 py-3 bg-blue-900 text-white rounded-lg hover:bg-blue-800 transition font-semibold disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
           >
             <Save className="h-5 w-5" />
-            {loading ? 'กำลังบันทึก...' : 'บันทึกการตั้งค่า'}
+            {loading ? 'กำลังบันทึก…' : 'บันทึกการตั้งค่า'}
           </button>
         </div>
       </div>

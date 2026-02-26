@@ -159,7 +159,7 @@ export default function AddMemberModal({ isOpen, onClose, onSuccess }) {
                 className="flex-1 px-4 py-3 rounded-xl bg-blue-900 text-white hover:bg-blue-800 transition font-semibold disabled:opacity-60 disabled:cursor-not-allowed inline-flex items-center justify-center gap-2"
               >
                 {saving && <span className="inline-block w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />}
-                {saving ? 'กำลังเพิ่มสมาชิก...' : 'เพิ่มสมาชิก'}
+                {saving ? 'กำลังเพิ่มสมาชิก…' : 'เพิ่มสมาชิก'}
               </button>
             </div>
           </form>

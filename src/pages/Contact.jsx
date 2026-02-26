@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useId } from 'react'
 import { Helmet } from 'react-helmet-async'
 import { MapPin, Phone, Mail, Facebook, Clock, Globe2, CheckCircle2 } from 'lucide-react'
 import PageLayout from '../components/PageLayout'
@@ -34,6 +34,7 @@ function ContactItem({ href, icon: Icon, children, className = '' }) {
 }
 
 export default function Contact() {
+  const baseId = useId()
   const [form, setForm] = useState({ name: '', phone: '', message: '' })
   const [errors, setErrors] = useState({})
   const [isLoading, setIsLoading] = useState(false)
@@ -179,10 +180,11 @@ export default function Contact() {
                   </div>
                   <form onSubmit={handleSubmit} className="space-y-4" noValidate>
                     <div>
-                      <label className="block text-sm font-medium text-slate-700 mb-1.5">
+                      <label htmlFor={`${baseId}-name`} className="block text-sm font-medium text-slate-700 mb-1.5">
                         ชื่อ–นามสกุล <span className="text-red-500">*</span>
                       </label>
                       <input
+                        id={`${baseId}-name`}
                         type="text"
                         name="name"
                         value={form.name}
@@ -198,10 +200,11 @@ export default function Contact() {
                     </div>
 
                     <div>
-                      <label className="block text-sm font-medium text-slate-700 mb-1.5">
+                      <label htmlFor={`${baseId}-phone`} className="block text-sm font-medium text-slate-700 mb-1.5">
                         เบอร์โทรศัพท์ <span className="text-red-500">*</span>
                       </label>
                       <input
+                        id={`${baseId}-phone`}
                         type="tel"
                         name="phone"
                         value={form.phone}
@@ -218,10 +221,11 @@ export default function Contact() {
                     </div>
 
                     <div>
-                      <label className="block text-sm font-medium text-slate-700 mb-1.5">
+                      <label htmlFor={`${baseId}-message`} className="block text-sm font-medium text-slate-700 mb-1.5">
                         ข้อความ <span className="text-slate-400 font-normal">(ถ้ามี)</span>
                       </label>
                       <textarea
+                        id={`${baseId}-message`}
                         name="message"
                         value={form.message}
                         onChange={handleChange}
@@ -245,7 +249,7 @@ export default function Contact() {
                       {isLoading ? (
                         <>
                           <span className="inline-block w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                          กำลังส่ง...
+                          กำลังส่ง…
                         </>
                       ) : 'ส่งข้อความ'}
                     </button>

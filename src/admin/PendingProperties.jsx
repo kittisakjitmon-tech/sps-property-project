@@ -229,7 +229,7 @@ export default function PendingProperties() {
                   <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
                     {viewingProperty.images.map((img, idx) => (
                       <div key={idx} className="aspect-square rounded-lg overflow-hidden bg-slate-100">
-                        <img src={img} alt={`Image ${idx + 1}`} className="w-full h-full object-cover" />
+                        <img src={img} alt={`Image ${idx + 1}`} width={200} height={200} className="w-full h-full object-cover" />
                       </div>
                     ))}
                   </div>
