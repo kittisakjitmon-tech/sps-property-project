@@ -14,10 +14,10 @@ export default function AdminProtectedRoute({ children, requiredRoles }) {
   }
 
   if (!user) {
-    return <Navigate to="/admin/login" state={{ from: location }} replace />
+    return <Navigate to="/sps-internal-admin/login" state={{ from: location }} replace />
   }
 
-  // Block agent from accessing /admin routes
+  // Block agent from accessing /sps-internal-admin routes
   if (userRole === 'agent') {
     return (
       <div className="min-h-screen bg-slate-50 flex items-center justify-center">

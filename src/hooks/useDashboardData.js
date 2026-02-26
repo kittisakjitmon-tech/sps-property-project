@@ -10,6 +10,7 @@ import {
   getActivitiesSnapshot,
   getPendingPropertiesSnapshot,
 } from '../lib/firestore'
+import { getPropertyLabel } from '../constants/propertyTypes'
 
 const DASHBOARD_ACTIVITY_LIMIT = 5
 const DASHBOARD_LEADS_LIMIT = 5
@@ -79,6 +80,7 @@ function buildLeadsChartData(contacts) {
 
 /**
  * สร้างข้อมูล Pie Chart ตาม type ของทรัพย์สิน
+ * ใช้ getPropertyLabel เพื่อแสดงชื่อชนิดทรัพย์ (คอนโด, บ้านเดี่ยว 1 ชั้น ฯลฯ) แทน type id
  */
 function buildPropertyTypeData(properties) {
   const colors = ['#1e3a8a', '#3b82f6', '#60a5fa', '#93c5fd', '#bfdbfe']
@@ -88,7 +90,11 @@ function buildPropertyTypeData(properties) {
     countByType[t] = (countByType[t] || 0) + 1
   })
   const entries = Object.entries(countByType)
-    .map(([name, value], i) => ({ name, value, color: colors[i % colors.length] }))
+    .map(([typeKey, value], i) => ({
+      name: getPropertyLabel(typeKey) || typeKey,
+      value,
+      color: colors[i % colors.length],
+    }))
     .sort((a, b) => b.value - a.value)
   return entries
 }

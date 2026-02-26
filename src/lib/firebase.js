@@ -26,7 +26,7 @@ export const adminStorage = getStorage(adminApp)
 
 function isAdminPath() {
   if (typeof window === 'undefined') return false
-  return window.location.pathname.startsWith('/admin')
+  return window.location.pathname.startsWith('/sps-internal-admin')
 }
 
 // Keep legacy exports for existing imports.

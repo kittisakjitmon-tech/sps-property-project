@@ -553,7 +553,7 @@ export default function PropertyForm() {
             mapUrl: payload.mapUrl,
           }).catch(() => { })
         }
-        navigate('/admin/properties')
+        navigate('/sps-internal-admin/properties')
       } else {
         const newId = await createProperty({
           ...payload,
@@ -609,7 +609,7 @@ export default function PropertyForm() {
             mapUrl: payload.mapUrl,
           }).catch(() => { })
         }
-        navigate('/admin/properties')
+        navigate('/sps-internal-admin/properties')
       }
     } catch (err) {
       console.error(err)
@@ -641,7 +641,7 @@ export default function PropertyForm() {
       <div className="max-w-3xl">
         {/* Back Button / Breadcrumb */}
         <Link
-          to="/admin/properties"
+          to="/sps-internal-admin/properties"
           className="inline-flex items-center gap-2 text-slate-600 hover:text-blue-900 mb-6 transition-colors"
         >
           <ArrowLeft className="h-5 w-5" />
@@ -1176,7 +1176,7 @@ export default function PropertyForm() {
             </button>
             <button
               type="button"
-              onClick={() => navigate('/admin')}
+              onClick={() => navigate('/sps-internal-admin')}
               className="px-6 py-3 rounded-lg border border-slate-200 text-slate-700 hover:bg-slate-50"
             >
               ยกเลิก

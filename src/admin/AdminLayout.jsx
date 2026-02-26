@@ -22,20 +22,20 @@ import {
 } from 'lucide-react'
 
 const allNavItems = [
-  { to: '/admin', end: true, label: 'แดชบอร์ด', icon: LayoutDashboard, roles: ['super_admin', 'admin', 'member'] },
-  { to: '/admin/properties', end: false, label: 'จัดการทรัพย์', icon: Building2, roles: ['super_admin', 'admin'] },
-  { to: '/admin/my-properties', end: false, label: 'ประกาศของฉัน', icon: FileText, roles: ['member'] },
-  { to: '/admin/properties/new', end: true, label: 'เพิ่มประกาศใหม่', icon: Building2, roles: ['member'] },
-  { to: '/admin/pending-properties', end: false, label: 'ตรวจสอบประกาศ', icon: FileCheck, roles: ['super_admin', 'admin'] },
-  { to: '/admin/hero-slides', end: false, label: 'จัดการสไลด์หน้าแรก', icon: Images, roles: ['super_admin', 'admin'] },
-  { to: '/admin/homepage-sections', end: false, label: 'จัดการหน้าแรก', icon: LayoutList, roles: ['super_admin', 'admin'] },
-  { to: '/admin/popular-locations', end: false, label: 'จัดการทำเลยอดฮิต', icon: MapPin, roles: ['super_admin', 'admin'] },
-  { to: '/admin/blogs', end: false, label: 'จัดการบทความ', icon: BookOpen, roles: ['super_admin', 'admin'] },
-  { to: '/admin/users', end: false, label: 'จัดการสมาชิก', icon: Users, roles: ['super_admin'] },
-  { to: '/admin/settings', end: false, label: 'การตั้งค่าระบบ', icon: Settings, roles: ['super_admin'] },
-  { to: '/admin/leads', end: false, label: 'จัดการนัดหมาย', icon: Inbox, roles: ['super_admin', 'admin', 'member'] },
-  { to: '/admin/loan-requests', end: false, label: 'จัดการสินเชื่อ', icon: CreditCard, roles: ['super_admin'] },
-  { to: '/admin/activities', end: false, label: 'บันทึกกิจกรรม', icon: Activity, roles: ['super_admin', 'admin'] },
+  { to: '/sps-internal-admin', end: true, label: 'แดชบอร์ด', icon: LayoutDashboard, roles: ['super_admin', 'admin', 'member'] },
+  { to: '/sps-internal-admin/properties', end: false, label: 'จัดการทรัพย์', icon: Building2, roles: ['super_admin', 'admin'] },
+  { to: '/sps-internal-admin/my-properties', end: false, label: 'ประกาศของฉัน', icon: FileText, roles: ['member'] },
+  { to: '/sps-internal-admin/properties/new', end: true, label: 'เพิ่มประกาศใหม่', icon: Building2, roles: ['member'] },
+  { to: '/sps-internal-admin/pending-properties', end: false, label: 'ตรวจสอบประกาศ', icon: FileCheck, roles: ['super_admin', 'admin'] },
+  { to: '/sps-internal-admin/hero-slides', end: false, label: 'จัดการสไลด์หน้าแรก', icon: Images, roles: ['super_admin', 'admin'] },
+  { to: '/sps-internal-admin/homepage-sections', end: false, label: 'จัดการหน้าแรก', icon: LayoutList, roles: ['super_admin', 'admin'] },
+  { to: '/sps-internal-admin/popular-locations', end: false, label: 'จัดการทำเลยอดฮิต', icon: MapPin, roles: ['super_admin', 'admin'] },
+  { to: '/sps-internal-admin/blogs', end: false, label: 'จัดการบทความ', icon: BookOpen, roles: ['super_admin', 'admin'] },
+  { to: '/sps-internal-admin/users', end: false, label: 'จัดการสมาชิก', icon: Users, roles: ['super_admin'] },
+  { to: '/sps-internal-admin/settings', end: false, label: 'การตั้งค่าระบบ', icon: Settings, roles: ['super_admin'] },
+  { to: '/sps-internal-admin/leads', end: false, label: 'จัดการนัดหมาย', icon: Inbox, roles: ['super_admin', 'admin', 'member'] },
+  { to: '/sps-internal-admin/loan-requests', end: false, label: 'จัดการสินเชื่อ', icon: CreditCard, roles: ['super_admin'] },
+  { to: '/sps-internal-admin/activities', end: false, label: 'บันทึกกิจกรรม', icon: Activity, roles: ['super_admin', 'admin'] },
 ]
 
 // ─── Sidebar content (shared between desktop & mobile drawer) ───────────────
@@ -97,7 +97,7 @@ export default function AdminLayout() {
 
   const handleLogout = async () => {
     await logout()
-    navigate('/admin/login', { replace: true })
+    navigate('/sps-internal-admin/login', { replace: true })
   }
 
   const navItems = allNavItems.filter((item) => {

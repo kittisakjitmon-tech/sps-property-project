@@ -51,7 +51,11 @@ export function AdminAuthProvider({ children }) {
   }, [])
 
   const login = async (email, password) => {
-    await signInWithEmailAndPassword(adminAuth, email, password)
+    const cred = await signInWithEmailAndPassword(adminAuth, email, password)
+    // เซ็ต user ทันทีหลัง sign-in เพื่อไม่ให้ navigate ไป /sps-internal-admin แล้วถูก redirect กลับ login (รอ onAuthStateChanged ช้าเกินไป)
+    setUser(cred.user)
+    setLoading(true)
+    // onAuthStateChanged จะรันต่อและดึง role จาก Firestore แล้วค่อย setLoading(false)
   }
 
   const logout = async () => {

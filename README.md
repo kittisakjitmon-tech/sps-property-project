@@ -8,7 +8,7 @@ SPS Property Solution
 
 **SPS Property Solution** เป็น Single Page Application (SPA) ที่แบ่งเป็น 2 ส่วนหลัก:
 - **Public Site**: หน้าเว็บสำหรับลูกค้า ค้นหาทรัพย์, ดูรายละเอียด, บันทึกเป็นรายการโปรด, สมัคร/ล็อกอินสมาชิก
-- **Admin Site** (`/admin`): แดชบอร์ดสำหรับทีมงาน จัดการทรัพย์, รูปภาพ, สไลด์หน้าแรก, บทความ, ผู้ใช้, Log การใช้งาน ฯลฯ
+- **Admin Site** (`/sps-internal-admin`): แดชบอร์ดสำหรับทีมงาน จัดการทรัพย์, รูปภาพ, สไลด์หน้าแรก, บทความ, ผู้ใช้, Log การใช้งาน ฯลฯ
 
 ใช้ **Firebase** เป็น Backend หลัก (Authentication, Firestore, Storage, Hosting, Cloud Functions) และใช้ **Longdo Map** สำหรับแผนที่ทรัพย์และสถานที่ใกล้เคียง
 
@@ -28,7 +28,7 @@ SPS Property Solution
 - **Authentication & Roles**
   - แยก `PublicAuthContext` กับ `AdminAuthContext`
   - รองรับ role เช่น `member`, `admin`, `super_admin`, block `agent` เข้าหน้า admin
-  - Login แยกหน้า: `/login` (public) และ `/admin/login`
+  - Login แยกหน้า: `/login` (public) และ `/sps-internal-admin/login`
 
 - **Map & Nearby Places**
   - ใช้ **Longdo Map** แสดงแผนที่ทรัพย์ในหน้า Properties และ MapPicker ตอนกรอกทรัพย์

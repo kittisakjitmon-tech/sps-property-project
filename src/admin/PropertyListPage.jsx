@@ -483,7 +483,7 @@ export default function PropertyListPage() {
             </p>
           </div>
           <Link
-            to="/admin/properties/new"
+            to="/sps-internal-admin/properties/new"
             className="flex items-center gap-2 px-4 py-2 bg-blue-900 text-white text-sm font-semibold rounded-lg hover:bg-blue-800 transition shrink-0"
           >
             <Plus className="h-5 w-5" />
@@ -660,7 +660,7 @@ export default function PropertyListPage() {
             <p className="text-lg font-medium text-slate-700 mb-2">ยังไม่มีประกาศ</p>
             <p className="text-slate-600 mb-6">เริ่มต้นด้วยการเพิ่มประกาศแรก</p>
             <Link
-              to="/admin/properties/new"
+              to="/sps-internal-admin/properties/new"
               className="inline-flex items-center gap-2 px-6 py-3 bg-blue-900 text-white font-semibold rounded-lg hover:bg-blue-800 transition"
             >
               <Plus className="h-5 w-5" />
@@ -729,7 +729,7 @@ export default function PropertyListPage() {
                               </td>
                               <td className="px-6 py-4 text-center">
                                 <Link
-                                  to={`/admin/properties/edit/${property.id}`}
+                                  to={`/sps-internal-admin/properties/edit/${property.id}`}
                                   className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg bg-blue-50 text-blue-900 font-medium hover:bg-blue-100 transition"
                                   aria-label={`แก้ไข ${property.title}`}
                                 >

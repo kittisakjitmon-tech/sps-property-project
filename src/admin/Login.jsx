@@ -12,7 +12,7 @@ export default function Login() {
   const { login } = useAdminAuth()
   const navigate = useNavigate()
   const location = useLocation()
-  const from = location.state?.from?.pathname ?? '/admin'
+  const from = location.state?.from?.pathname ?? '/sps-internal-admin'
 
   const handleSubmit = async (e) => {
     e.preventDefault()

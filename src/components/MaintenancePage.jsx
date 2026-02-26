@@ -2,7 +2,7 @@ import { Wrench } from 'lucide-react'
 
 /**
  * MaintenancePage — แสดงเมื่อ maintenanceMode = true
- * Admin ยังเข้า /admin ได้ตามปกติ
+ * Admin ยังเข้า /sps-internal-admin ได้ตามปกติ
  */
 export default function MaintenancePage({ siteName = 'SPS Property Solution' }) {
     return (

@@ -61,7 +61,7 @@ function PublicRoutesWrapper() {
 
   if (loading) return <RouteLoading />
 
-  // Maintenance Mode เปิดอยู่ → แสดงหน้าปิดปรับปรุง (admin /admin/* ไม่ถูกบล็อก)
+  // Maintenance Mode เปิดอยู่ → แสดงหน้าปิดปรับปรุง (admin /sps-internal-admin/* ไม่ถูกบล็อก)
   if (settings.maintenanceMode) {
     return <MaintenancePage siteName={settings.siteName} />
   }
@@ -111,7 +111,7 @@ export default function App() {
           <Routes>
             {/* ── Admin routes (ไม่ถูก maintenanceMode บล็อก) ── */}
             <Route
-              path="/admin/*"
+              path="/sps-internal-admin/*"
               element={
                 <AdminAuthProvider>
                   <Routes>
