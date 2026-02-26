@@ -17,29 +17,64 @@ export default function RelatedProperties({ currentPropertyId, district, type })
     const [loading, setLoading] = useState(true)
 
     useEffect(() => {
-        if (!district || !type) return
-
         const fetchRelated = async () => {
             try {
                 setLoading(true)
-                const q = query(
-                    collection(db, 'properties'),
-                    where('status', '==', 'available'),
-                    where('type', '==', type),
-                    where('location.district', '==', district),
-                    limit(4)
-                )
+                const seen = new Set([currentPropertyId])
+                let items = []
 
-                const snapshot = await getDocs(q)
-                const items = []
-                snapshot.forEach(doc => {
-                    if (doc.id !== currentPropertyId) {
-                        items.push({ id: doc.id, ...doc.data() })
-                    }
-                })
+                // ขั้น 1: type + district เดียวกัน
+                if (district && type) {
+                    const q1 = query(
+                        collection(db, 'properties'),
+                        where('status', '==', 'available'),
+                        where('type', '==', type),
+                        where('location.district', '==', district),
+                        limit(4)
+                    )
+                    const snap1 = await getDocs(q1)
+                    snap1.forEach(doc => {
+                        if (!seen.has(doc.id)) {
+                            seen.add(doc.id)
+                            items.push({ id: doc.id, ...doc.data() })
+                        }
+                    })
+                }
 
-                // Take up to 3 properties (we fetched 4 in case one is the current property)
-                setRelated(items.slice(0, 3))
+                // ขั้น 2: type เดียวกัน ทุก district (ถ้ายังไม่ครบ 3)
+                if (items.length < 3 && type) {
+                    const q2 = query(
+                        collection(db, 'properties'),
+                        where('status', '==', 'available'),
+                        where('type', '==', type),
+                        limit(10)
+                    )
+                    const snap2 = await getDocs(q2)
+                    snap2.forEach(doc => {
+                        if (!seen.has(doc.id) && items.length < 3) {
+                            seen.add(doc.id)
+                            items.push({ id: doc.id, ...doc.data() })
+                        }
+                    })
+                }
+
+                // ขั้น 3: ทรัพย์ล่าสุดทั่วไป (ถ้ายังไม่ครบ 3)
+                if (items.length < 3) {
+                    const q3 = query(
+                        collection(db, 'properties'),
+                        where('status', '==', 'available'),
+                        limit(15)
+                    )
+                    const snap3 = await getDocs(q3)
+                    snap3.forEach(doc => {
+                        if (!seen.has(doc.id) && items.length < 3) {
+                            seen.add(doc.id)
+                            items.push({ id: doc.id, ...doc.data() })
+                        }
+                    })
+                }
+
+                setRelated(items)
             } catch (error) {
                 console.error('Error fetching related properties:', error)
             } finally {
@@ -52,10 +87,19 @@ export default function RelatedProperties({ currentPropertyId, district, type })
 
     if (loading) {
         return (
-            <div className="animate-pulse flex gap-4 mt-8">
-                {[1, 2, 3].map(i => (
-                    <div key={i} className="h-64 bg-slate-200 rounded-xl flex-1"></div>
-                ))}
+            <div className="mt-12 mb-8">
+                <h3 className="text-xl font-bold text-slate-900 mb-6 border-b pb-4">บ้านที่คุณอาจสนใจ</h3>
+                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-6">
+                    {[1, 2, 3].map(i => (
+                        <div key={i} className="animate-pulse bg-white rounded-xl border border-slate-200 overflow-hidden">
+                            <div className="aspect-[4/3] bg-slate-200" />
+                            <div className="p-4 space-y-2">
+                                <div className="h-4 bg-slate-200 rounded w-3/4" />
+                                <div className="h-3 bg-slate-100 rounded w-1/2" />
+                            </div>
+                        </div>
+                    ))}
+                </div>
             </div>
         )
     }
@@ -64,7 +108,7 @@ export default function RelatedProperties({ currentPropertyId, district, type })
 
     return (
         <div className="mt-12 mb-8">
-            <h3 className="text-xl font-bold text-slate-900 mb-6 border-b pb-4">ทรัพย์สินที่เกี่ยวข้อง / ใกล้เคียง</h3>
+            <h3 className="text-xl font-bold text-slate-900 mb-6 border-b pb-4">บ้านที่คุณอาจสนใจ</h3>
             <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-6">
                 {related.map(prop => {
                     const coverImage = (prop.images && prop.images.length > 0) ? prop.images[0] : null
