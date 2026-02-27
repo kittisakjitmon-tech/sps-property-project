@@ -611,10 +611,10 @@ exports.scheduledDailyBlog = functions
   .timeZone('Asia/Bangkok')
   .onRun(async (context) => {
     try {
-      // 1. Initialize Vertex AI (Singapore region)
-      const projectId = process.env.GCLOUD_PROJECT || admin.app().options.projectId || 'sps-property'
-      functions.logger.info(`ใช้ Project ID: ${projectId} สำหรับ Vertex AI`)
-      const vertex_ai = new VertexAI({ project: projectId, location: 'asia-southeast1' })
+      // 1. Initialize Vertex AI (Using us-central1 for maximum model availability)
+      const projectId = process.env.GCP_PROJECT || process.env.GCLOUD_PROJECT || admin.app().options.projectId
+      functions.logger.info(`Scheduled Blog: ใช้ Project ID: ${projectId} ใน us-central1`)
+      const vertex_ai = new VertexAI({ project: projectId, location: 'us-central1' })
       const model = vertex_ai.getGenerativeModel({ model: 'gemini-1.5-flash-002' })
 
       const topic = BLOG_TOPICS[Math.floor(Math.random() * BLOG_TOPICS.length)]
@@ -657,43 +657,4 @@ exports.scheduledDailyBlog = functions
 /**
  * ฟังก์ชันสำหรับทดสอบสร้าง Blog ทันที (รันผ่าน HTTP) - Vertex AI version
  */
-exports.manualTestAIBlog = functions
-  .runWith({
-    timeoutSeconds: 301,
-    memory: '512MB',
-  })
-  .https.onRequest(async (req, res) => {
-    try {
-      const projectId = process.env.GCLOUD_PROJECT || admin.app().options.projectId || 'sps-property'
-      functions.logger.info(`Manual Test: ใช้ Project ID: ${projectId} สำหรับ Vertex AI`)
-      const vertex_ai = new VertexAI({ project: projectId, location: 'asia-southeast1' })
-      const model = vertex_ai.getGenerativeModel({ model: 'gemini-1.5-flash-002' })
 
-      const topic = BLOG_TOPICS[Math.floor(Math.random() * BLOG_TOPICS.length)]
-      const prompt = `เขียนบทความอสังหาฯ ไทยเกี่ยวกับ: ${topic} ในรูปแบบ JSON {title, content, summary} ห้ามมีข้อความอื่น`
-
-      const resp = await model.generateContent({
-        contents: [{ role: 'user', parts: [{ text: prompt }] }],
-      })
-
-      let resultText = resp.response.candidates[0].content.parts[0].text
-      const jsonMatch = resultText.match(/\{[\s\S]*\}/)
-      if (!jsonMatch) {
-        throw new Error(`AI ไม่ได้ส่งรูปแบบ JSON กลับมา: ${resultText}`)
-      }
-      const blogData = JSON.parse(jsonMatch[0])
-
-      const db = admin.firestore()
-      await db.collection('blogs').add({
-        ...blogData,
-        published: true,
-        createdAt: admin.firestore.FieldValue.serverTimestamp(),
-        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-        author: 'AI Tester (Vertex)'
-      })
-
-      res.status(200).send(`✅ สำเร็จผ่าน Vertex AI! ระบบคุยกับ AI ได้แล้วโดยไม่ต้องใช้ API Key`)
-    } catch (error) {
-      res.status(500).send(`❌ ล้มเหลว (Vertex AI): ${error.message}`)
-    }
-  })
