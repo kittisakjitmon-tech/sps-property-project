@@ -612,9 +612,10 @@ exports.scheduledDailyBlog = functions
   .onRun(async (context) => {
     try {
       // 1. Initialize Vertex AI (Singapore region)
-      const projectId = admin.app().options.projectId || 'sps-property'
+      const projectId = process.env.GCLOUD_PROJECT || admin.app().options.projectId || 'sps-property'
+      functions.logger.info(`ใช้ Project ID: ${projectId} สำหรับ Vertex AI`)
       const vertex_ai = new VertexAI({ project: projectId, location: 'asia-southeast1' })
-      const model = vertex_ai.getGenerativeModel({ model: 'gemini-1.5-flash-001' })
+      const model = vertex_ai.getGenerativeModel({ model: 'gemini-1.5-flash-002' })
 
       const topic = BLOG_TOPICS[Math.floor(Math.random() * BLOG_TOPICS.length)]
       const prompt = `คุณเป็นนักเขียนบล็อกอสังหาริมทรัพย์มืออาชีพในประเทศไทย เขียนบทความคุณภาพสูงเกี่ยวกับ: ${topic} 
@@ -626,7 +627,11 @@ exports.scheduledDailyBlog = functions
       })
 
       const resultText = resp.response.candidates[0].content.parts[0].text
-      const blogData = JSON.parse(resultText.replace(/```json/g, '').replace(/```/g, '').trim())
+      const jsonMatch = resultText.match(/\{[\s\S]*\}/)
+      if (!jsonMatch) {
+        throw new Error(`AI ไม่ได้ส่งรูปแบบ JSON กลับมา: ${resultText}`)
+      }
+      const blogData = JSON.parse(jsonMatch[0])
 
       const db = admin.firestore()
       const newBlog = {
@@ -654,15 +659,16 @@ exports.scheduledDailyBlog = functions
  */
 exports.manualTestAIBlog = functions
   .runWith({
-    timeoutSeconds: 300,
+    timeoutSeconds: 301,
     memory: '512MB',
   })
   .https.onRequest(async (req, res) => {
     try {
-      const projectId = admin.app().options.projectId || 'sps-property'
+      const projectId = process.env.GCLOUD_PROJECT || admin.app().options.projectId || 'sps-property'
+      functions.logger.info(`Manual Test: ใช้ Project ID: ${projectId} สำหรับ Vertex AI`)
       const vertex_ai = new VertexAI({ project: projectId, location: 'asia-southeast1' })
-      const model = vertex_ai.getGenerativeModel({ model: 'gemini-1.5-flash-001' })
-      
+      const model = vertex_ai.getGenerativeModel({ model: 'gemini-1.5-flash-002' })
+
       const topic = BLOG_TOPICS[Math.floor(Math.random() * BLOG_TOPICS.length)]
       const prompt = `เขียนบทความอสังหาฯ ไทยเกี่ยวกับ: ${topic} ในรูปแบบ JSON {title, content, summary} ห้ามมีข้อความอื่น`
 
@@ -671,8 +677,11 @@ exports.manualTestAIBlog = functions
       })
 
       let resultText = resp.response.candidates[0].content.parts[0].text
-      resultText = resultText.replace(/```json/g, '').replace(/```/g, '').trim()
-      const blogData = JSON.parse(resultText)
+      const jsonMatch = resultText.match(/\{[\s\S]*\}/)
+      if (!jsonMatch) {
+        throw new Error(`AI ไม่ได้ส่งรูปแบบ JSON กลับมา: ${resultText}`)
+      }
+      const blogData = JSON.parse(jsonMatch[0])
 
       const db = admin.firestore()
       await db.collection('blogs').add({
