@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useEffect, useMemo, useRef } from 'react'
 import { Link } from 'react-router-dom'
 import {
   CheckCircle2, Building2, Lightbulb, Handshake, TrendingUp,
@@ -11,6 +11,7 @@ import HomeSearch from '../components/HomeSearch'
 import DynamicPropertySection from '../components/DynamicPropertySection'
 import { getPropertiesOnce, getPopularLocationsOnce, getHomepageSectionsOnce, filterPropertiesByCriteria, getFeaturedBlogs } from '../lib/firestore'
 import { getCloudinaryThumbUrl } from '../lib/cloudinary'
+import { useInView } from '../hooks/useInView'
 
 /** การ์ดทำเลยอดฮิต - placeholder น้ำเงินเป็นพื้นหลังเสมอ รูปทับด้านบนเมื่อโหลดได้ */
 const PLACEHOLDER_BG = 'bg-gradient-to-br from-blue-600 to-blue-500'
@@ -105,37 +106,73 @@ const serviceHighlights = [
   },
 ]
 
+const ANIMATE_VISIBLE = 'opacity-100 translate-y-0'
+const ANIMATE_HIDDEN = 'opacity-0 translate-y-6'
+const ANIMATE_TRANSITION = 'transition-all duration-600 ease-out'
+
 export default function Home() {
   const [properties, setProperties] = useState([])
   const [popularLocations, setPopularLocations] = useState([])
   const [homepageSections, setHomepageSections] = useState([])
   const [featuredBlogs, setFeaturedBlogs] = useState([])
-  const [isLoading, setIsLoading] = useState(true)
+  const [blogsLoading, setBlogsLoading] = useState(false)
+  const [sectionsLoading, setSectionsLoading] = useState(false)
+  const [locationsLoading, setLocationsLoading] = useState(false)
+  const [showBlogs, setShowBlogs] = useState(false)
+  const [showSections, setShowSections] = useState(false)
+  const [showLocations, setShowLocations] = useState(false)
 
+  const [refBlogs, inViewBlogs] = useInView({ rootMargin: '80px', threshold: 0.05 })
+  const [refSections, inViewSections] = useInView({ rootMargin: '80px', threshold: 0.05 })
+  const [refLocations, inViewLocations] = useInView({ rootMargin: '80px', threshold: 0.05 })
+
+  const fetchedBlogsRef = useRef(false)
+  const fetchedSectionsRef = useRef(false)
+  const fetchedLocationsRef = useRef(false)
+
+  // โหลด Featured Blogs เมื่อ section เข้าหน้าจอ
   useEffect(() => {
-    let mounted = true
-    const loadHomeData = async () => {
-      try {
-        const [allProperties, locations, sections, blogs] = await Promise.all([
-          getPropertiesOnce(false),
-          getPopularLocationsOnce(),
-          getHomepageSectionsOnce(),
-          getFeaturedBlogs(),
-        ])
-        if (!mounted) return
-        setProperties(allProperties)
-        setPopularLocations((locations || []).filter((loc) => loc.isActive === true))
-        setHomepageSections((sections || []).filter((s) => s.isActive === true))
+    if (!inViewBlogs || fetchedBlogsRef.current) return
+    fetchedBlogsRef.current = true
+    setBlogsLoading(true)
+    getFeaturedBlogs()
+      .then((blogs) => {
         setFeaturedBlogs(blogs || [])
-      } catch (error) {
-        console.error('Error loading home data:', error)
-      } finally {
-        if (mounted) setIsLoading(false)
-      }
-    }
-    loadHomeData()
-    return () => { mounted = false }
-  }, [])
+        requestAnimationFrame(() => setShowBlogs(true))
+      })
+      .catch((e) => console.error('Error loading featured blogs:', e))
+      .finally(() => setBlogsLoading(false))
+  }, [inViewBlogs])
+
+  // โหลด Dynamic sections (properties + homepage sections) เมื่อ section เข้าหน้าจอ
+  useEffect(() => {
+    if (!inViewSections || fetchedSectionsRef.current) return
+    fetchedSectionsRef.current = true
+    setSectionsLoading(true)
+    Promise.all([getPropertiesOnce(false), getHomepageSectionsOnce()])
+      .then(([allProperties, sections]) => {
+        setProperties(allProperties)
+        setHomepageSections((sections || []).filter((s) => s.isActive === true))
+        requestAnimationFrame(() => setShowSections(true))
+      })
+      .catch((e) => console.error('Error loading sections:', e))
+      .finally(() => setSectionsLoading(false))
+  }, [inViewSections])
+
+  // โหลด Popular Locations เมื่อ section เข้าหน้าจอ
+  useEffect(() => {
+    if (!inViewLocations || fetchedLocationsRef.current) return
+    fetchedLocationsRef.current = true
+    setLocationsLoading(true)
+    getPopularLocationsOnce()
+      .then((locations) => {
+        const list = (locations || []).filter((loc) => loc.isActive === true)
+        setPopularLocations(list)
+        requestAnimationFrame(() => setShowLocations(true))
+      })
+      .catch((e) => console.error('Error loading popular locations:', e))
+      .finally(() => setLocationsLoading(false))
+  }, [inViewLocations])
 
   // Resolve properties for each section (จำกัดสูงสุด 5 รายการต่อ section)
   const sectionPropertiesMap = useMemo(() => {
@@ -298,10 +335,21 @@ export default function Home() {
           </div>
         </section>
 
-        {/* Featured Blogs Section */}
-        {featuredBlogs.length > 0 && (
-          <section className="py-10 bg-white">
+        {/* Featured Blogs Section — โหลดเมื่อเลื่อนถึง + fade/slide in */}
+        <section ref={refBlogs} className="py-10 bg-white min-h-[320px]">
+          {blogsLoading && featuredBlogs.length === 0 ? (
             <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+              <div className="h-8 w-48 bg-slate-200 rounded-lg mb-6 animate-pulse" />
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                {[1, 2, 3].map((i) => (
+                  <div key={i} className="rounded-2xl bg-slate-100 aspect-video animate-pulse" />
+                ))}
+              </div>
+            </div>
+          ) : featuredBlogs.length > 0 ? (
+            <div
+              className={`max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 ${ANIMATE_TRANSITION} ${showBlogs ? ANIMATE_VISIBLE : ANIMATE_HIDDEN}`}
+            >
               <div className="flex items-center justify-between mb-6">
                 <h2 className="text-2xl sm:text-3xl font-bold text-slate-900">บทความน่าสนใจ</h2>
                 <Link
@@ -365,33 +413,38 @@ export default function Home() {
                 })}
               </div>
             </div>
-          </section>
-        )}
+          ) : null}
+        </section>
 
-        {/* Dynamic Sections — แสดง skeleton ขณะโหลด แล้ว fade-in เมื่อข้อมูลมาถึง */}
-        <div className={`transition-opacity duration-500 ${isLoading ? 'opacity-0' : 'opacity-100'}`}>
-          {isLoading ? (
-            // Skeleton placeholders จองพื้นที่ไว้ก่อน ป้องกัน layout shift
+        {/* Dynamic Sections — โหลดเมื่อเลื่อนถึง + fade/slide in */}
+        <div ref={refSections} className="min-h-[280px]">
+          {sectionsLoading && properties.length === 0 && homepageSections.length === 0 ? (
             <>
               <PropertySectionSkeleton />
               <PropertySectionSkeleton />
             </>
-          ) : hasSections ? (
-            homepageSections.map((section, idx) => (
-              <DynamicPropertySection
-                key={section.id}
-                title={section.title}
-                subtitle={section.subtitle}
-                properties={sectionPropertiesMap[section.id] || []}
-                targetTag={(section.targetTag && section.targetTag.trim()) || section.title || ''}
-                titleColor={section.titleColor || 'text-blue-900'}
-                isHighlighted={section.isHighlighted || false}
-                isBlinking={section.isBlinking || false}
-                sectionIndex={idx}
-              />
-            ))
-          ) : featured.length > 0 ? (
-            <DynamicPropertySection title="ทรัพย์เด่น" properties={featured} sectionIndex={0} />
+          ) : (hasSections || featured.length > 0) ? (
+            <div
+              className={`${ANIMATE_TRANSITION} ${showSections ? ANIMATE_VISIBLE : ANIMATE_HIDDEN}`}
+            >
+              {hasSections ? (
+                homepageSections.map((section, idx) => (
+                  <DynamicPropertySection
+                    key={section.id}
+                    title={section.title}
+                    subtitle={section.subtitle}
+                    properties={sectionPropertiesMap[section.id] || []}
+                    targetTag={(section.targetTag && section.targetTag.trim()) || section.title || ''}
+                    titleColor={section.titleColor || 'text-blue-900'}
+                    isHighlighted={section.isHighlighted || false}
+                    isBlinking={section.isBlinking || false}
+                    sectionIndex={idx}
+                  />
+                ))
+              ) : (
+                <DynamicPropertySection title="ทรัพย์เด่น" properties={featured} sectionIndex={0} />
+              )}
+            </div>
           ) : null}
         </div>
 
@@ -516,43 +569,56 @@ export default function Home() {
           </div>
         </section>
 
-        {/* ── Popular Locations ── */}
-        <section className="py-10 sm:py-12 bg-white">
-          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-            <div className="flex items-center justify-between mb-6">
-              <div className="flex items-center gap-3">
-                <span className="w-1 h-7 bg-yellow-400 rounded-full shrink-0" />
-                <div>
-                  <h2 className="text-xl sm:text-2xl font-bold text-slate-900 tracking-tight">ทำเลยอดฮิต</h2>
-                  <p className="text-slate-500 text-sm mt-0.5">พื้นที่แนะนำในชลบุรีและใกล้เคียง</p>
-                </div>
-              </div>
-              <Link
-                to="/properties"
-                className="inline-flex items-center gap-1 text-sm font-semibold text-blue-900 border border-blue-200 bg-blue-50 hover:bg-blue-900 hover:text-white px-4 py-1.5 rounded-full transition-all duration-200 shrink-0"
-              >
-                ดูทั้งหมด →
-              </Link>
-            </div>
-            {popularLocations.length === 0 ? (
-              <div className="text-center py-8 text-slate-500">
-                <MapPinned className="h-10 w-10 text-slate-300 mx-auto mb-3" />
-                <p className="text-lg">ยังไม่มีทำเลยอดฮิต</p>
-                <p className="text-sm mt-1">กรุณาเพิ่มทำเลในหน้า Admin</p>
-              </div>
-            ) : (
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 sm:gap-5">
-                {popularLocations.map((loc, index) => (
-                  <PopularLocationCard
-                    key={loc.id}
-                    loc={loc}
-                    buildLocationPath={buildLocationPath}
-                    highPriority={index === 0}
-                  />
+        {/* ── Popular Locations — โหลดเมื่อเลื่อนถึง + fade/slide in ── */}
+        <section ref={refLocations} className="py-10 sm:py-12 bg-white min-h-[320px]">
+          {locationsLoading && popularLocations.length === 0 ? (
+            <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+              <div className="h-6 w-40 bg-slate-200 rounded-lg mb-6 animate-pulse" />
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                {[1, 2, 3].map((i) => (
+                  <div key={i} className="aspect-video rounded-2xl bg-slate-100 animate-pulse" />
                 ))}
               </div>
-            )}
-          </div>
+            </div>
+          ) : (
+            <div
+              className={`max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 ${ANIMATE_TRANSITION} ${showLocations ? ANIMATE_VISIBLE : ANIMATE_HIDDEN}`}
+            >
+              <div className="flex items-center justify-between mb-6">
+                <div className="flex items-center gap-3">
+                  <span className="w-1 h-7 bg-yellow-400 rounded-full shrink-0" />
+                  <div>
+                    <h2 className="text-xl sm:text-2xl font-bold text-slate-900 tracking-tight">ทำเลยอดฮิต</h2>
+                    <p className="text-slate-500 text-sm mt-0.5">พื้นที่แนะนำในชลบุรีและใกล้เคียง</p>
+                  </div>
+                </div>
+                <Link
+                  to="/properties"
+                  className="inline-flex items-center gap-1 text-sm font-semibold text-blue-900 border border-blue-200 bg-blue-50 hover:bg-blue-900 hover:text-white px-4 py-1.5 rounded-full transition-all duration-200 shrink-0"
+                >
+                  ดูทั้งหมด →
+                </Link>
+              </div>
+              {popularLocations.length === 0 ? (
+                <div className="text-center py-8 text-slate-500">
+                  <MapPinned className="h-10 w-10 text-slate-300 mx-auto mb-3" />
+                  <p className="text-lg">ยังไม่มีทำเลยอดฮิต</p>
+                  <p className="text-sm mt-1">กรุณาเพิ่มทำเลในหน้า Admin</p>
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 sm:gap-5">
+                  {popularLocations.map((loc, index) => (
+                    <PopularLocationCard
+                      key={loc.id}
+                      loc={loc}
+                      buildLocationPath={buildLocationPath}
+                      highPriority={index === 0}
+                    />
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
         </section>
       </PageLayout>
     </>

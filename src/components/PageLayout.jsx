@@ -1,8 +1,9 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, Suspense, lazy } from 'react'
 import Navbar from './Navbar'
 import Footer from './Footer'
-import HeroSlider from './HeroSlider'
 import { Phone, ArrowUp } from 'lucide-react'
+
+const HeroSlider = lazy(() => import('./HeroSlider'))
 
 /**
  * PageLayout - Layout component ที่มี Navbar, Hero section และ Footer สำหรับทุกหน้า
@@ -43,35 +44,53 @@ export default function PageLayout({
       
       {showHero && (
         useHeroSlider && fullHeight ? (
-          <HeroSlider>
-            <div className="w-full max-w-5xl mx-auto">
-              {/* Hero Title & Subtitle */}
-              <div className="text-center mb-8">
+          <Suspense fallback={
+            <section
+              className="relative flex items-center justify-center min-h-[85vh] bg-slate-900 bg-cover bg-center"
+              style={{
+                backgroundImage: `linear-gradient(rgba(15,23,42,0.85),rgba(15,23,42,0.8)), url('https://images.unsplash.com/photo-1564013799919-ab600027ffc6?w=1280&q=75')`,
+                backgroundSize: 'cover',
+                backgroundPosition: 'center',
+              }}
+            >
+              <div className="absolute inset-0 bg-gradient-to-b from-black/50 to-black/70" />
+              <div className="relative z-10 w-full max-w-5xl mx-auto px-4 text-center">
                 <h1 className="text-3xl sm:text-4xl md:text-5xl lg:text-6xl font-bold text-white mb-4 drop-shadow-lg leading-tight">
                   {heroTitle}
                 </h1>
-                <p className="text-white text-lg sm:text-xl md:text-2xl drop-shadow-md font-medium">
+                <p className="text-white text-lg sm:text-xl md:text-2xl drop-shadow-md font-medium mb-8">
                   {heroSubtitle}
                 </p>
-              </div>
-
-              {/* Search Component - Glassmorphism */}
-              {searchComponent && (
-                <div className="mb-8">
+                {searchComponent && (
                   <div className="bg-white/70 backdrop-blur-md border border-white/20 shadow-lg rounded-2xl p-3 sm:p-5 max-w-3xl mx-auto">
                     {searchComponent}
                   </div>
+                )}
+                {heroExtra && <div className="mt-12">{heroExtra}</div>}
+              </div>
+            </section>
+          }>
+            <HeroSlider>
+              <div className="w-full max-w-5xl mx-auto">
+                <div className="text-center mb-8">
+                  <h1 className="text-3xl sm:text-4xl md:text-5xl lg:text-6xl font-bold text-white mb-4 drop-shadow-lg leading-tight">
+                    {heroTitle}
+                  </h1>
+                  <p className="text-white text-lg sm:text-xl md:text-2xl drop-shadow-md font-medium">
+                    {heroSubtitle}
+                  </p>
                 </div>
-              )}
-
-              {/* Hero Extra Content */}
-              {heroExtra && (
-                <div className="mt-12">
-                  {heroExtra}
-                </div>
-              )}
-            </div>
-          </HeroSlider>
+                {searchComponent && (
+                  <div className="mb-8">
+                    <div className="bg-white/70 backdrop-blur-md border border-white/20 shadow-lg rounded-2xl p-3 sm:p-5 max-w-3xl mx-auto">
+                      {searchComponent}
+                    </div>
+                  </div>
+                )}
+                {heroExtra && <div className="mt-12">{heroExtra}</div>}
+              </div>
+            </HeroSlider>
+          </Suspense>
         ) : (
           <section
             className={`relative flex items-center justify-center bg-slate-800 bg-cover bg-center ${fullHeight ? 'min-h-[70vh]' : 'min-h-[20vh]'}`}

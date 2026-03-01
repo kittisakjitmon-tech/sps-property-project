@@ -6,7 +6,7 @@ import 'swiper/css/effect-fade'
 import 'swiper/css/pagination'
 import { getHeroSlidesOnce } from '../lib/firestore'
 
-const DEFAULT_IMAGE = 'https://images.unsplash.com/photo-1564013799919-ab600027ffc6?w=1920&q=80&auto=format'
+const DEFAULT_IMAGE = 'https://images.unsplash.com/photo-1564013799919-ab600027ffc6?w=1280&q=80&auto=format'
 
 function getSlideImageUrl(slide) {
   return slide?.imageUrl || slide?.image || slide?.url || DEFAULT_IMAGE
@@ -77,10 +77,12 @@ export default function HeroSlider({ children, className = '' }) {
               <img
                 src={imageUrl}
                 alt=""
+                width={1920}
+                height={1080}
                 className="absolute inset-0 w-full h-full object-cover"
                 loading={index === 0 ? 'eager' : 'lazy'}
                 fetchPriority={index === 0 ? 'high' : 'auto'}
-                decoding={index === 0 ? 'sync' : 'async'}
+                decoding="async"
                 aria-hidden="true"
               />
             </SwiperSlide>
