@@ -10,6 +10,7 @@ import PageLayout from '../components/PageLayout'
 import HomeSearch from '../components/HomeSearch'
 import DynamicPropertySection from '../components/DynamicPropertySection'
 import { getPropertiesOnce, getPopularLocationsOnce, getHomepageSectionsOnce, filterPropertiesByCriteria, getFeaturedBlogs } from '../lib/firestore'
+import { getCloudinaryThumbUrl } from '../lib/cloudinary'
 
 /** การ์ดทำเลยอดฮิต - placeholder น้ำเงินเป็นพื้นหลังเสมอ รูปทับด้านบนเมื่อโหลดได้ */
 const PLACEHOLDER_BG = 'bg-gradient-to-br from-blue-600 to-blue-500'
@@ -58,7 +59,7 @@ function PopularLocationCard({ loc, buildLocationPath, highPriority = false }) {
         <div className="absolute inset-0 z-[1] overflow-hidden" onContextMenu={(e) => e.preventDefault()}>
           <img
             key={imageUrl}
-            src={imageUrl}
+            src={getCloudinaryThumbUrl(imageUrl)}
             alt={displayName}
             className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300 select-none"
             loading={highPriority ? 'eager' : 'lazy'}
@@ -327,7 +328,7 @@ export default function Home() {
                         {thumbnail ? (
                           <>
                             <img
-                              src={thumbnail}
+                              src={getCloudinaryThumbUrl(thumbnail)}
                               alt={blog.title}
                               loading="lazy"
                               decoding="async"

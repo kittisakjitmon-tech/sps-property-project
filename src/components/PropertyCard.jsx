@@ -3,6 +3,7 @@ import { MapPin, Bed, Bath, Heart } from 'lucide-react'
 import { useState, useEffect, memo } from 'react'
 import { isFavorite, toggleFavorite } from '../lib/favorites'
 import { formatPrice } from '../lib/priceFormat'
+import { getCloudinaryThumbUrl } from '../lib/cloudinary'
 import ProtectedImageContainer from './ProtectedImageContainer'
 import { highlightText, highlightTags } from '../lib/textHighlight'
 import { getPropertyLabel } from '../constants/propertyTypes'
@@ -252,7 +253,7 @@ function PropertyCard({ property, featuredLabel = 'แนะนำ', searchQuery
           <div className="relative aspect-[4/3] overflow-hidden rounded-t-2xl">
             <ProtectedImageContainer className="absolute inset-0 w-full h-full" propertyId={property.propertyId}>
               <img
-                src={coverImage}
+                src={getCloudinaryThumbUrl(coverImage)}
                 alt={`${getPropertyLabel(property.type) || 'อสังหาริมทรัพย์'} โครงการ ${property.title} ทำเล ${property.location?.district || ''}, ${property.location?.province || ''}`}
                 className="w-full h-full object-cover protected-image transition-transform duration-700 ease-in-out group-hover:scale-110"
                 loading="lazy"

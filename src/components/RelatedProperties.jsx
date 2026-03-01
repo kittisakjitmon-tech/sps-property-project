@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom'
 import { collection, query, where, limit, getDocs } from 'firebase/firestore'
 import { db } from '../lib/firebase'
 import { MapPin, Bed, Bath, Maximize2 } from 'lucide-react'
+import { getCloudinaryThumbUrl } from '../lib/cloudinary'
 
 // Constants
 const formatPrice = (price, isRental, showPrice) => {
@@ -117,7 +118,7 @@ export default function RelatedProperties({ currentPropertyId, district, type })
                         <Link key={prop.id} to={`/properties/${prop.id}`} className="group bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden hover:shadow-md transition">
                             <div className="aspect-[4/3] bg-slate-200 overflow-hidden relative">
                                 {coverImage ? (
-                                    <img src={coverImage} alt={prop.title} width={400} height={300} loading="lazy" className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" />
+                                    <img src={getCloudinaryThumbUrl(coverImage)} alt={prop.title} width={400} height={300} loading="lazy" className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" />
                                 ) : (
                                     <div className="w-full h-full flex items-center justify-center text-slate-400">No Image</div>
                                 )}

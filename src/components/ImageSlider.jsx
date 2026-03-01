@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import { ChevronLeft, ChevronRight } from 'lucide-react'
+import { getCloudinaryMediumUrl } from '../lib/cloudinary'
 import ProtectedImageContainer from './ProtectedImageContainer'
 
 /**
@@ -25,6 +26,7 @@ export default function ImageSlider({
 }) {
   const [currentIndex, setCurrentIndex] = useState(0)
   const imgs = images && images.length > 0 ? images : [defaultImage]
+  const imgsOptimized = imgs.map((src) => getCloudinaryMediumUrl(src))
 
   // Auto play
   useEffect(() => {
@@ -72,7 +74,7 @@ export default function ImageSlider({
       {protectImages ? (
         <ProtectedImageContainer className="absolute inset-0 w-full h-full" propertyId={propertyId}>
           <div className="relative w-full h-full overflow-hidden">
-            {imgs.map((img, index) => (
+            {imgsOptimized.map((img, index) => (
               <img
                 key={index}
                 src={img}
@@ -87,7 +89,7 @@ export default function ImageSlider({
         </ProtectedImageContainer>
       ) : (
         <div className="relative w-full h-full overflow-hidden">
-          {imgs.map((img, index) => (
+          {imgsOptimized.map((img, index) => (
             <img
               key={index}
               src={img}

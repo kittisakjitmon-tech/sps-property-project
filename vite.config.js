@@ -1,11 +1,21 @@
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 import compression from 'vite-plugin-compression'
+import { ViteImageOptimizer } from 'vite-plugin-image-optimizer'
 
 // https://vite.dev/config/
 export default defineConfig({
   plugins: [
     react(),
+    // Optimize images in public/ and imported assets (PNG, JPEG, WebP, SVG)
+    ViteImageOptimizer({
+      test: /\.(jpe?g|png|gif|tiff|webp|svg|avif)$/i,
+      includePublic: true,
+      logStats: true,
+      png: { quality: 85 },
+      jpeg: { quality: 85 },
+      webp: { quality: 85 },
+    }),
     // Gzip compression — ลด bundle size ~60-70% สำหรับ static hosting
     compression({
       algorithm: 'gzip',

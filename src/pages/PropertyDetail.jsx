@@ -12,6 +12,7 @@ import { highlightText, highlightTags } from '../lib/textHighlight'
 import { usePublicAuth } from '../context/PublicAuthContext'
 import { getPropertyLabel } from '../constants/propertyTypes'
 import RelatedProperties from '../components/RelatedProperties'
+import { getCloudinaryLargeUrl, getCloudinaryThumbUrl } from '../lib/cloudinary'
 
 function MortgageCalculator({ price, directInstallment }) {
   const [loanType, setLoanType] = useState(directInstallment ? 'direct' : 'bank')
@@ -636,7 +637,7 @@ export default function PropertyDetail() {
               <div className="bg-white rounded-xl overflow-hidden shadow-md">
                 <ProtectedImageContainer propertyId={property.propertyId} className="aspect-video relative bg-slate-200">
                   <img
-                    src={imgs[galleryIndex]}
+                    src={getCloudinaryLargeUrl(imgs[galleryIndex])}
                     alt={`${getPropertyLabel(property.type) || 'อสังหาริมทรัพย์'} โครงการ ${property.title} - รูปภาพที่ ${galleryIndex + 1}`}
                     className="w-full h-full object-cover protected-image"
                     loading="lazy"
@@ -655,7 +656,7 @@ export default function PropertyDetail() {
                         aria-label={`ดูรูปภาพที่ ${i + 1} จากทั้งหมด ${imgs.length} รูป`}
                       >
                         <img
-                          src={img}
+                          src={getCloudinaryThumbUrl(img)}
                           alt={`รูปย่อที่ ${i + 1} โครงการ ${property.title}`}
                           className="w-full h-full object-cover protected-image"
                           loading="lazy"

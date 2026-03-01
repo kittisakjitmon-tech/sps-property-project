@@ -4,6 +4,7 @@ import { Calendar, ArrowLeft, Play } from 'lucide-react'
 import PageLayout from '../components/PageLayout'
 import { getBlogByIdOnce } from '../lib/firestore'
 import { Helmet } from 'react-helmet-async'
+import { getCloudinaryLargeUrl, getCloudinaryMediumUrl } from '../lib/cloudinary'
 
 export default function BlogDetail() {
   const { id } = useParams()
@@ -129,9 +130,11 @@ export default function BlogDetail() {
           {coverImage && (
             <div className="mb-8 rounded-lg overflow-hidden">
               <img
-                src={coverImage}
+                src={getCloudinaryLargeUrl(coverImage)}
                 alt={blog.title}
                 className="w-full h-auto object-cover"
+                loading="eager"
+                decoding="async"
               />
             </div>
           )}
@@ -164,9 +167,11 @@ export default function BlogDetail() {
                 {blog.images.slice(1).map((imageUrl, index) => (
                   <div key={index} className="rounded-lg overflow-hidden">
                     <img
-                      src={imageUrl}
+                      src={getCloudinaryMediumUrl(imageUrl)}
                       alt={`${blog.title} - รูปภาพ ${index + 2}`}
                       className="w-full h-auto object-cover"
+                      loading="lazy"
+                      decoding="async"
                     />
                   </div>
                 ))}

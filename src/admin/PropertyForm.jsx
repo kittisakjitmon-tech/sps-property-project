@@ -10,6 +10,7 @@ import {
   getPropertiesOnce,
   createProperty,
   updatePropertyById,
+  deletePropertyById,
   uploadPropertyImageWithProgress,
 } from '../lib/firestore'
 import { generatePropertyID, checkPropertyIdDuplicate } from '../lib/propertyId'
@@ -17,7 +18,7 @@ import { logActivity } from '../services/activityLogger'
 import { fetchAndCacheNearbyPlaces } from '../services/nearbyPlacesService'
 import { compressImages } from '../lib/imageCompressor'
 import { generateAutoTags, mergeTags } from '../lib/autoTags'
-import { ImagePlus, X, ArrowLeft, RefreshCw, Plus, Star } from 'lucide-react'
+import { ImagePlus, X, ArrowLeft, RefreshCw, Plus, Star, Trash2 } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import GoogleMapsInputWithPreview from '../components/GoogleMapsInputWithPreview'
 import PropertyExporter from './components/PropertyExporter'
@@ -114,6 +115,7 @@ export default function PropertyForm() {
   const [compressing, setCompressing] = useState(false)
   const [allProperties, setAllProperties] = useState([])
   const [displayIdManuallyEdited, setDisplayIdManuallyEdited] = useState(false)
+  const [deleting, setDeleting] = useState(false)
   const progressLoader = useProgressLoader()
 
   useEffect(() => {
@@ -418,6 +420,34 @@ export default function PropertyForm() {
       setNearbyStatusMessage('อัปเดตข้อมูลไม่สำเร็จ กรุณาลองใหม่อีกครั้ง')
     } finally {
       setRefreshingNearby(false)
+    }
+  }
+
+  const handleDelete = async () => {
+    if (!isEdit || !id) return
+    const confirmed = window.confirm(
+      `คุณต้องการลบบ้าน/ทรัพย์นี้ใช่หรือไม่?\n\n"${form.title || '(ไม่มีชื่อ)'}"\n\nการดำเนินการนี้ไม่สามารถย้อนกลับได้ และรายการจะหายจากเว็บไซต์ทันที`
+    )
+    if (!confirmed) return
+    setDeleting(true)
+    try {
+      await deletePropertyById(id)
+      try {
+        await logActivity({
+          action: 'property_delete',
+          target: form.title || id,
+          details: `ลบทรัพย์: ${form.displayId || form.propertyId || id}`,
+          currentUser: user,
+        })
+      } catch (e) {
+        console.error('[PropertyForm] Failed to log activity:', e)
+      }
+      navigate('/sps-internal-admin/properties', { replace: true })
+    } catch (err) {
+      console.error(err)
+      alert('ลบไม่สำเร็จ: ' + (err?.message || err))
+    } finally {
+      setDeleting(false)
     }
   }
 
@@ -1166,7 +1196,7 @@ export default function PropertyForm() {
 
 
 
-          <div className="flex gap-3">
+          <div className="flex flex-wrap items-center gap-3">
             <button
               type="submit"
               disabled={saving}
@@ -1177,10 +1207,22 @@ export default function PropertyForm() {
             <button
               type="button"
               onClick={() => navigate('/sps-internal-admin')}
-              className="px-6 py-3 rounded-lg border border-slate-200 text-slate-700 hover:bg-slate-50"
+              disabled={saving || deleting}
+              className="px-6 py-3 rounded-lg border border-slate-200 text-slate-700 hover:bg-slate-50 disabled:opacity-50"
             >
               ยกเลิก
             </button>
+            {isEdit && (
+              <button
+                type="button"
+                onClick={handleDelete}
+                disabled={saving || deleting}
+                className="ml-auto px-6 py-3 rounded-lg bg-red-600 text-white font-semibold hover:bg-red-700 disabled:opacity-50 inline-flex items-center gap-2"
+              >
+                <Trash2 className="h-4 w-4" />
+                {deleting ? 'กำลังลบ…' : 'ลบบ้าน'}
+              </button>
+            )}
           </div>
         </form>
       </div>
