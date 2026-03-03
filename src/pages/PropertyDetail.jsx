@@ -562,11 +562,11 @@ export default function PropertyDetail() {
   const isShortMapLink = property.mapUrl && (property.mapUrl.includes('maps.app.goo.gl') || property.mapUrl.includes('goo.gl/maps'))
 
   const handleShare = async () => {
-    if (!user || !property?.id) return
+    if (!property?.id) return
     try {
       const link = await createOrReuseShareLink({
         propertyId: property.id,
-        createdBy: user.uid,
+        createdBy: 'public_share',
         ttlHours: 24,
       })
       const shareUrl = `${window.location.origin}/share/${link.id}`
@@ -764,8 +764,7 @@ export default function PropertyDetail() {
                     {/* Custom Tags with Highlight */}
 
                   </div>
-                  {/* แสดงปุ่มแชร์เฉพาะเมื่อล็อกอินแล้ว */}
-                  {user && isAgent() && (
+                  {/* ปุ่มแชร์สำหรับส่งลิงก์ให้ลูกค้า */}
                     <button
                       onClick={handleShare}
                       className="ml-4 flex items-center gap-2 px-4 py-2 rounded-lg bg-blue-900 text-white hover:bg-blue-800 transition font-medium shrink-0"
@@ -774,7 +773,6 @@ export default function PropertyDetail() {
                       <span className="hidden sm:inline">แชร์ให้ลูกค้า</span>
                       <span className="sm:hidden">แชร์</span>
                     </button>
-                  )}
                 </div>
 
                 {/* Location & Specs */}
