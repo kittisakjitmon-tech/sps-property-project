@@ -18,8 +18,12 @@
         "function": "sitemap"
       },
       {
-      "source": "/properties/**",
-      "destination": "/index.html"
+        "source": "/properties/**",
+        "destination": "/index.html"
+      },
+      {
+        "source": "/share/**",
+        "function": "shareMeta"
       },
       {
         "source": "**",

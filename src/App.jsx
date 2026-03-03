@@ -1,5 +1,5 @@
-import { Suspense, lazy } from 'react'
-import { Routes, Route, Navigate } from 'react-router-dom'
+import { Suspense, lazy, useEffect } from 'react'
+import { Routes, Route, Navigate, useLocation, useNavigate } from 'react-router-dom'
 import { HelmetProvider } from 'react-helmet-async'
 import { SearchProvider } from './context/SearchContext'
 import { PublicAuthProvider } from './context/PublicAuthContext'
@@ -102,53 +102,71 @@ function PublicRoutesWrapper() {
   )
 }
 
+// ─── Global handler สำหรับ query share=token จาก Cloud Functions ──────────────
+function ShareRedirectHandler({ children }) {
+  const location = useLocation()
+  const navigate = useNavigate()
+
+  useEffect(() => {
+    const params = new URLSearchParams(location.search)
+    const shareToken = params.get('share')
+    if (shareToken) {
+      navigate(`/share/${encodeURIComponent(shareToken)}`, { replace: true })
+    }
+  }, [location.search, navigate])
+
+  return children
+}
+
 // ─── App ─────────────────────────────────────────────────────────────────────
 export default function App() {
   return (
     <HelmetProvider>
       <SearchProvider>
-        <Suspense fallback={<RouteLoading />}>
-          <Routes>
-            {/* ── Admin routes (ไม่ถูก maintenanceMode บล็อก) ── */}
-            <Route
-              path="/sps-internal-admin/*"
-              element={
-                <AdminAuthProvider>
-                  <Routes>
-                    <Route path="login" element={<Login />} />
-                    <Route
-                      path="*"
-                      element={
-                        <AdminProtectedRoute>
-                          <AdminLayout />
-                        </AdminProtectedRoute>
-                      }
-                    >
-                      <Route index element={<Dashboard />} />
-                      <Route path="properties" element={<PropertyListPage />} />
-                      <Route path="properties/new" element={<PropertyForm />} />
-                      <Route path="properties/edit/:id" element={<PropertyForm />} />
-                      <Route path="hero-slides" element={<HeroSlidesAdmin />} />
-                      <Route path="homepage-sections" element={<HomepageSectionsAdmin />} />
-                      <Route path="popular-locations" element={<PopularLocationsAdmin />} />
-                      <Route path="pending-properties" element={<PendingProperties />} />
-                      <Route path="users" element={<UserManagement />} />
-                      <Route path="settings" element={<Settings />} />
-                      <Route path="my-properties" element={<MyProperties />} />
-                      <Route path="leads" element={<LeadsInbox />} />
-                      <Route path="loan-requests" element={<AdminLoanRequests />} />
-                      <Route path="activities" element={<ActivityLogsPage />} />
-                      <Route path="blogs" element={<AdminBlogs />} />
-                    </Route>
-                  </Routes>
-                </AdminAuthProvider>
-              }
-            />
+        <ShareRedirectHandler>
+          <Suspense fallback={<RouteLoading />}>
+            <Routes>
+              {/* ── Admin routes (ไม่ถูก maintenanceMode บล็อก) ── */}
+              <Route
+                path="/sps-internal-admin/*"
+                element={
+                  <AdminAuthProvider>
+                    <Routes>
+                      <Route path="login" element={<Login />} />
+                      <Route
+                        path="*"
+                        element={
+                          <AdminProtectedRoute>
+                            <AdminLayout />
+                          </AdminProtectedRoute>
+                        }
+                      >
+                        <Route index element={<Dashboard />} />
+                        <Route path="properties" element={<PropertyListPage />} />
+                        <Route path="properties/new" element={<PropertyForm />} />
+                        <Route path="properties/edit/:id" element={<PropertyForm />} />
+                        <Route path="hero-slides" element={<HeroSlidesAdmin />} />
+                        <Route path="homepage-sections" element={<HomepageSectionsAdmin />} />
+                        <Route path="popular-locations" element={<PopularLocationsAdmin />} />
+                        <Route path="pending-properties" element={<PendingProperties />} />
+                        <Route path="users" element={<UserManagement />} />
+                        <Route path="settings" element={<Settings />} />
+                        <Route path="my-properties" element={<MyProperties />} />
+                        <Route path="leads" element={<LeadsInbox />} />
+                        <Route path="loan-requests" element={<AdminLoanRequests />} />
+                        <Route path="activities" element={<ActivityLogsPage />} />
+                        <Route path="blogs" element={<AdminBlogs />} />
+                      </Route>
+                    </Routes>
+                  </AdminAuthProvider>
+                }
+              />
 
-            {/* ── Public routes (ครอบด้วย maintenance guard) ── */}
-            <Route path="/*" element={<PublicRoutesWrapper />} />
-          </Routes>
-        </Suspense>
+              {/* ── Public routes (ครอบด้วย maintenance guard) ── */}
+              <Route path="/*" element={<PublicRoutesWrapper />} />
+            </Routes>
+          </Suspense>
+        </ShareRedirectHandler>
       </SearchProvider>
     </HelmetProvider>
   )

@@ -120,6 +120,12 @@ export default function SharePage() {
   const isShortMapLink = property.mapUrl && (property.mapUrl.includes('maps.app.goo.gl') || property.mapUrl.includes('goo.gl/maps'))
 
   const pageTitle = `${property.title} | SPS Property Solution`
+  const shareDescription = `${property.title} - ${priceText} - ${locationText}`
+  const primaryImageRaw = imgs[0]
+  const primaryImage = primaryImageRaw && primaryImageRaw.startsWith('http')
+    ? primaryImageRaw
+    : `https://spspropertysolution.com${primaryImageRaw || ''}`
+  const shareUrl = `https://spspropertysolution.com/share/${token}`
   const handleContextMenu = (e) => e.preventDefault()
   const handleCopyPropertyId = async () => {
     if (!property?.propertyId) return
@@ -136,7 +142,18 @@ export default function SharePage() {
     <>
       <Helmet>
         <title>{pageTitle}</title>
-        <meta name="description" content={`${property.title} - ${priceText} - ${locationText}`} />
+        <meta name="description" content={shareDescription} />
+        {/* Open Graph meta สำหรับแชร์ไป LINE / Social */}
+        <meta property="og:title" content={pageTitle} />
+        <meta property="og:description" content={shareDescription} />
+        <meta property="og:url" content={shareUrl} />
+        <meta property="og:type" content="website" />
+        <meta property="og:image" content={primaryImage} />
+        {/* Twitter Card */}
+        <meta name="twitter:card" content="summary_large_image" />
+        <meta name="twitter:title" content={pageTitle} />
+        <meta name="twitter:description" content={shareDescription} />
+        <meta name="twitter:image" content={primaryImage} />
       </Helmet>
       <div
         className="share-page protected-content min-h-screen bg-white flex flex-col items-center justify-center p-4 sm:p-6 md:p-8 relative overflow-hidden"

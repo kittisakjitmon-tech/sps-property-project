@@ -15,6 +15,7 @@ admin.initializeApp()
 const PROPERTY_IMAGES_PREFIX = 'properties/'
 const ALLOWED_MIME = ['image/jpeg', 'image/png', 'image/jpg']
 const FIRESTORE_PROPERTIES = 'properties'
+const SHARE_LINKS = 'share_links'
 
 /**
  * ตั้งค่า Cloudinary จาก Environment Config (ไม่ hardcode)
@@ -498,9 +499,9 @@ exports.dynamicMeta = functions
   .onRequest(async (req, res) => {
     const userAgent = req.headers['user-agent']?.toLowerCase() || ''
 
-    // Check if the requester is a social bot
+    // Check if the requester is a social bot (use specific crawlers, ไม่ใช้คำว่า 'line' ตรงๆ เพื่อไม่ชนกับ in-app browser)
     const isBot = userAgent.includes('facebookexternalhit') ||
-      userAgent.includes('line') ||
+      userAgent.includes('linespider') || // LINE crawler
       userAgent.includes('twitterbot') ||
       userAgent.includes('linkedinbot') ||
       userAgent.includes('whatsapp') ||
@@ -582,6 +583,109 @@ exports.dynamicMeta = functions
         functions.logger.error('Error loading page from hosting', error)
         return res.status(500).send('Error loading page')
       }
+    }
+  })
+
+/**
+ * Dynamic Meta Generator for Share Links
+ * ใช้สำหรับ path /share/:token เพื่อให้ LINE / Facebook แสดงรูปบ้านจากทรัพย์ที่ลิงก์แชร์อ้างอิงอยู่
+ */
+exports.shareMeta = functions
+  .runWith({
+    timeoutSeconds: 30,
+    memory: '256MB',
+  })
+  .https
+  .onRequest(async (req, res) => {
+    const userAgent = req.headers['user-agent']?.toLowerCase() || ''
+    const isBot = userAgent.includes('facebookexternalhit') ||
+      userAgent.includes('linespider') || // LINE crawler
+      userAgent.includes('twitterbot') ||
+      userAgent.includes('linkedinbot') ||
+      userAgent.includes('whatsapp') ||
+      userAgent.includes('telegrambot')
+
+    const segments = req.path.split('/').filter(Boolean) // expect ['share', ':token']
+    if (segments[0] !== 'share' || !segments[1]) {
+      return res.status(404).send('Not Found')
+    }
+    const token = segments[1]
+
+    const db = admin.firestore()
+
+    if (isBot) {
+      try {
+        // 1) พยายามหา share link ตาม token ก่อน
+        const shareSnap = await db.collection(SHARE_LINKS).doc(token).get()
+
+        let propertyId = null
+        if (shareSnap.exists) {
+          const shareData = shareSnap.data() || {}
+          propertyId = shareData.propertyId || null
+        }
+
+        // 2) ถ้าไม่พบ share link หรือไม่มี propertyId ให้ fallback เป็น propertyId = token (ลิงก์เก่า)
+        if (!propertyId) {
+          propertyId = token
+        }
+
+        const propSnap = await db.collection(FIRESTORE_PROPERTIES).doc(propertyId).get()
+        if (!propSnap.exists) {
+          return res.status(404).send('Property Not Found')
+        }
+
+        const property = propSnap.data()
+        const title = `${property.title || 'อสังหาริมทรัพย์'} | SPS Property Solution`
+        const description = property.description
+          ? `${property.description.substring(0, 150)}...`
+          : 'รายละเอียดอสังหาริมทรัพย์ SPS Property Solution ชลบุรี'
+        const imageUrl = Array.isArray(property.images) && property.images.length > 0
+          ? property.images[0]
+          : 'https://spspropertysolution.com/icon.png'
+        const url = `https://spspropertysolution.com/share/${token}`
+
+        const htmlContent = `
+          <!DOCTYPE html>
+          <html lang="th">
+          <head>
+            <meta charset="UTF-8">
+            <title>${title}</title>
+            <meta name="description" content="${description}">
+
+            <!-- Open Graph / Facebook / LINE -->
+            <meta property="og:type" content="article">
+            <meta property="og:title" content="${title}">
+            <meta property="og:description" content="${description}">
+            <meta property="og:image" content="${imageUrl}">
+            <meta property="og:url" content="${url}">
+
+            <!-- Twitter -->
+            <meta name="twitter:card" content="summary_large_image">
+            <meta name="twitter:title" content="${title}">
+            <meta name="twitter:description" content="${description}">
+            <meta name="twitter:image" content="${imageUrl}">
+
+            <!-- Optional: redirect real users to SPA share page -->
+            <meta http-equiv="refresh" content="0; url=${url}">
+          </head>
+          <body>
+            <h1>${title}</h1>
+            <p>${description}</p>
+            <img src="${imageUrl}" alt="${title}">
+          </body>
+          </html>
+        `
+
+        res.set('Cache-Control', 'public, max-age=300, s-maxage=600')
+        return res.status(200).send(htmlContent)
+      } catch (error) {
+        functions.logger.error('Error generating share meta tags:', error)
+        return res.status(500).send('Internal Server Error')
+      }
+    } else {
+      // ผู้ใช้ปกติ: redirect ไปให้ SPA โหลด index.html แล้วให้ React จัดการ route ต่อเอง
+      const redirectUrl = `/index.html?share=${encodeURIComponent(token)}`
+      return res.redirect(302, redirectUrl)
     }
   })
 

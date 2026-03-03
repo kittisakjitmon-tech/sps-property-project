@@ -519,6 +519,12 @@ export default function PropertyDetail() {
   const imgs = property.images && property.images.length > 0 ? property.images : ['https://images.unsplash.com/photo-1564013799919-ab600027ffc6?w=800']
   const title = `${property.title} | SPS Property Solution`
   const description = (property.description || '').slice(0, 160) + ((property.description || '').length > 160 ? '...' : '')
+  const primaryImageRaw = Array.isArray(property.images) && property.images.length > 0
+    ? property.images[0]
+    : 'https://spspropertysolution.com/share-default.jpg'
+  const primaryImage = primaryImageRaw && primaryImageRaw.startsWith('http')
+    ? primaryImageRaw
+    : `https://spspropertysolution.com${primaryImageRaw || ''}`
 
   // Convert Google Maps URL to embed URL if needed
   const getMapEmbedUrl = (url) => {
@@ -589,6 +595,17 @@ export default function PropertyDetail() {
         <title>{title}</title>
         <meta name="description" content={description} />
         <link rel="canonical" href={`https://spspropertysolution.com/properties/${property.id}`} />
+        {/* Open Graph for social sharing (e.g., LINE, Facebook) */}
+        <meta property="og:title" content={title} />
+        <meta property="og:description" content={description} />
+        <meta property="og:url" content={`https://spspropertysolution.com/properties/${property.id}`} />
+        <meta property="og:type" content="website" />
+        <meta property="og:image" content={primaryImage} />
+        {/* Twitter Card (บางแพลตฟอร์มอื่นใช้งานร่วมกันได้) */}
+        <meta name="twitter:card" content="summary_large_image" />
+        <meta name="twitter:title" content={title} />
+        <meta name="twitter:description" content={description} />
+        <meta name="twitter:image" content={primaryImage} />
         <script type="application/ld+json">
           {JSON.stringify({
             '@context': 'https://schema.org',
