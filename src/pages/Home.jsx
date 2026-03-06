@@ -11,7 +11,7 @@ import HomeSearch from '../components/HomeSearch'
 import { getPropertiesOnce, getPopularLocationsOnce, getHomepageSectionsOnce, filterPropertiesByCriteria, getFeaturedBlogs } from '../lib/firestore'
 
 const DynamicPropertySection = lazy(() => import('../components/DynamicPropertySection'))
-import { getCloudinaryThumbUrl } from '../lib/cloudinary'
+import { getOptimizedImageUrl } from '../lib/cloudinary'
 import { useInView } from '../hooks/useInView'
 
 /** การ์ดทำเลยอดฮิต - placeholder น้ำเงินเป็นพื้นหลังเสมอ รูปทับด้านบนเมื่อโหลดได้ */
@@ -61,10 +61,13 @@ function PopularLocationCard({ loc, buildLocationPath, highPriority = false }) {
         <div className="absolute inset-0 z-[1] overflow-hidden" onContextMenu={(e) => e.preventDefault()}>
           <img
             key={imageUrl}
-            src={getCloudinaryThumbUrl(imageUrl)}
+            src={getOptimizedImageUrl(imageUrl, { width: 400, height: 225, crop: 'fill' })}
             alt={displayName}
+            width={400}
+            height={225}
             className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300 select-none"
             loading={highPriority ? 'eager' : 'lazy'}
+            decoding="async"
             draggable={false}
             fetchPriority={highPriority ? 'high' : 'auto'}
             onError={() => setFailedImageUrl(imageUrl)}
@@ -109,7 +112,7 @@ const serviceHighlights = [
 
 const ANIMATE_VISIBLE = 'opacity-100 translate-y-0'
 const ANIMATE_HIDDEN = 'opacity-0 translate-y-6'
-const ANIMATE_TRANSITION = 'transition-all duration-600 ease-out'
+const ANIMATE_TRANSITION = 'transition-all duration-500 ease-out'
 
 export default function Home() {
   const [properties, setProperties] = useState([])
@@ -137,10 +140,7 @@ export default function Home() {
     fetchedBlogsRef.current = true
     setBlogsLoading(true)
     getFeaturedBlogs()
-      .then((blogs) => {
-        setFeaturedBlogs(blogs || [])
-        requestAnimationFrame(() => setShowBlogs(true))
-      })
+      .then((blogs) => setFeaturedBlogs(blogs || []))
       .catch((e) => console.error('Error loading featured blogs:', e))
       .finally(() => setBlogsLoading(false))
   }, [inViewBlogs])
@@ -154,7 +154,6 @@ export default function Home() {
       .then(([allProperties, sections]) => {
         setProperties(allProperties)
         setHomepageSections((sections || []).filter((s) => s.isActive === true))
-        requestAnimationFrame(() => setShowSections(true))
       })
       .catch((e) => console.error('Error loading sections:', e))
       .finally(() => setSectionsLoading(false))
@@ -169,11 +168,37 @@ export default function Home() {
       .then((locations) => {
         const list = (locations || []).filter((loc) => loc.isActive === true)
         setPopularLocations(list)
-        requestAnimationFrame(() => setShowLocations(true))
       })
       .catch((e) => console.error('Error loading popular locations:', e))
       .finally(() => setLocationsLoading(false))
   }, [inViewLocations])
+
+  // Fade-in เนื้อหาหลังโหลดเสร็จ — double rAF ให้ content วาดครั้งแรกที่ opacity-0 ก่อน แล้วค่อย transition
+  useEffect(() => {
+    if (featuredBlogs.length === 0 || blogsLoading) return
+    const id = requestAnimationFrame(() => {
+      requestAnimationFrame(() => setShowBlogs(true))
+    })
+    return () => cancelAnimationFrame(id)
+  }, [featuredBlogs.length, blogsLoading])
+
+  useEffect(() => {
+    if (sectionsLoading) return
+    const hasSectionData = homepageSections.length > 0 || properties.some((p) => p.status === 'available' && p.featured)
+    if (!hasSectionData) return
+    const id = requestAnimationFrame(() => {
+      requestAnimationFrame(() => setShowSections(true))
+    })
+    return () => cancelAnimationFrame(id)
+  }, [sectionsLoading, homepageSections.length, properties])
+
+  useEffect(() => {
+    if (locationsLoading) return
+    const id = requestAnimationFrame(() => {
+      requestAnimationFrame(() => setShowLocations(true))
+    })
+    return () => cancelAnimationFrame(id)
+  }, [locationsLoading])
 
   // Resolve properties for each section (จำกัดสูงสุด 5 รายการต่อ section)
   const sectionPropertiesMap = useMemo(() => {
@@ -377,8 +402,10 @@ export default function Home() {
                         {thumbnail ? (
                           <>
                             <img
-                              src={getCloudinaryThumbUrl(thumbnail)}
+                              src={getOptimizedImageUrl(thumbnail, { width: 400, height: 225, crop: 'fill' })}
                               alt={blog.title}
+                              width={400}
+                              height={225}
                               loading="lazy"
                               decoding="async"
                               className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"

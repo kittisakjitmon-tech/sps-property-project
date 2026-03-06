@@ -5,8 +5,12 @@ import 'swiper/css'
 import 'swiper/css/effect-fade'
 import 'swiper/css/pagination'
 import { getHeroSlidesOnce } from '../lib/firestore'
+import { getOptimizedImageUrl } from '../lib/cloudinary'
 
 const DEFAULT_IMAGE = 'https://images.unsplash.com/photo-1564013799919-ab600027ffc6?w=1280&q=80&auto=format'
+
+const HERO_WIDTH = 1280
+const HERO_HEIGHT = 720
 
 function getSlideImageUrl(slide) {
   return slide?.imageUrl || slide?.image || slide?.url || DEFAULT_IMAGE
@@ -70,15 +74,15 @@ export default function HeroSlider({ children, className = '' }) {
         style={{ height: '100%', minHeight: '85vh' }}
       >
         {slides.map((slide, index) => {
-          const imageUrl = getSlideImageUrl(slide)
+          const rawUrl = getSlideImageUrl(slide)
+          const imageUrl = getOptimizedImageUrl(rawUrl, { width: HERO_WIDTH, height: HERO_HEIGHT, crop: 'fill' })
           return (
             <SwiperSlide key={slide.id} style={{ height: '100%', minHeight: '85vh' }}>
-              {/* ใช้ <img> แทน background-image เพื่อให้ browser preload/lazy load ได้ */}
               <img
                 src={imageUrl}
                 alt=""
-                width={1920}
-                height={1080}
+                width={HERO_WIDTH}
+                height={HERO_HEIGHT}
                 className="absolute inset-0 w-full h-full object-cover"
                 loading={index === 0 ? 'eager' : 'lazy'}
                 fetchPriority={index === 0 ? 'high' : 'auto'}

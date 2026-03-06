@@ -5,6 +5,7 @@
 
 const CLOUD_NAME = import.meta.env.VITE_CLOUDINARY_CLOUD_NAME || ''
 const CDN_BASE = CLOUD_NAME ? `https://res.cloudinary.com/${CLOUD_NAME}/image/upload` : ''
+const FETCH_BASE = CLOUD_NAME ? `https://res.cloudinary.com/${CLOUD_NAME}/image/fetch/` : ''
 
 /**
  * ตรวจว่าเป็น URL ของ Cloudinary หรือไม่
@@ -68,22 +69,44 @@ export function getCloudinaryImageUrl(url, options = {}) {
 }
 
 /**
- * URL รูป thumbnail สำหรับ card/list (ความกว้าง 400)
+ * รูปที่เก็บใน Cloudinary จะได้ resize + WebP
+ * รูปที่เก็บที่อื่น (เช่น Firebase Storage) จะถูกดึงผ่าน Cloudinary fetch → WebP + resize
+ * @param {string} url - URL รูป (Cloudinary หรือ external)
+ * @param {object} options - { width, height, crop, quality } (format เป็น webp เสมอ)
+ */
+export function getOptimizedImageUrl(url, options = {}) {
+  if (!url || typeof url !== 'string') return url
+  const opts = { ...options, format: 'webp', quality: options.quality ?? 'auto' }
+  if (isCloudinaryUrl(url)) {
+    return getCloudinaryImageUrl(url, opts)
+  }
+  if (!FETCH_BASE) return url
+  const { width, height, crop = 'fill' } = opts
+  const parts = ['f_webp', 'q_auto']
+  if (width) parts.push(`w_${width}`)
+  if (height) parts.push(`h_${height}`)
+  if ((width || height) && crop) parts.push(`c_${crop}`)
+  const transformStr = parts.join(',')
+  return `${FETCH_BASE}${transformStr}/${encodeURIComponent(url)}`
+}
+
+/**
+ * URL รูป thumbnail สำหรับ card/list — WebP, ขนาดพอดีช่อง 4:3
  */
 export function getCloudinaryThumbUrl(url) {
-  return getCloudinaryImageUrl(url, { width: 400, crop: 'fill' })
+  return getCloudinaryImageUrl(url, { width: 400, height: 300, crop: 'fill', format: 'webp' })
 }
 
 /**
- * URL รูปขนาดกลาง สำหรับ slider/detail (ความกว้าง 800)
+ * URL รูปขนาดกลาง สำหรับ slider/detail — WebP
  */
 export function getCloudinaryMediumUrl(url) {
-  return getCloudinaryImageUrl(url, { width: 800, crop: 'fill' })
+  return getCloudinaryImageUrl(url, { width: 800, height: 450, crop: 'fill', format: 'webp' })
 }
 
 /**
- * URL รูปขนาดใหญ่ สำหรับหน้า detail gallery (ความกว้าง 1200)
+ * URL รูปขนาดใหญ่ สำหรับหน้า detail gallery — WebP
  */
 export function getCloudinaryLargeUrl(url) {
-  return getCloudinaryImageUrl(url, { width: 1200, crop: 'fill' })
+  return getCloudinaryImageUrl(url, { width: 1200, height: 675, crop: 'fill', format: 'webp' })
 }

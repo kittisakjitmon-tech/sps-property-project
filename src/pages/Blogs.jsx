@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom'
 import { ChevronLeft, ChevronRight, Calendar, Play } from 'lucide-react'
 import PageLayout from '../components/PageLayout'
 import { getPublishedBlogs } from '../lib/firestore'
+import { getOptimizedImageUrl } from '../lib/cloudinary'
 import { Helmet } from 'react-helmet-async'
 
 export default function Blogs() {
@@ -125,7 +126,7 @@ export default function Blogs() {
                         {coverImage ? (
                           <>
                             <img
-                              src={coverImage}
+                              src={getOptimizedImageUrl(coverImage, { width: 400, height: 225, crop: 'fill' })}
                               alt={blog.title}
                               width={400}
                               height={225}

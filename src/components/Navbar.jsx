@@ -119,7 +119,7 @@ export default function Navbar() {
   }, [])
 
   return (
-    <header className="sticky top-0 z-[100] w-full bg-white/98 border-b border-slate-200/80 shadow-sm">
+    <header className="sticky top-0 z-[100] w-full bg-white border-b border-slate-200 shadow-sm">
       <nav className="max-w-7xl mx-auto px-3 sm:px-5 lg:px-8">
         <div className="flex items-center justify-between h-16">
         
