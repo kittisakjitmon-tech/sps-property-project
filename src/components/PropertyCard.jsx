@@ -239,7 +239,7 @@ function PropertyCard({ property, featuredLabel = 'แนะนำ', searchQuery
     return (
       <Link
         to={`/properties/${property.id}`}
-        className="group block bg-white rounded-2xl overflow-hidden shadow-sm hover:shadow-2xl hover:-translate-y-2 transition-all duration-300 ease-in-out"
+        className="group block bg-white rounded-2xl overflow-hidden shadow-sm hover:shadow-lg hover:-translate-y-2 transition-all duration-300 ease-in-out"
       >
         <div
           className="relative overflow-hidden rounded-t-2xl"
@@ -271,7 +271,7 @@ function PropertyCard({ property, featuredLabel = 'แนะนำ', searchQuery
             <button
               type="button"
               onClick={handleFavoriteClick}
-              className="p-2 bg-white/80 backdrop-blur-md rounded-full shadow-sm hover:bg-white/90 transition min-w-[44px] min-h-[44px] [touch-action:manipulation]"
+              className="p-2 bg-white/95 rounded-full shadow-sm hover:bg-white transition min-w-[44px] min-h-[44px] [touch-action:manipulation]"
               title={favorited ? 'ลบออกจากรายการโปรด' : 'บันทึกเป็นรายการโปรด'}
               aria-label={favorited ? 'ลบออกจากรายการโปรด' : 'บันทึกเป็นรายการโปรด'}
             >
@@ -314,7 +314,7 @@ function PropertyCard({ property, featuredLabel = 'แนะนำ', searchQuery
             {/* Badge สถานะ (availability) - แสดงทุกประเภท */}
             {availabilityBadge && (
               <span
-                className={`px-2.5 py-1 rounded-md text-xs font-medium shadow-md backdrop-blur-sm hover:scale-105 transition-transform ${availabilityBadge.color}`}
+                className={`px-2.5 py-1 rounded-md text-xs font-medium shadow-sm hover:scale-105 transition-transform ${availabilityBadge.color}`}
               >
                 {availabilityBadge.label}
               </span>
@@ -322,14 +322,14 @@ function PropertyCard({ property, featuredLabel = 'แนะนำ', searchQuery
             {/* Badge สภาพ (propertyCondition - มือ 1/มือ 2) - แสดงเฉพาะ listingType === 'sale' */}
             {propertyConditionBadge && (
               <span
-                className={`px-2.5 py-1 rounded-md text-xs font-medium shadow-md backdrop-blur-sm hover:scale-105 transition-transform ${propertyConditionBadge.color}`}
+                className={`px-2.5 py-1 rounded-md text-xs font-medium shadow-sm hover:scale-105 transition-transform ${propertyConditionBadge.color}`}
               >
                 {propertyConditionBadge.label}
               </span>
             )}
             {/* Display ID */}
             {property.displayId && (
-              <span className="text-[10px] text-white drop-shadow-md font-medium mt-0.5 text-right bg-black/40 px-2 py-0.5 rounded-md backdrop-blur-sm">
+              <span className="text-[10px] text-white drop-shadow font-medium mt-0.5 text-right bg-black/50 px-2 py-0.5 rounded-md">
                 {property.displayId}
               </span>
             )}

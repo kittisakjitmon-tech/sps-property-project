@@ -41,7 +41,7 @@ export default function FilterSidebar({ filters, onUpdateFilters, onApply, onCle
       )}
       
       {/* Sidebar */}
-      <div className={`fixed top-16 right-0 h-[calc(100vh-4rem)] w-80 bg-white shadow-xl z-40 transition-transform lg:relative lg:top-0 lg:h-auto lg:shadow-sm lg:rounded-2xl lg:w-64 lg:translate-x-0 overflow-y-auto ${
+      <div className={`fixed top-16 right-0 h-[calc(100vh-4rem)] w-80 bg-white shadow-lg z-40 transition-transform lg:relative lg:top-0 lg:h-auto lg:shadow-sm lg:rounded-2xl lg:w-64 lg:translate-x-0 overflow-y-auto ${
         isOpen ? 'translate-x-0' : 'translate-x-full lg:translate-x-0'
       }`}>
         <div className="p-6">

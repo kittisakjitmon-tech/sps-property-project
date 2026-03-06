@@ -57,14 +57,14 @@ function SortableSlideItem({ slide, index, onDelete, isDeleting }) {
       <div
         {...attributes}
         {...listeners}
-        className="absolute top-2 left-2 z-20 p-2 bg-white/90 backdrop-blur-sm rounded-lg cursor-grab active:cursor-grabbing shadow-md hover:bg-white transition"
+        className="absolute top-2 left-2 z-20 p-2 bg-white rounded-lg cursor-grab active:cursor-grabbing shadow-md hover:bg-slate-50 transition"
         title="ลากเพื่อสลับลำดับ"
       >
         <GripVertical className="h-5 w-5 text-slate-600" />
       </div>
 
       {/* Order Badge */}
-      <div className="absolute top-2 right-2 z-20 px-3 py-1 bg-blue-900/90 backdrop-blur-sm text-white text-sm font-bold rounded-lg shadow-md">
+      <div className="absolute top-2 right-2 z-20 px-3 py-1 bg-blue-900 text-white text-sm font-bold rounded-lg shadow-md">
         #{index + 1}
       </div>
 

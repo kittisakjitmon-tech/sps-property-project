@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, lazy, Suspense } from 'react'
 import { useParams, Link } from 'react-router-dom'
 import { Helmet } from 'react-helmet-async'
 import {
@@ -13,8 +13,9 @@ import {
   ChevronRight,
 } from 'lucide-react'
 import { getPropertyByIdOnce, getShareLinkByToken, isShareLinkExpired } from '../lib/firestore'
-import NeighborhoodData from '../components/NeighborhoodData'
 import ProtectedImageContainer from '../components/ProtectedImageContainer'
+
+const NeighborhoodData = lazy(() => import('../components/NeighborhoodData'))
 import { formatPrice } from '../lib/priceFormat'
 
 export default function SharePage() {
@@ -163,7 +164,7 @@ export default function SharePage() {
         {/* Theme: Blue 30%, White 60%, Yellow 10% */}
         <div className="w-full max-w-3xl relative z-10">
           {/* Card - White 60% background */}
-          <div className="bg-white rounded-2xl shadow-xl border border-blue-100 overflow-hidden">
+          <div className="bg-white rounded-2xl shadow-lg border border-blue-100 overflow-hidden">
             {/* Main Image */}
             <ProtectedImageContainer propertyId={property.propertyId} className="aspect-video relative bg-slate-100 select-none">
               <img
@@ -290,9 +291,15 @@ export default function SharePage() {
                 </p>
               </div>
 
-              {/* Nearby Places */}
+              {/* Nearby Places — below the fold, lazy loaded */}
               <div className="mt-6">
-                <NeighborhoodData property={property} />
+                <Suspense
+                  fallback={
+                    <div className="bg-white rounded-xl border border-slate-200 p-6 shadow-sm min-h-[120px] animate-pulse" aria-hidden="true" />
+                  }
+                >
+                  <NeighborhoodData property={property} />
+                </Suspense>
               </div>
 
               {/* Live Google Map Embed */}

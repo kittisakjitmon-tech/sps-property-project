@@ -127,6 +127,10 @@ export default function Blogs() {
                             <img
                               src={coverImage}
                               alt={blog.title}
+                              width={400}
+                              height={225}
+                              loading="lazy"
+                              decoding="async"
                               className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
                             />
                             {hasVideo && (

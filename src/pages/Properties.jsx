@@ -1,13 +1,14 @@
 import { useSearchParams, Link, useNavigate } from 'react-router-dom'
-import { useEffect, useMemo, useState, useCallback, useRef } from 'react'
+import { useEffect, useMemo, useState, useCallback, useRef, lazy, Suspense } from 'react'
 import { useSearch } from '../context/SearchContext'
 import { getPropertiesSnapshot } from '../lib/firestore'
 import PageLayout from '../components/PageLayout'
 import PropertyCard from '../components/PropertyCard'
-import PropertiesMap from '../components/PropertiesMap'
-import FilterSidebar from '../components/FilterSidebar'
 import ActiveSearchCriteriaBar from '../components/ActiveSearchCriteriaBar'
 import { SlidersHorizontal, Search, X, Wallet, Landmark, SearchX } from 'lucide-react'
+
+const PropertiesMap = lazy(() => import('../components/PropertiesMap'))
+const FilterSidebar = lazy(() => import('../components/FilterSidebar'))
 import { searchProperties } from '../lib/smartSearch'
 import { filterProperties } from '../lib/globalSearch'
 import { useTypingPlaceholder } from '../components/TypingPlaceholder'
@@ -492,15 +493,21 @@ export default function Properties() {
           </div>
 
           <div className="flex gap-6">
-            {/* Filter Sidebar */}
-            <FilterSidebar
-              filters={filters}
-              onUpdateFilters={updateFilters}
-              onApply={handleSearch}
-              onClear={handleClearFilters}
-              isOpen={filterSidebarOpen}
-              onClose={() => setFilterSidebarOpen(false)}
-            />
+            {/* Filter Sidebar — below the fold on mobile, lazy loaded */}
+            <Suspense
+              fallback={
+                <div className="hidden lg:block w-72 shrink-0 h-[400px] bg-slate-100 rounded-xl animate-pulse" aria-hidden="true" />
+              }
+            >
+              <FilterSidebar
+                filters={filters}
+                onUpdateFilters={updateFilters}
+                onApply={handleSearch}
+                onClear={handleClearFilters}
+                isOpen={filterSidebarOpen}
+                onClose={() => setFilterSidebarOpen(false)}
+              />
+            </Suspense>
 
             <div className="flex-1 min-w-0">
               {/* Active Search Criteria Bar */}
@@ -517,10 +524,18 @@ export default function Properties() {
                 onClearAll={handleClearFilters}
               />
 
-              {/* Properties Map */}
+              {/* Properties Map — below the fold, lazy loaded */}
               {safeFiltered.length > 0 && (
                 <div className="mb-8">
-                  <PropertiesMap properties={safeFiltered} />
+                  <Suspense
+                    fallback={
+                      <div className="w-full h-[320px] bg-slate-100 rounded-xl flex items-center justify-center animate-pulse" aria-hidden="true">
+                        <span className="text-slate-500 text-sm">กำลังโหลดแผนที่…</span>
+                      </div>
+                    }
+                  >
+                    <PropertiesMap properties={safeFiltered} />
+                  </Suspense>
                 </div>
               )}
 

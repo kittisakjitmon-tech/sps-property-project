@@ -80,7 +80,7 @@ export default function HomeSearch() {
   return (
     <div className="w-full">
       {/* Single Smart Input Box - Google/Airbnb Style */}
-      <div className="relative bg-white rounded-full shadow-xl flex items-center p-1.5 sm:p-2 border border-slate-100 overflow-hidden">
+      <div className="relative bg-white rounded-full shadow-md flex items-center p-1.5 sm:p-2 border border-slate-100 overflow-hidden">
         {/* Search Icon (Left) */}
         <div className="pl-3 sm:pl-4 flex-shrink-0">
           <Search className="h-5 w-5 sm:h-6 sm:w-6 text-slate-400" />

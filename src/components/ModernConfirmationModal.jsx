@@ -68,12 +68,12 @@ export default function ModernConfirmationModal({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-gray-900/60 backdrop-blur-sm transition-opacity duration-300"
+      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-gray-900/60 transition-opacity duration-300"
       onClick={handleOverlayClick}
       style={{ animation: 'fadeIn 0.3s ease-out' }}
     >
       <div
-        className="relative w-full max-w-md bg-white rounded-3xl shadow-2xl transform transition-all duration-300"
+        className="relative w-full max-w-md bg-white rounded-3xl shadow-xl transform transition-all duration-300"
         style={{ animation: 'scaleIn 0.3s ease-out' }}
       >
         {/* Close Button */}

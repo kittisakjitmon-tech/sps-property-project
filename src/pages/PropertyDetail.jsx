@@ -1,8 +1,7 @@
-import { useState, useEffect, useId } from 'react'
+import { useState, useEffect, useId, lazy, Suspense } from 'react'
 import { useParams, Link, useSearchParams, useNavigate } from 'react-router-dom'
 import { Helmet } from 'react-helmet-async'
 import { MapPin, Bed, Bath, Maximize2, Phone, MessageCircle, Share2, CheckCircle2, Copy } from 'lucide-react'
-import NeighborhoodData from '../components/NeighborhoodData'
 import { getPropertyByIdOnce, createAppointment, createOrReuseShareLink, recordPropertyView } from '../lib/firestore'
 import PageLayout from '../components/PageLayout'
 import Toast from '../components/Toast'
@@ -11,8 +10,10 @@ import { formatPrice } from '../lib/priceFormat'
 import { highlightText, highlightTags } from '../lib/textHighlight'
 import { usePublicAuth } from '../context/PublicAuthContext'
 import { getPropertyLabel } from '../constants/propertyTypes'
-import RelatedProperties from '../components/RelatedProperties'
 import { getCloudinaryLargeUrl, getCloudinaryThumbUrl } from '../lib/cloudinary'
+
+const RelatedProperties = lazy(() => import('../components/RelatedProperties'))
+const NeighborhoodData = lazy(() => import('../components/NeighborhoodData'))
 
 function MortgageCalculator({ price, directInstallment }) {
   const [loanType, setLoanType] = useState(directInstallment ? 'direct' : 'bank')
@@ -940,8 +941,21 @@ export default function PropertyDetail() {
                 </div>
               )}
 
-              {/* Related Properties */}
-              <RelatedProperties currentPropertyId={property.id} district={loc.district} type={property.type} />
+              {/* Related Properties — below the fold, lazy loaded */}
+              <Suspense
+                fallback={
+                  <div className="py-8" aria-hidden="true">
+                    <div className="h-6 w-40 bg-slate-200 rounded-lg mb-4 animate-pulse" />
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                      {[1, 2, 3].map((i) => (
+                        <div key={i} className="h-64 bg-slate-100 rounded-xl animate-pulse" />
+                      ))}
+                    </div>
+                  </div>
+                }
+              >
+                <RelatedProperties currentPropertyId={property.id} district={loc.district} type={property.type} />
+              </Suspense>
             </div>
 
             <div className="lg:col-span-1">
@@ -969,7 +983,13 @@ export default function PropertyDetail() {
                   </div>
                 </div>
 
-                <NeighborhoodData property={property} />
+                <Suspense
+                  fallback={
+                    <div className="bg-white rounded-xl border border-slate-200 p-6 shadow-md min-h-[120px] animate-pulse" aria-hidden="true" />
+                  }
+                >
+                  <NeighborhoodData property={property} />
+                </Suspense>
               </div>
             </div>
           </div>

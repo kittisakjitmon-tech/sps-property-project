@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useRef } from 'react'
+import { useState, useEffect, useMemo, useRef, lazy, Suspense } from 'react'
 import { Link } from 'react-router-dom'
 import {
   CheckCircle2, Building2, Lightbulb, Handshake, TrendingUp,
@@ -8,8 +8,9 @@ import {
 import { Helmet } from 'react-helmet-async'
 import PageLayout from '../components/PageLayout'
 import HomeSearch from '../components/HomeSearch'
-import DynamicPropertySection from '../components/DynamicPropertySection'
 import { getPropertiesOnce, getPopularLocationsOnce, getHomepageSectionsOnce, filterPropertiesByCriteria, getFeaturedBlogs } from '../lib/firestore'
+
+const DynamicPropertySection = lazy(() => import('../components/DynamicPropertySection'))
 import { getCloudinaryThumbUrl } from '../lib/cloudinary'
 import { useInView } from '../hooks/useInView'
 
@@ -71,7 +72,7 @@ function PopularLocationCard({ loc, buildLocationPath, highPriority = false }) {
         </div>
       )}
       <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/20 to-transparent z-10" />
-      <span className="absolute bottom-4 left-4 right-4 text-white text-xl font-bold drop-shadow-lg z-20">
+      <span className="absolute bottom-4 left-4 right-4 text-white text-xl font-bold drop-shadow z-20">
         {displayName}
       </span>
     </Link>
@@ -271,7 +272,7 @@ export default function Home() {
           <span className="inline-block leading-tight">
             <span className="block text-4xl sm:text-5xl lg:text-6xl font-extrabold text-white">
               รวมภาระหนี้{' '}
-              <span className="text-yellow-400 drop-shadow-md">ผ่อนบ้านทางเดียว</span>
+              <span className="text-yellow-400 drop-shadow">ผ่อนบ้านทางเดียว</span>
             </span>
             <span className="block text-lg sm:text-xl font-medium text-blue-200 mt-3">
               อสังหาริมทรัพย์คุณภาพ อมตะซิตี้ · ชลบุรี
@@ -289,7 +290,7 @@ export default function Home() {
                 return (
                   <div
                     key={item.title}
-                    className="flex items-start gap-3 p-3 sm:p-4 rounded-xl bg-white/10 backdrop-blur-md border border-white/20 shadow-md"
+                    className="flex items-start gap-3 p-3 sm:p-4 rounded-xl bg-white/15 border border-white/25 shadow-sm"
                   >
                     <div className="w-8 h-8 rounded-full bg-white/15 flex items-center justify-center shrink-0">
                       <IconComponent className={`h-4.5 w-4.5 ${item.iconClassName}`} />
@@ -427,23 +428,25 @@ export default function Home() {
             <div
               className={`${ANIMATE_TRANSITION} ${showSections ? ANIMATE_VISIBLE : ANIMATE_HIDDEN}`}
             >
-              {hasSections ? (
-                homepageSections.map((section, idx) => (
-                  <DynamicPropertySection
-                    key={section.id}
-                    title={section.title}
-                    subtitle={section.subtitle}
-                    properties={sectionPropertiesMap[section.id] || []}
-                    targetTag={(section.targetTag && section.targetTag.trim()) || section.title || ''}
-                    titleColor={section.titleColor || 'text-blue-900'}
-                    isHighlighted={section.isHighlighted || false}
-                    isBlinking={section.isBlinking || false}
-                    sectionIndex={idx}
-                  />
-                ))
-              ) : (
-                <DynamicPropertySection title="ทรัพย์เด่น" properties={featured} sectionIndex={0} />
-              )}
+              <Suspense fallback={<PropertySectionSkeleton />}>
+                {hasSections ? (
+                  homepageSections.map((section, idx) => (
+                    <DynamicPropertySection
+                      key={section.id}
+                      title={section.title}
+                      subtitle={section.subtitle}
+                      properties={sectionPropertiesMap[section.id] || []}
+                      targetTag={(section.targetTag && section.targetTag.trim()) || section.title || ''}
+                      titleColor={section.titleColor || 'text-blue-900'}
+                      isHighlighted={section.isHighlighted || false}
+                      isBlinking={section.isBlinking || false}
+                      sectionIndex={idx}
+                    />
+                  ))
+                ) : (
+                  <DynamicPropertySection title="ทรัพย์เด่น" properties={featured} sectionIndex={0} />
+                )}
+              </Suspense>
             </div>
           ) : null}
         </div>
@@ -459,8 +462,8 @@ export default function Home() {
             }}
           />
           {/* Colour blobs for depth */}
-          <div className="absolute -top-24 -left-24 w-72 h-72 bg-blue-700 rounded-full blur-3xl opacity-40 pointer-events-none" />
-          <div className="absolute -bottom-24 -right-24 w-72 h-72 bg-indigo-700 rounded-full blur-3xl opacity-30 pointer-events-none" />
+          <div className="absolute -top-24 -left-24 w-72 h-72 bg-blue-700 rounded-full blur-2xl opacity-40 pointer-events-none" />
+          <div className="absolute -bottom-24 -right-24 w-72 h-72 bg-indigo-700 rounded-full blur-2xl opacity-30 pointer-events-none" />
 
           <div className="relative max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
             <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-8">
@@ -482,7 +485,7 @@ export default function Home() {
               <div className="flex flex-col sm:flex-row md:flex-col lg:flex-row items-stretch sm:items-center gap-3 md:shrink-0">
                 <a
                   href="tel:0955520801"
-                  className="inline-flex items-center justify-center gap-2 bg-yellow-400 hover:bg-yellow-300 text-blue-900 font-bold px-7 py-3.5 rounded-xl shadow-lg hover:shadow-xl transition-all duration-300 text-base whitespace-nowrap"
+                  className="inline-flex items-center justify-center gap-2 bg-yellow-400 hover:bg-yellow-300 text-blue-900 font-bold px-7 py-3.5 rounded-xl shadow-md hover:shadow-lg transition-all duration-300 text-base whitespace-nowrap"
                 >
                   <Phone className="h-5 w-5" />
                   095 552 0801

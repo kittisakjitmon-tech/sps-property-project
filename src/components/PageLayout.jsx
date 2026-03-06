@@ -1,9 +1,9 @@
 import { useState, useEffect, Suspense, lazy } from 'react'
 import Navbar from './Navbar'
-import Footer from './Footer'
 import { Phone, ArrowUp } from 'lucide-react'
 
 const HeroSlider = lazy(() => import('./HeroSlider'))
+const Footer = lazy(() => import('./Footer'))
 
 /**
  * PageLayout - Layout component ที่มี Navbar, Hero section และ Footer สำหรับทุกหน้า
@@ -62,7 +62,7 @@ export default function PageLayout({
                   {heroSubtitle}
                 </p>
                 {searchComponent && (
-                  <div className="bg-white/70 backdrop-blur-md border border-white/20 shadow-lg rounded-2xl p-3 sm:p-5 max-w-3xl mx-auto">
+                  <div className="bg-white/90 border border-white/30 shadow-md rounded-2xl p-3 sm:p-5 max-w-3xl mx-auto">
                     {searchComponent}
                   </div>
                 )}
@@ -82,7 +82,7 @@ export default function PageLayout({
                 </div>
                 {searchComponent && (
                   <div className="mb-8">
-                    <div className="bg-white/70 backdrop-blur-md border border-white/20 shadow-lg rounded-2xl p-3 sm:p-5 max-w-3xl mx-auto">
+                    <div className="bg-white/90 border border-white/30 shadow-md rounded-2xl p-3 sm:p-5 max-w-3xl mx-auto">
                       {searchComponent}
                     </div>
                   </div>
@@ -106,7 +106,7 @@ export default function PageLayout({
               <p className={`text-slate-200 text-center text-lg ${fullHeight ? 'mb-6' : 'mb-2'}`}>{heroSubtitle}</p>
 
               {searchComponent && (
-                <div className={`bg-white/70 backdrop-blur-md border border-white/20 shadow-lg rounded-2xl ${fullHeight ? 'p-4 sm:p-6' : 'p-3 sm:p-4 max-w-2xl mx-auto'}`}>
+                <div className={`bg-white/90 border border-white/30 shadow-md rounded-2xl ${fullHeight ? 'p-4 sm:p-6' : 'p-3 sm:p-4 max-w-2xl mx-auto'}`}>
                   {searchComponent}
                 </div>
               )}
@@ -125,7 +125,17 @@ export default function PageLayout({
         {children}
       </main>
 
-      {showFooter && <Footer />}
+      {showFooter && (
+        <Suspense
+          fallback={
+            <footer className="bg-blue-900 text-white min-h-[200px] flex items-center justify-center" aria-hidden="true">
+              <div className="animate-pulse text-blue-200 text-sm">กำลังโหลด…</div>
+            </footer>
+          }
+        >
+          <Footer />
+        </Suspense>
+      )}
 
       {/* Floating Call Button - Mobile only */}
       <a

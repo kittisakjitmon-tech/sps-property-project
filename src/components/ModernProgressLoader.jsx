@@ -8,12 +8,12 @@ export default function ModernProgressLoader({ progress = 0, status = '', subSta
 
   return (
     <div
-      className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm"
+      className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/50"
       aria-live="polite"
       aria-busy="true"
       role="alert"
     >
-      <div className="bg-white rounded-2xl shadow-2xl p-8 w-full max-w-md">
+      <div className="bg-white rounded-2xl shadow-xl p-8 w-full max-w-md">
         {/* Percentage */}
         <div className="text-center mb-6">
           <p className="text-5xl font-bold text-blue-900 tabular-nums">{displayPercent}%</p>

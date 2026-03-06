@@ -545,7 +545,7 @@ export default function HomepageSectionsAdmin() {
 
       {showForm && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4 overflow-y-auto">
-          <div className="bg-white rounded-xl shadow-xl max-w-lg w-full max-h-[90vh] overflow-y-auto">
+          <div className="bg-white rounded-xl shadow-lg max-w-lg w-full max-h-[90vh] overflow-y-auto">
             <div className="p-6">
               <h2 className="text-xl font-bold text-blue-900 mb-4">{editingSection ? 'แก้ไขหัวข้อ' : 'เพิ่มหัวข้อใหม่'}</h2>
               <form onSubmit={handleSubmit} className="space-y-4">

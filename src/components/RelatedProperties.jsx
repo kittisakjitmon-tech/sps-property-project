@@ -122,7 +122,7 @@ export default function RelatedProperties({ currentPropertyId, district, type })
                                 ) : (
                                     <div className="w-full h-full flex items-center justify-center text-slate-400">No Image</div>
                                 )}
-                                <div className="absolute top-3 right-3 bg-white/90 backdrop-blur-sm px-2.5 py-1 rounded-md text-xs font-bold text-blue-900 shadow-sm">
+                                <div className="absolute top-3 right-3 bg-white px-2.5 py-1 rounded-md text-xs font-bold text-blue-900 shadow-sm border border-slate-100">
                                     {formatPrice(prop.price, prop.isRental, prop.showPrice)}
                                 </div>
                             </div>

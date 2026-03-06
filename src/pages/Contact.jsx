@@ -265,12 +265,12 @@ export default function Contact() {
         {showThankYou && (
           <>
             <div
-              className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50"
+              className="fixed inset-0 bg-black/50 z-50"
               onClick={handleCloseThankYou}
               aria-hidden="true"
             />
             <div className="fixed inset-0 z-50 flex items-center justify-center p-4 pointer-events-none">
-              <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full p-8 pointer-events-auto">
+              <div className="bg-white rounded-2xl shadow-xl max-w-md w-full p-8 pointer-events-auto">
                 <div className="text-center">
                   <div className="w-16 h-16 rounded-full bg-emerald-100 flex items-center justify-center mx-auto mb-4">
                     <CheckCircle2 className="h-8 w-8 text-emerald-600" />

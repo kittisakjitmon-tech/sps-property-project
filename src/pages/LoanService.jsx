@@ -160,7 +160,7 @@ export default function LoanService() {
           <section className="relative bg-gradient-to-br from-blue-900 via-blue-800 to-slate-900 text-white overflow-hidden">
             <div className="absolute inset-0 opacity-20" style={{ backgroundImage: "url('https://images.unsplash.com/photo-1560518883-ce09059eeffa?w=1920')", backgroundSize: 'cover' }} />
             <div className="relative max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-16 sm:py-24">
-              <h1 className="text-2xl sm:text-3xl md:text-4xl lg:text-5xl font-extrabold leading-tight mb-6 drop-shadow-lg">
+              <h1 className="text-2xl sm:text-3xl md:text-4xl lg:text-5xl font-extrabold leading-tight mb-6 drop-shadow">
                 เปลี่ยนหนี้บัตรหลายใบ...<br />
                 ให้เป็นบ้านหลังเดียว ผ่อนถูกลงครึ่งต่อครึ่ง!
               </h1>
@@ -187,7 +187,7 @@ export default function LoanService() {
               <button
                 type="button"
                 onClick={scrollToForm}
-                className="inline-flex items-center gap-2 px-8 py-4 rounded-2xl bg-amber-400 hover:bg-amber-300 text-slate-900 font-bold text-lg shadow-xl hover:shadow-2xl transition-all duration-300 hover:-translate-y-1"
+                className="inline-flex items-center gap-2 px-8 py-4 rounded-2xl bg-amber-400 hover:bg-amber-300 text-slate-900 font-bold text-lg shadow-lg hover:shadow-xl transition-all duration-300 hover:-translate-y-1"
               >
                 <Calculator className="h-6 w-6" />
                 ประเมินวงเงิน & ทางออกแก้หนี้ (ฟรี)
@@ -257,7 +257,7 @@ export default function LoanService() {
               {/* Result */}
               <div className="rounded-2xl bg-gradient-to-r from-emerald-500 to-teal-600 p-6 sm:p-8 text-white text-center">
                 <p className="text-lg sm:text-xl font-medium mb-2">หยุดจ่ายดอกเบี้ยแพงๆ! รวมหนี้วันนี้ มีเงินเหลือไปแต่งบ้านเดือนละ</p>
-                <p className="text-3xl sm:text-4xl md:text-5xl font-extrabold drop-shadow-lg">
+                <p className="text-3xl sm:text-4xl md:text-5xl font-extrabold drop-shadow">
                   {savingsPerMonth.toLocaleString('th-TH')} บาท
                 </p>
               </div>
@@ -273,7 +273,7 @@ export default function LoanService() {
               </div>
               <p className="text-slate-600 mb-8">ข้อมูลปลอดภัย 100% ใช้เพื่อวิเคราะห์โอกาสกู้และติดต่อกลับเท่านั้น</p>
 
-              <form onSubmit={handleSubmit} className="bg-white rounded-2xl border border-slate-200 shadow-xl p-6 sm:p-8 space-y-6">
+              <form onSubmit={handleSubmit} className="bg-white rounded-2xl border border-slate-200 shadow-lg p-6 sm:p-8 space-y-6">
                 {formErrors.submit && (
                   <div className="flex items-center gap-2 p-3 rounded-lg bg-red-50 text-red-700 text-sm">
                     <AlertCircle className="h-5 w-5 shrink-0" />
@@ -405,7 +405,7 @@ export default function LoanService() {
           {/* Result Modal */}
           {showModal && modalScenario && (
             <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/50">
-              <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full p-6 sm:p-8 relative">
+              <div className="bg-white rounded-2xl shadow-xl max-w-md w-full p-6 sm:p-8 relative">
                 <button
                   type="button"
                   onClick={handleCloseModal}

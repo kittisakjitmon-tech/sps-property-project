@@ -71,8 +71,8 @@ export default function AddMemberModal({ isOpen, onClose, onSuccess }) {
   }
 
   return (
-    <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-sm flex items-center justify-center p-4">
-      <div className="relative w-full max-w-lg bg-white rounded-3xl shadow-2xl border border-slate-100">
+    <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4">
+      <div className="relative w-full max-w-lg bg-white rounded-3xl shadow-xl border border-slate-100">
         <button
           type="button"
           onClick={handleClose}

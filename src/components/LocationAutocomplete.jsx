@@ -1,7 +1,15 @@
 import { useState, useRef, useEffect } from 'react'
 import { MapPin } from 'lucide-react'
-import { searchLocations } from '../data/thaiLocations'
 import { useTypingPlaceholder } from './TypingPlaceholder'
+
+// Lazy-load thaiLocations (~144KB) only when autocomplete is used; avoids pulling into initial route chunks
+let thaiLocationsLoadPromise = null
+function loadSearchLocations() {
+  if (!thaiLocationsLoadPromise) {
+    thaiLocationsLoadPromise = import('../data/thaiLocations').then((m) => m.searchLocations)
+  }
+  return thaiLocationsLoadPromise
+}
 
 const TYPING_PHRASES = [
   'ค้นหาพื้นที่ จังหวัด อำเภอ...',
@@ -25,8 +33,16 @@ export default function LocationAutocomplete({
   const [isOpen, setIsOpen] = useState(false)
   const [highlightIndex, setHighlightIndex] = useState(-1)
   const [isFocused, setIsFocused] = useState(false)
+  const [searchLocationsFn, setSearchLocationsFn] = useState(null)
   const wrapperRef = useRef(null)
-  
+
+  // Lazy-load thaiLocations when component mounts (e.g. user opened a page with this input)
+  useEffect(() => {
+    loadSearchLocations().then((fn) => {
+      setSearchLocationsFn(() => fn)
+    })
+  }, [])
+
   // Typing animation สำหรับ placeholder (Decoupled จาก searchQuery)
   const { displayText: typingPlaceholder, stop: stopTyping, start: startTyping } = useTypingPlaceholder(
     TYPING_PHRASES,
@@ -50,18 +66,22 @@ export default function LocationAutocomplete({
     }
   }, [isFocused, searchQuery, enableTypingAnimation, stopTyping, startTyping])
 
-  // Filtering Dependency: ใช้ searchQuery เป็น dependency เพียงอย่างเดียว (ห้ามใช้ typingPlaceholder)
+  // Filtering: run only when searchLocations is loaded and there is a query
   useEffect(() => {
     if (!searchQuery.trim()) {
       setSuggestions([])
       setIsOpen(false)
       return
     }
-    const results = searchLocations(searchQuery)
+    if (!searchLocationsFn) {
+      setSuggestions([])
+      return
+    }
+    const results = searchLocationsFn(searchQuery)
     setSuggestions(results.slice(0, 8))
     setIsOpen(results.length > 0)
     setHighlightIndex(-1)
-  }, [searchQuery])
+  }, [searchQuery, searchLocationsFn])
 
   useEffect(() => {
     function handleClickOutside(e) {

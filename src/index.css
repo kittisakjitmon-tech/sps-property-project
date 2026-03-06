@@ -1,5 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=Prompt:wght@300;400;500;600;700&display=swap');
-
+/* Font loaded async via index.html to avoid render-blocking */
 @tailwind base;
 @tailwind components;
 @tailwind utilities;

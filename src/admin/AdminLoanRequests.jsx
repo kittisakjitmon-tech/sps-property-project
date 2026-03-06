@@ -361,7 +361,7 @@ export default function AdminLoanRequests() {
       {/* Detail Modal */}
       {detailModal && (
         <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/50">
-          <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full max-h-[90vh] overflow-y-auto">
+          <div className="bg-white rounded-2xl shadow-xl max-w-md w-full max-h-[90vh] overflow-y-auto">
             <div className="p-6 flex justify-between items-start border-b">
               <h3 className="text-lg font-bold text-blue-900">รายละเอียดคำขอ</h3>
               <button
