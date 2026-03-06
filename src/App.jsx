@@ -56,13 +56,12 @@ function RouteLoading() {
 }
 
 // ─── Public Routes Wrapper (Maintenance Mode Guard) ───────────────────────────
+// ไม่บล็อก first paint รอ system settings — แสดงหน้าแรกทันที แล้วค่อยเช็ก maintenance เมื่อโหลดเสร็จ
 function PublicRoutesWrapper() {
   const { settings, loading } = useSystemSettings()
 
-  if (loading) return <RouteLoading />
-
-  // Maintenance Mode เปิดอยู่ → แสดงหน้าปิดปรับปรุง (admin /sps-internal-admin/* ไม่ถูกบล็อก)
-  if (settings.maintenanceMode) {
+  // Maintenance Mode เปิดอยู่ (และโหลด settings เสร็จแล้ว) → แสดงหน้าปิดปรับปรุง
+  if (!loading && settings.maintenanceMode) {
     return <MaintenancePage siteName={settings.siteName} />
   }
 

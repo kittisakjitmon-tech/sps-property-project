@@ -16,6 +16,24 @@ export function isCloudinaryUrl(url) {
 }
 
 /**
+ * ตรวจว่าเป็น URL รูปที่ใช้ได้ (ไม่พัง/ไม่มีช่องว่าง)
+ * ป้องกัน GET ไปที่ URL ที่ truncate หรือผิดรูปแบบ (เช่น firebasestorage.ap_rates 5d78bf3888.webp)
+ */
+export function isValidImageUrl(url) {
+  if (!url || typeof url !== 'string') return false
+  const trimmed = url.trim()
+  if (trimmed.length < 20 || trimmed.includes(' ')) return false
+  try {
+    const u = new URL(trimmed)
+    if (u.protocol !== 'https:' && u.protocol !== 'http:') return false
+    if (url.includes('firebasestorage.googleapis.com') && !url.includes('appspot.com')) return false
+    return true
+  } catch {
+    return false
+  }
+}
+
+/**
  * แยก path หลัง /image/upload/ เป็น [transforms, publicId]
  * เช่น /image/upload/e_improve,a_auto,q_auto,f_auto/abc123 -> ['e_improve,a_auto,q_auto,f_auto', 'abc123']
  */

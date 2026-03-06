@@ -11,7 +11,7 @@ import HomeSearch from '../components/HomeSearch'
 import { getPropertiesOnce, getPopularLocationsOnce, getHomepageSectionsOnce, filterPropertiesByCriteria, getFeaturedBlogs } from '../lib/firestore'
 
 const DynamicPropertySection = lazy(() => import('../components/DynamicPropertySection'))
-import { getOptimizedImageUrl } from '../lib/cloudinary'
+import { getOptimizedImageUrl, isValidImageUrl } from '../lib/cloudinary'
 import { useInView } from '../hooks/useInView'
 
 /** การ์ดทำเลยอดฮิต - placeholder น้ำเงินเป็นพื้นหลังเสมอ รูปทับด้านบนเมื่อโหลดได้ */
@@ -388,7 +388,8 @@ export default function Home() {
               </div>
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                 {featuredBlogs.map((blog) => {
-                  const coverImage = blog.images?.[0]
+                  const rawCover = blog.images?.[0]
+                  const coverImage = rawCover && isValidImageUrl(rawCover) ? rawCover : null
                   const hasVideo = !!blog.youtubeUrl
                   const thumbnail = coverImage || getYouTubeThumbnail(blog.youtubeUrl)
 

@@ -53,7 +53,7 @@ export default function ImageSlider({
 
   if (imgs.length === 0) {
     const imgBlock = (
-      <img src={defaultImage} alt="" width={400} height={300} className="w-full h-full object-cover protected-image" draggable={false} />
+      <img src={defaultImage} alt="" width={400} height={300} loading="lazy" decoding="async" className="w-full h-full object-cover protected-image" draggable={false} />
     )
     return (
       <div className={`relative aspect-[4/3] overflow-hidden bg-slate-200 ${className}`}>
@@ -79,6 +79,10 @@ export default function ImageSlider({
                 key={index}
                 src={img}
                 alt={`Slide ${index + 1}`}
+                width={400}
+                height={300}
+                loading="lazy"
+                decoding="async"
                 draggable={false}
                 className={`absolute inset-0 w-full h-full object-cover protected-image transition-all duration-500 group-hover:scale-105 ${
                   index === currentIndex ? 'opacity-100' : 'opacity-0'
@@ -94,6 +98,10 @@ export default function ImageSlider({
               key={index}
               src={img}
               alt={`Slide ${index + 1}`}
+              width={400}
+              height={300}
+              loading="lazy"
+              decoding="async"
               className={`absolute inset-0 w-full h-full object-cover transition-all duration-500 group-hover:scale-105 ${
                 index === currentIndex ? 'opacity-100' : 'opacity-0'
               }`}

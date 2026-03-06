@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom'
 import { ChevronLeft, ChevronRight, Calendar, Play } from 'lucide-react'
 import PageLayout from '../components/PageLayout'
 import { getPublishedBlogs } from '../lib/firestore'
-import { getOptimizedImageUrl } from '../lib/cloudinary'
+import { getOptimizedImageUrl, isValidImageUrl } from '../lib/cloudinary'
 import { Helmet } from 'react-helmet-async'
 
 export default function Blogs() {
@@ -112,7 +112,8 @@ export default function Blogs() {
             <>
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
                 {blogs.map((blog) => {
-                  const coverImage = blog.images?.[0] || getYouTubeThumbnail(blog.youtubeUrl)
+                  const rawCover = blog.images?.[0]
+                  const coverImage = (rawCover && isValidImageUrl(rawCover) ? rawCover : null) || getYouTubeThumbnail(blog.youtubeUrl)
                   const hasVideo = !!blog.youtubeUrl
 
                   return (

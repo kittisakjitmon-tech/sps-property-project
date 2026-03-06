@@ -1,4 +1,4 @@
-import { initializeApp } from 'firebase/app'
+import { initializeApp, getApps } from 'firebase/app'
 import { getFirestore } from 'firebase/firestore'
 import { getStorage } from 'firebase/storage'
 import { getAuth } from 'firebase/auth'
@@ -12,14 +12,18 @@ const firebaseConfig = {
   appId: import.meta.env.VITE_FIREBASE_APP_ID,
 }
 
-// Separate Firebase apps for public and admin.
-// Each side must use its own app so Auth session does not collide.
-export const publicApp = initializeApp(firebaseConfig, 'publicApp')
+// Initialize only once to avoid duplicate app errors (e.g. HMR or double import)
+function getOrCreateApp(name, config) {
+  const existing = getApps().find((app) => app.name === name)
+  return existing || initializeApp(config, name)
+}
+
+export const publicApp = getOrCreateApp('publicApp', firebaseConfig)
 export const publicAuth = getAuth(publicApp)
 export const publicDb = getFirestore(publicApp)
 export const publicStorage = getStorage(publicApp)
 
-export const adminApp = initializeApp(firebaseConfig, 'adminApp')
+export const adminApp = getOrCreateApp('adminApp', firebaseConfig)
 export const adminAuth = getAuth(adminApp)
 export const adminDb = getFirestore(adminApp)
 export const adminStorage = getStorage(adminApp)

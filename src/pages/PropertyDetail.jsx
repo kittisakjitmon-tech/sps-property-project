@@ -10,7 +10,7 @@ import { formatPrice } from '../lib/priceFormat'
 import { highlightText, highlightTags } from '../lib/textHighlight'
 import { usePublicAuth } from '../context/PublicAuthContext'
 import { getPropertyLabel } from '../constants/propertyTypes'
-import { getCloudinaryLargeUrl, getCloudinaryThumbUrl } from '../lib/cloudinary'
+import { getCloudinaryLargeUrl, getCloudinaryThumbUrl, isValidImageUrl } from '../lib/cloudinary'
 
 const RelatedProperties = lazy(() => import('../components/RelatedProperties'))
 const NeighborhoodData = lazy(() => import('../components/NeighborhoodData'))
@@ -517,15 +517,13 @@ export default function PropertyDetail() {
 
   const loc = property.location || {}
   const agent = property.agentContact || {}
-  const imgs = property.images && property.images.length > 0 ? property.images : ['https://images.unsplash.com/photo-1564013799919-ab600027ffc6?w=800']
+  const defaultImg = 'https://images.unsplash.com/photo-1564013799919-ab600027ffc6?w=800'
+  const rawImgs = property.images && Array.isArray(property.images) ? property.images.filter(isValidImageUrl) : []
+  const imgs = rawImgs.length > 0 ? rawImgs : [defaultImg]
   const title = `${property.title} | SPS Property Solution`
   const description = (property.description || '').slice(0, 160) + ((property.description || '').length > 160 ? '...' : '')
-  const primaryImageRaw = Array.isArray(property.images) && property.images.length > 0
-    ? property.images[0]
-    : 'https://spspropertysolution.com/share-default.jpg'
-  const primaryImage = primaryImageRaw && primaryImageRaw.startsWith('http')
-    ? primaryImageRaw
-    : `https://spspropertysolution.com${primaryImageRaw || ''}`
+  const primaryImageRaw = rawImgs.length > 0 ? rawImgs[0] : 'https://spspropertysolution.com/icon.png'
+  const primaryImage = primaryImageRaw && primaryImageRaw.startsWith('http') ? primaryImageRaw : `https://spspropertysolution.com${primaryImageRaw || ''}`
 
   // Convert Google Maps URL to embed URL if needed
   const getMapEmbedUrl = (url) => {

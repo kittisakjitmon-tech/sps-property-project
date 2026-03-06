@@ -19,7 +19,6 @@
     "firebase": "^11.6.0",
     "jszip": "^3.10.1",
     "lucide-react": "^0.468.0",
-    "npm": "^11.10.1",
     "react": "^19.2.4",
     "react-dom": "^19.2.4",
     "react-helmet-async": "^2.0.5",

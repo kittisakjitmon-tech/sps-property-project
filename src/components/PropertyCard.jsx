@@ -3,7 +3,7 @@ import { MapPin, Bed, Bath, Heart } from 'lucide-react'
 import { useState, useEffect, memo } from 'react'
 import { isFavorite, toggleFavorite } from '../lib/favorites'
 import { formatPrice } from '../lib/priceFormat'
-import { getCloudinaryThumbUrl } from '../lib/cloudinary'
+import { getCloudinaryThumbUrl, isValidImageUrl } from '../lib/cloudinary'
 import ProtectedImageContainer from './ProtectedImageContainer'
 import { highlightText, highlightTags } from '../lib/textHighlight'
 import { getPropertyLabel } from '../constants/propertyTypes'
@@ -204,11 +204,10 @@ function PropertyCard({ property, featuredLabel = 'แนะนำ', searchQuery
   }
 
   try {
-    // Image Selection Logic: ใช้ coverImageUrl ถ้ามี หรือ images[0] ถ้าไม่มี
-    const coverImage = property.coverImageUrl ||
-      (property.images && Array.isArray(property.images) && property.images.length > 0
-        ? property.images[0]
-        : DEFAULT_IMAGE)
+    // Image Selection Logic: ใช้ coverImageUrl ถ้ามี หรือ images[0] ถ้าไม่มี (กรอง URL พัง เช่น Firebase ที่ truncate)
+    const rawCover = property.coverImageUrl ||
+      (property.images && Array.isArray(property.images) && property.images.length > 0 ? property.images[0] : null)
+    const coverImage = rawCover && isValidImageUrl(rawCover) ? rawCover : DEFAULT_IMAGE
 
     const loc = property.location || {}
     const badges = getBadges(property)

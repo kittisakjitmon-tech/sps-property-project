@@ -77,6 +77,8 @@ export default function PropertyShareModal({ isOpen, onClose, property, onCopySu
               <img
                 src={mainImage}
                 alt={property.title}
+                loading="lazy"
+                decoding="async"
                 className="w-full h-48 object-cover protected-image"
                 draggable={false}
               />

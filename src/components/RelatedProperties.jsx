@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom'
 import { collection, query, where, limit, getDocs } from 'firebase/firestore'
 import { db } from '../lib/firebase'
 import { MapPin, Bed, Bath, Maximize2 } from 'lucide-react'
-import { getCloudinaryThumbUrl } from '../lib/cloudinary'
+import { getCloudinaryThumbUrl, isValidImageUrl } from '../lib/cloudinary'
 
 // Constants
 const formatPrice = (price, isRental, showPrice) => {
@@ -112,7 +112,8 @@ export default function RelatedProperties({ currentPropertyId, district, type })
             <h3 className="text-xl font-bold text-slate-900 mb-6 border-b pb-4">บ้านที่คุณอาจสนใจ</h3>
             <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-6">
                 {related.map(prop => {
-                    const coverImage = (prop.images && prop.images.length > 0) ? prop.images[0] : null
+                    const rawCover = (prop.images && prop.images.length > 0) ? prop.images[0] : null
+                    const coverImage = rawCover && isValidImageUrl(rawCover) ? rawCover : null
 
                     return (
                         <Link key={prop.id} to={`/properties/${prop.id}`} className="group bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden hover:shadow-md transition">

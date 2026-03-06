@@ -205,7 +205,7 @@ export default function SharePage() {
                       onClick={() => setGalleryIndex(i)}
                       className={`shrink-0 w-20 h-14 rounded-lg overflow-hidden border-2 transition ${i === galleryIndex ? 'border-blue-900' : 'border-transparent'}`}
                     >
-                      <img src={img} alt="" width={80} height={56} className="w-full h-full object-cover protected-image" draggable={false} />
+                      <img src={img} alt="" width={80} height={56} loading="lazy" decoding="async" className="w-full h-full object-cover protected-image" draggable={false} />
                     </button>
                   ))}
                 </div>

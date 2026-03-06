@@ -15,6 +15,7 @@ admin.initializeApp()
 const PROPERTY_IMAGES_PREFIX = 'properties/'
 const ALLOWED_MIME = ['image/jpeg', 'image/png', 'image/jpg']
 const FIRESTORE_PROPERTIES = 'properties'
+const FIRESTORE_BLOGS = 'blogs'
 const SHARE_LINKS = 'share_links'
 
 /**
@@ -686,6 +687,125 @@ exports.shareMeta = functions
       // ผู้ใช้ปกติ: redirect ไปให้ SPA โหลด index.html แล้วให้ React จัดการ route ต่อเอง
       const redirectUrl = `/index.html?share=${encodeURIComponent(token)}`
       return res.redirect(302, redirectUrl)
+    }
+  })
+
+/**
+ * Dynamic OG Meta for Blog Share (Facebook / LINE)
+ * เมื่อ bot เข้า /blogs/:id จะได้ HTML ที่มี og:image = รูป cover บทความ
+ */
+function escapeHtml(str) {
+  if (str == null || typeof str !== 'string') return ''
+  return str
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;')
+}
+
+exports.blogMeta = functions
+  .runWith({
+    timeoutSeconds: 30,
+    memory: '256MB',
+  })
+  .https
+  .onRequest(async (req, res) => {
+    const userAgent = req.headers['user-agent']?.toLowerCase() || ''
+    const isBot = userAgent.includes('facebookexternalhit') ||
+      userAgent.includes('linespider') ||
+      userAgent.includes('twitterbot') ||
+      userAgent.includes('linkedinbot') ||
+      userAgent.includes('whatsapp') ||
+      userAgent.includes('telegrambot')
+
+    const pathSegments = req.path.split('/').filter(Boolean)
+    if (pathSegments[0] !== 'blogs' || !pathSegments[1]) {
+      return res.status(404).send('Not Found')
+    }
+    const blogId = pathSegments[1]
+
+    if (isBot) {
+      try {
+        const db = admin.firestore()
+        const docSnap = await db.collection(FIRESTORE_BLOGS).doc(blogId).get()
+
+        if (!docSnap.exists) {
+          return res.status(404).send('Blog Not Found')
+        }
+
+        const blog = docSnap.data()
+        if (!blog.published) {
+          return res.status(404).send('Blog Not Found')
+        }
+
+        const title = `${blog.title || 'บทความ'} | SPS Property Solution`
+        const rawDesc = (blog.content || '').substring(0, 160)
+        const description = rawDesc ? `${rawDesc}...` : 'บทความจาก SPS Property Solution บ้านคอนโดอมตะซิตี้ ชลบุรี'
+        const imageUrl = (blog.images && blog.images.length > 0 && blog.images[0])
+          ? blog.images[0]
+          : 'https://spspropertysolution.com/icon.png'
+        const url = `https://spspropertysolution.com/blogs/${blogId}`
+
+        const safeTitle = escapeHtml(title)
+        const safeDesc = escapeHtml(description)
+        const safeImage = escapeHtml(imageUrl)
+        const safeUrl = escapeHtml(url)
+
+        const htmlContent = `
+          <!DOCTYPE html>
+          <html lang="th">
+          <head>
+            <meta charset="UTF-8">
+            <title>${safeTitle}</title>
+            <meta name="description" content="${safeDesc}">
+
+            <!-- Open Graph / Facebook / LINE -->
+            <meta property="og:type" content="article">
+            <meta property="og:title" content="${safeTitle}">
+            <meta property="og:description" content="${safeDesc}">
+            <meta property="og:image" content="${safeImage}">
+            <meta property="og:url" content="${safeUrl}">
+
+            <!-- Twitter -->
+            <meta name="twitter:card" content="summary_large_image">
+            <meta name="twitter:title" content="${safeTitle}">
+            <meta name="twitter:description" content="${safeDesc}">
+            <meta name="twitter:image" content="${safeImage}">
+          </head>
+          <body>
+            <h1>${safeTitle}</h1>
+            <p>${safeDesc}</p>
+            <img src="${safeImage}" alt="${safeTitle}">
+          </body>
+          </html>
+        `
+
+        res.set('Cache-Control', 'public, max-age=300, s-maxage=600')
+        return res.status(200).send(htmlContent)
+      } catch (error) {
+        functions.logger.error('Error generating blog meta tags:', error)
+        return res.status(500).send('Internal Server Error')
+      }
+    } else {
+      // ผู้ใช้ปกติ: ส่ง index.html เพื่อให้ SPA โหลดและ React Router จัดการ /blogs/:id (แก้ refresh 404)
+      const origin = req.headers['x-forwarded-host']
+        ? `https://${req.headers['x-forwarded-host']}`
+        : (req.headers.host && !req.headers.host.includes('cloudfunctions.net'))
+          ? `https://${req.headers.host}`
+          : 'https://spspropertysolution.com'
+      try {
+        const response = await fetch(`${origin}/`, { redirect: 'follow' })
+        const html = await response.text()
+        res.set('Cache-Control', 'public, max-age=0, s-maxage=60')
+        res.set('Content-Type', 'text/html; charset=utf-8')
+        return res.status(200).send(html)
+      } catch (error) {
+        functions.logger.error('Error loading page from hosting', error)
+        // Fallback: redirect ไป root ให้ SPA โหลด แล้วผู้ใช้สามารถเข้า /blogs ได้จากเมนู
+        res.redirect(302, 'https://spspropertysolution.com/')
+        return
+      }
     }
   })
 

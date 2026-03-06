@@ -4,7 +4,7 @@ import { Calendar, ArrowLeft, Play } from 'lucide-react'
 import PageLayout from '../components/PageLayout'
 import { getBlogByIdOnce } from '../lib/firestore'
 import { Helmet } from 'react-helmet-async'
-import { getCloudinaryLargeUrl, getCloudinaryMediumUrl } from '../lib/cloudinary'
+import { getCloudinaryLargeUrl, getCloudinaryMediumUrl, isValidImageUrl } from '../lib/cloudinary'
 
 export default function BlogDetail() {
   const { id } = useParams()
@@ -93,18 +93,31 @@ export default function BlogDetail() {
     )
   }
 
-  const coverImage = blog.images?.[0]
+  const rawCover = blog.images?.[0]
+  const coverImage = rawCover && isValidImageUrl(rawCover) ? rawCover : null
   const youtubeEmbedUrl = getYouTubeEmbedUrl(blog.youtubeUrl)
 
   const title = `${blog.title} | SPS Property Solution`
   const description = (blog.content || '').substring(0, 160) + '...'
+  const canonicalUrl = `https://spspropertysolution.com/blogs/${blog.id}`
+  const ogImage = coverImage ? getCloudinaryLargeUrl(coverImage) : 'https://spspropertysolution.com/icon.png'
 
   return (
     <>
       <Helmet>
         <title>{title}</title>
         <meta name="description" content={description} />
-        <link rel="canonical" href={`https://spspropertysolution.com/blogs/${blog.id}`} />
+        <link rel="canonical" href={canonicalUrl} />
+        {/* Open Graph / Facebook / LINE แชร์ลิงก์ให้เห็นรูป cover */}
+        <meta property="og:type" content="article" />
+        <meta property="og:title" content={title} />
+        <meta property="og:description" content={description} />
+        <meta property="og:image" content={ogImage} />
+        <meta property="og:url" content={canonicalUrl} />
+        <meta name="twitter:card" content="summary_large_image" />
+        <meta name="twitter:title" content={title} />
+        <meta name="twitter:description" content={description} />
+        <meta name="twitter:image" content={ogImage} />
       </Helmet>
       <PageLayout>
         <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
@@ -160,24 +173,28 @@ export default function BlogDetail() {
           </div>
 
           {/* Image Gallery */}
-          {blog.images && blog.images.length > 1 && (
-            <div className="mt-12">
-              <h2 className="text-2xl font-bold text-slate-900 mb-6">รูปภาพเพิ่มเติม</h2>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {blog.images.slice(1).map((imageUrl, index) => (
-                  <div key={index} className="rounded-lg overflow-hidden">
-                    <img
-                      src={getCloudinaryMediumUrl(imageUrl)}
-                      alt={`${blog.title} - รูปภาพ ${index + 2}`}
-                      className="w-full h-auto object-cover"
-                      loading="lazy"
-                      decoding="async"
-                    />
-                  </div>
-                ))}
+          {blog.images && blog.images.length > 1 && (() => {
+            const validExtra = blog.images.slice(1).filter(isValidImageUrl)
+            if (validExtra.length === 0) return null
+            return (
+              <div className="mt-12">
+                <h2 className="text-2xl font-bold text-slate-900 mb-6">รูปภาพเพิ่มเติม</h2>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {validExtra.map((imageUrl, index) => (
+                    <div key={index} className="rounded-lg overflow-hidden">
+                      <img
+                        src={getCloudinaryMediumUrl(imageUrl)}
+                        alt={`${blog.title} - รูปภาพ ${index + 2}`}
+                        className="w-full h-auto object-cover"
+                        loading="lazy"
+                        decoding="async"
+                      />
+                    </div>
+                  ))}
+                </div>
               </div>
-            </div>
-          )}
+            )
+          })()}
 
           {/* Back to Blogs */}
           <div className="mt-12 pt-8 border-t border-slate-200">

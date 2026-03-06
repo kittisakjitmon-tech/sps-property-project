@@ -45,16 +45,19 @@ export default function PageLayout({
       {showHero && (
         useHeroSlider && fullHeight ? (
           <Suspense fallback={
-            <section
-              className="relative flex items-center justify-center min-h-[85vh] bg-slate-900 bg-cover bg-center"
-              style={{
-                backgroundImage: `linear-gradient(rgba(15,23,42,0.85),rgba(15,23,42,0.8)), url('https://images.unsplash.com/photo-1564013799919-ab600027ffc6?w=1280&q=75')`,
-                backgroundSize: 'cover',
-                backgroundPosition: 'center',
-              }}
-            >
-              <div className="absolute inset-0 bg-gradient-to-b from-black/50 to-black/70" />
-              <div className="relative z-10 w-full max-w-5xl mx-auto px-4 text-center">
+            <section className="relative flex items-center justify-center min-h-[85vh] overflow-hidden">
+              <img
+                src="https://images.unsplash.com/photo-1564013799919-ab600027ffc6?w=800&q=75&auto=format"
+                alt=""
+                width={800}
+                height={450}
+                fetchPriority="high"
+                decoding="async"
+                className="absolute inset-0 w-full h-full object-cover"
+                aria-hidden="true"
+              />
+              <div className="absolute inset-0 bg-gradient-to-b from-black/50 to-black/70 z-[1]" />
+              <div className="relative z-[2] w-full max-w-5xl mx-auto px-4 text-center">
                 <h1 className="text-3xl sm:text-4xl md:text-5xl lg:text-6xl font-bold text-white mb-4 drop-shadow-lg leading-tight">
                   {heroTitle}
                 </h1>
