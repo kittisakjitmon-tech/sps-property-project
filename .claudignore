@@ -2,7 +2,7 @@
 node_modules/
 bower_components/
 vendor/
-
+._*
 # Build outputs (ไฟล์ที่คอมไพล์แล้ว Claude ไม่จำเป็นต้องเห็น)
 dist/
 build/
