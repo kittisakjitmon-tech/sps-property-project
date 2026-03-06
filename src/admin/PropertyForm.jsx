@@ -215,6 +215,7 @@ export default function PropertyForm() {
         propertySubStatus: p.propertySubStatus ?? '', // Keep for backward compatibility
         showPrice: p.showPrice !== false,
         customTags: Array.isArray(p.customTags) ? p.customTags : [],
+        project: p.project ?? '',
         mapUrl: p.mapUrl ?? '',
         lat: p.lat ?? null,
         lng: p.lng ?? null,

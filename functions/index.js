@@ -508,14 +508,36 @@ exports.dynamicMeta = functions
       userAgent.includes('whatsapp') ||
       userAgent.includes('telegrambot')
 
-    // Only process /properties/:id paths
-    const pathSegments = req.path.split('/').filter(Boolean)
-    if (pathSegments[0] !== 'properties' || !pathSegments[1]) {
-      // Not a property detail page, handle as normal or return 404
-      return res.status(404).send('Not Found')
+    // เวลา Hosting rewrite มา path อยู่ที่ originalUrl หรือ url (รีเฟรชต้องได้ path ถูก)
+    const rawPath = req.originalUrl || (req.url && typeof req.url === 'string' ? req.url : '') || (req.path && typeof req.path === 'string' ? req.path : '') || '/'
+    const pathname = String(rawPath).split('?')[0].replace(/^\/+/, '') || ''
+    const pathSegments = pathname ? pathname.split('/').filter(Boolean) : []
+
+    // Helper: ส่ง index.html จาก Hosting (ใช้ทั้งกรณี path ผิดหรือไม่ใช่บอท)
+    // ใช้โดเมนคงที่เพื่อให้ fetch จาก Cloud Function ไปขอหน้าเว็บจริงได้ (req.headers.host อาจเป็นโดเมนของ Function)
+    const serveSpaIndex = async () => {
+      try {
+        const origin = 'https://spspropertysolution.com'
+        const response = await fetch(`${origin}/`)
+        const html = await response.text()
+        res.set('Cache-Control', 'public, max-age=300, s-maxage=600')
+        return res.status(200).send(html)
+      } catch (error) {
+        functions.logger.error('Error loading page from hosting', error)
+        return res.status(500).send('Error loading page')
+      }
     }
 
+    // path ต้องขึ้นต้นด้วย properties (rewrite ส่งมาแค่ /properties/**)
+    if (pathSegments[0] !== 'properties') {
+      return serveSpaIndex()
+    }
+
+    // /properties เท่านั้น (หน้ารายการ) → ส่ง SPA
     const propertyId = pathSegments[1]
+    if (!propertyId) {
+      return serveSpaIndex()
+    }
 
     if (isBot) {
       try {
@@ -571,19 +593,8 @@ exports.dynamicMeta = functions
         return res.status(500).send('Internal Server Error')
       }
     } else {
-      // Not a bot. Serve the standard SPA React index file.
-      // Fetch index.html from the current hosting origin (root path),
-      // which is rewritten to /index.html by Firebase Hosting (no infinite loop).
-      try {
-        const origin = req.headers.host ? `https://${req.headers.host}` : 'https://spspropertysolution.com'
-        const response = await fetch(`${origin}/`)
-        const html = await response.text()
-        res.set('Cache-Control', 'public, max-age=300, s-maxage=600')
-        return res.status(200).send(html)
-      } catch (error) {
-        functions.logger.error('Error loading page from hosting', error)
-        return res.status(500).send('Error loading page')
-      }
+      // ไม่ใช่บอท (รวมถึงรีเฟรช) → ส่ง SPA เพื่อไม่ให้ขึ้น page not found
+      return serveSpaIndex()
     }
   })
 
