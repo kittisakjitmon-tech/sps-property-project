@@ -568,6 +568,28 @@ export default function PropertyDetail() {
 
   const handleShare = async () => {
     if (!property?.id) return
+
+    const isLineApp = /Line/i.test(navigator.userAgent)
+
+    if (isLineApp) {
+      try {
+        const link = await createOrReuseShareLink({
+          propertyId: property.id,
+          createdBy: 'public_share',
+          ttlHours: 24,
+        })
+        const shareUrl = `${window.location.origin}/share/${link.id}`
+        window.location.href = shareUrl
+      } catch (error) {
+        console.error('Share link error:', error)
+        setToastMessage('ไม่สามารถสร้างลิงก์แชร์ได้ กรุณาลองใหม่')
+        setShowToast(true)
+        setTimeout(() => setShowToast(false), 2500)
+      }
+      return
+    }
+
+    // ไม่ใช่ Line: ได้ shareUrl แล้วเปิดแท็บใหม่เท่านั้น — แท็บเดิมไม่ redirect เลย (ถ้าเปิดแท็บไม่ได้ให้แสดงลิงก์)
     try {
       const link = await createOrReuseShareLink({
         propertyId: property.id,
@@ -575,9 +597,19 @@ export default function PropertyDetail() {
         ttlHours: 24,
       })
       const shareUrl = `${window.location.origin}/share/${link.id}`
-      window.open(shareUrl, '_blank', 'noopener,noreferrer')
+      const newTab = window.open(shareUrl, '_blank', 'noopener,noreferrer')
+      if (!newTab || newTab.closed) {
+        try {
+          await navigator.clipboard.writeText(shareUrl)
+          setToastMessage('คัดลอกลิงก์แชร์แล้ว — แท็บใหม่ถูกบล็อก กรุณาวางลิงก์ในแท็บใหม่')
+        } catch {
+          setToastMessage(`ลิงก์แชร์: ${shareUrl}`)
+        }
+        setShowToast(true)
+        setTimeout(() => setShowToast(false), 4000)
+      }
     } catch (error) {
-      console.error('Error creating share link:', error)
+      console.error('Share link error:', error)
       setToastMessage('ไม่สามารถสร้างลิงก์แชร์ได้ กรุณาลองใหม่')
       setShowToast(true)
       setTimeout(() => setShowToast(false), 2500)
@@ -780,10 +812,12 @@ export default function PropertyDetail() {
                     {/* Custom Tags with Highlight */}
 
                   </div>
-                  {/* ปุ่มแชร์สำหรับส่งลิงก์ให้ลูกค้า */}
+                  {/* ปุ่มแชร์สำหรับส่งลิงก์ให้ลูกค้า (เปิด blank ทันทีเพื่อไม่ให้ mobile บล็อก popup) */}
                     <button
+                      type="button"
                       onClick={handleShare}
-                      className="ml-4 flex items-center gap-2 px-4 py-2 rounded-lg bg-blue-900 text-white hover:bg-blue-800 transition font-medium shrink-0"
+                      className="ml-4 flex items-center gap-2 px-4 py-2.5 min-h-[44px] min-w-[44px] rounded-lg bg-blue-900 text-white hover:bg-blue-800 transition font-medium shrink-0 [touch-action:manipulation]"
+                      aria-label="แชร์ให้ลูกค้า"
                     >
                       <Share2 className="h-4 w-4" />
                       <span className="hidden sm:inline">แชร์ให้ลูกค้า</span>

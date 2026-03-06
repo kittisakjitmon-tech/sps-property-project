@@ -94,6 +94,7 @@ const defaultForm = {
   propertySubStatus: '', // เก็บไว้เพื่อ backward compatibility
   showPrice: true,
   customTags: [],
+  project: '', // ระบบโครงการ (ชื่อโครงการที่บ้านหลังนี้อยู่)
   mapUrl: '',
   lat: null,
   lng: null,
@@ -116,6 +117,7 @@ export default function PropertyForm() {
   const [allProperties, setAllProperties] = useState([])
   const [displayIdManuallyEdited, setDisplayIdManuallyEdited] = useState(false)
   const [deleting, setDeleting] = useState(false)
+  const [committedLocationDisplay, setCommittedLocationDisplay] = useState('')
   const progressLoader = useProgressLoader()
 
   useEffect(() => {
@@ -177,13 +179,14 @@ export default function PropertyForm() {
         }
       }
 
+      const initialLocationDisplay = p.locationDisplay ?? `${loc.district || ''} ${loc.province || ''}`.trim()
       setForm({
         title: p.title ?? '',
         price: p.price ?? '',
         propertyId: p.propertyId ?? '',
         displayId: p.displayId ?? p.propertyId ?? '',
         type: p.type ?? 'SPS-CD-ID',
-        locationDisplay: p.locationDisplay ?? `${loc.district || ''} ${loc.province || ''}`.trim(),
+        locationDisplay: initialLocationDisplay,
         location: {
           province: loc.province ?? '',
           district: loc.district ?? '',
@@ -217,6 +220,7 @@ export default function PropertyForm() {
         lng: p.lng ?? null,
         nearbyPlace: Array.isArray(p.nearbyPlace) ? p.nearbyPlace : [],
       })
+      setCommittedLocationDisplay(initialLocationDisplay)
     }).finally(() => setLoading(false))
     return () => { cancelled = true }
   }, [id, isEdit])
@@ -228,11 +232,14 @@ export default function PropertyForm() {
     // Skip auto-update during initial load or if form is not ready
     if (loading || !form.title) return
 
+    // ใช้ค่าพื้นที่ที่ยืนยันแล้วเท่านั้น (เลือกจากรายการ/กด Enter) ไม่ใช้ค่าที่กำลังพิมพ์
+    const locationDisplayForTags = committedLocationDisplay || ''
+
     // Prepare property data for auto-tag generation
     const propertyDataForTags = {
       displayId: form.displayId || '',
       type: form.type,
-      locationDisplay: form.locationDisplay || '',
+      locationDisplay: locationDisplayForTags,
       nearbyPlace: form.nearbyPlace || [],
       listingType: form.listingType || (form.isRental ? 'rent' : 'sale'),
       subListingType: form.subListingType || null,
@@ -266,11 +273,12 @@ export default function PropertyForm() {
     form.listingType,
     form.subListingType,
     form.propertyCondition,
-    form.locationDisplay,
+    committedLocationDisplay,
     form.nearbyPlace,
     form.type,
     form.propertyId,
     // Don't include form.customTags to avoid infinite loop
+    // Don't include form.locationDisplay so typing does not trigger tag update
     // Don't include loading to avoid updating during initial load
   ])
 
@@ -465,11 +473,13 @@ export default function PropertyForm() {
     const price = Number(form.price) || 0
     const area = Number(form.area) || 0
 
+    const locationDisplayForTags = (committedLocationDisplay || '').trim()
+
     // Prepare property data for auto-tag generation
     const propertyDataForTags = {
       propertyId: propertyIdTrimmed || null,
       type: form.type,
-      locationDisplay: form.locationDisplay.trim(),
+      locationDisplay: locationDisplayForTags,
       nearbyPlace: form.nearbyPlace || [],
       listingType: form.listingType || (form.isRental ? 'rent' : 'sale'),
       subListingType: form.subListingType || null,
@@ -514,6 +524,7 @@ export default function PropertyForm() {
       propertySubStatus: form.propertySubStatus || form.propertyCondition || null, // Keep for backward compatibility
       showPrice: form.showPrice !== false,
       customTags: mergedTags, // Use merged tags (custom + auto-generated)
+      project: (form.project || '').trim() || null,
       coverImageUrl: form.coverImageUrl || null, // บันทึก coverImageUrl
       mapUrl: (form.mapUrl || '').trim(),
       lat: form.lat ? Number(form.lat) : null,
@@ -933,10 +944,24 @@ export default function PropertyForm() {
             </div>
 
             <div>
+              <label className="block text-sm font-medium text-slate-700 mb-1">ระบบโครงการ</label>
+              <input
+                type="text"
+                value={form.project}
+                onChange={(e) => update({ project: e.target.value })}
+                placeholder="เช่น โครงการหมู่บ้านจัดสรร..."
+                className="w-full px-4 py-3 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-900/20"
+              />
+              <p className="text-xs text-slate-500 mt-1">ระบุว่าบ้านหลังนี้อยู่โครงการใด (ถ้ามี)</p>
+            </div>
+            <div>
               <label className="block text-sm font-medium text-slate-700 mb-1">พื้นที่ (จังหวัด/อำเภอ/ตำบล) *</label>
               <LocationAutocomplete
                 value={form.locationDisplay}
-                onChange={(v) => update({ locationDisplay: v })}
+                onChange={(v) => {
+                  update({ locationDisplay: v })
+                  if (!v.trim()) setCommittedLocationDisplay('')
+                }}
                 onSelect={handleLocationSelect}
                 placeholder="ค้นหาพื้นที่..."
               />

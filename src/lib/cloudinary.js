@@ -18,6 +18,7 @@ export function isCloudinaryUrl(url) {
 /**
  * ตรวจว่าเป็น URL รูปที่ใช้ได้ (ไม่พัง/ไม่มีช่องว่าง)
  * ป้องกัน GET ไปที่ URL ที่ truncate หรือผิดรูปแบบ (เช่น firebasestorage.ap_rates 5d78bf3888.webp)
+ * Firebase Storage รองรับทั้ง bucket แบบ appspot.com และ firebasestorage.app
  */
 export function isValidImageUrl(url) {
   if (!url || typeof url !== 'string') return false
@@ -26,7 +27,9 @@ export function isValidImageUrl(url) {
   try {
     const u = new URL(trimmed)
     if (u.protocol !== 'https:' && u.protocol !== 'http:') return false
-    if (url.includes('firebasestorage.googleapis.com') && !url.includes('appspot.com')) return false
+    const isFirebaseStorage = trimmed.includes('firebasestorage.googleapis.com')
+    const validFirebaseBucket = trimmed.includes('appspot.com') || trimmed.includes('firebasestorage.app')
+    if (isFirebaseStorage && !validFirebaseBucket) return false
     return true
   } catch {
     return false
