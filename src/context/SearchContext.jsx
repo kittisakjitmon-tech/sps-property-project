@@ -1,51 +1,61 @@
-import { createContext, useContext, useState, useCallback } from 'react'
+import { createContext, useContext, useState, useCallback, useMemo } from 'react'
 
-const SearchContext = createContext(null)
+const SearchStateContext = createContext(null)
+const SearchActionsContext = createContext(null)
+
+const INITIAL_FILTERS = {
+  location: '',
+  propertyType: '',
+  priceMin: '',
+  priceMax: '',
+  bedrooms: '',
+  bathrooms: '',
+  areaMin: '',
+  areaMax: '',
+  propertySubStatus: '', // มือ 1, มือ 2
+  isRental: null, // null = ทั้งหมด, false = ซื้อ, true = เช่า
+  tag: '', // จาก homepage section (targetTag)
+}
 
 export function SearchProvider({ children }) {
-  const [filters, setFilters] = useState({
-    location: '',
-    propertyType: '',
-    priceMin: '',
-    priceMax: '',
-    bedrooms: '',
-    bathrooms: '',
-    areaMin: '',
-    areaMax: '',
-    propertySubStatus: '', // มือ 1, มือ 2
-    isRental: null, // null = ทั้งหมด, false = ซื้อ, true = เช่า
-    tag: '', // จาก homepage section (targetTag)
-  })
+  const [filters, setFilters] = useState(INITIAL_FILTERS)
 
   const updateFilters = useCallback((next) => {
     setFilters((prev) => (typeof next === 'function' ? next(prev) : { ...prev, ...next }))
   }, [])
 
   const clearFilters = useCallback(() => {
-    setFilters({
-      location: '',
-      propertyType: '',
-      priceMin: '',
-      priceMax: '',
-      bedrooms: '',
-      bathrooms: '',
-      areaMin: '',
-      areaMax: '',
-      propertySubStatus: '',
-      isRental: null,
-      tag: '',
-    })
+    setFilters(INITIAL_FILTERS)
   }, [])
 
+  const actions = useMemo(() => ({ updateFilters, clearFilters }), [updateFilters, clearFilters])
+
   return (
-    <SearchContext.Provider value={{ filters, updateFilters, clearFilters }}>
-      {children}
-    </SearchContext.Provider>
+    <SearchStateContext.Provider value={filters}>
+      <SearchActionsContext.Provider value={actions}>
+        {children}
+      </SearchActionsContext.Provider>
+    </SearchStateContext.Provider>
   )
 }
 
 export function useSearch() {
-  const ctx = useContext(SearchContext)
-  if (!ctx) throw new Error('useSearch must be used within SearchProvider')
-  return ctx
+  const filters = useContext(SearchStateContext)
+  const actions = useContext(SearchActionsContext)
+  if (!filters || !actions) throw new Error('useSearch must be used within SearchProvider')
+  return { filters, ...actions }
+}
+
+// เฉพาะคอมโพเนนต์ที่ต้องการแค่อัปเดตค่า (เช่น ปุ่มค้นหา, ปุ่มรีเซ็ต)
+export function useSearchActions() {
+  const actions = useContext(SearchActionsContext)
+  if (!actions) throw new Error('useSearchActions must be used within SearchProvider')
+  return actions
+}
+
+// เฉพาะคอมโพเนนต์ที่ต้องการแค่ค่าฟิลเตอร์ (เช่น หน้าแสดงผลการค้นหา)
+export function useSearchFilters() {
+  const filters = useContext(SearchStateContext)
+  if (!filters) throw new Error('useSearchFilters must be used within SearchProvider')
+  return filters
 }

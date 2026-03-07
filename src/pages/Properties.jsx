@@ -5,7 +5,10 @@ import { getPropertiesOnce } from '../lib/firestore'
 import PageLayout from '../components/PageLayout'
 import PropertyCard from '../components/PropertyCard'
 import ActiveSearchCriteriaBar from '../components/ActiveSearchCriteriaBar'
-import { SlidersHorizontal, Search, X, Wallet, Landmark, SearchX } from 'lucide-react'
+import { 
+  SlidersHorizontal, Search, X, Wallet, Landmark, SearchX, 
+  Home as HomeIcon, MapPin, Sparkles, ShieldCheck, ChevronDown
+} from 'lucide-react'
 
 const PropertiesMap = lazy(() => import('../components/PropertiesMap'))
 const FilterSidebar = lazy(() => import('../components/FilterSidebar'))
@@ -13,6 +16,68 @@ import { searchProperties } from '../lib/smartSearch'
 import { filterProperties } from '../lib/globalSearch'
 import { useTypingPlaceholder } from '../components/TypingPlaceholder'
 import { Helmet } from 'react-helmet-async'
+import { PROPERTY_TYPES } from '../constants/propertyTypes'
+
+// --- Reusable Modern Dropdown Component ---
+const FilterItem = ({ label, value, options, onChange, icon: Icon, activeColor = 'text-blue-900' }) => {
+  const [isOpen, setIsOpen] = useState(false)
+  const containerRef = useRef(null)
+
+  // Close when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (e) => {
+      if (containerRef.current && !containerRef.current.contains(e.target)) setIsOpen(false)
+    }
+    document.addEventListener('mousedown', handleClickOutside)
+    return () => document.removeEventListener('mousedown', handleClickOutside)
+  }, [])
+
+  const selectedOption = options.find(opt => opt.value === value) || options[0]
+
+  return (
+    <div className="relative" ref={containerRef}>
+      <div className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1.5 ml-1">{label}</div>
+      <button
+        onClick={() => setIsOpen(!isOpen)}
+        className={`w-full flex items-center justify-between gap-2 px-4 py-2.5 rounded-2xl bg-slate-50 hover:bg-white border-2 transition-all duration-200 ${
+          isOpen ? 'border-blue-900 shadow-md ring-4 ring-blue-900/5 bg-white' : 'border-transparent'
+        }`}
+      >
+        <div className="flex items-center gap-2.5 min-w-0">
+          <div className={`p-1.5 rounded-lg ${value ? 'bg-blue-100 ' + activeColor : 'bg-slate-200 text-slate-400'}`}>
+            <Icon className="h-3.5 w-3.5" />
+          </div>
+          <span className={`text-sm font-semibold truncate ${value ? 'text-slate-900' : 'text-slate-500'}`}>
+            {selectedOption.label}
+          </span>
+        </div>
+        <ChevronDown className={`h-4 w-4 text-slate-400 transition-transform duration-300 ${isOpen ? 'rotate-180' : ''}`} />
+      </button>
+
+      {isOpen && (
+        <div className="absolute top-[calc(100%+8px)] left-0 w-full min-w-[200px] bg-white rounded-2xl shadow-xl border border-slate-100 py-2 z-50 animate-in fade-in slide-in-from-top-2 duration-200">
+          {options.map((opt) => (
+            <button
+              key={opt.value}
+              onClick={() => {
+                onChange(opt.value)
+                setIsOpen(false)
+              }}
+              className={`w-full flex items-center justify-between px-4 py-2.5 text-sm transition-colors ${
+                value === opt.value 
+                ? 'bg-blue-50 text-blue-900 font-bold' 
+                : 'text-slate-600 hover:bg-slate-50'
+              }`}
+            >
+              {opt.label}
+              {value === opt.value && <ShieldCheck className="h-4 w-4" />}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
 
 export default function Properties() {
   const [searchParams, setSearchParams] = useSearchParams()
@@ -42,6 +107,27 @@ export default function Properties() {
   const [debouncedKeyword, setDebouncedKeyword] = useState(initialKeyword) // ค่าที่ใช้สำหรับ Filter (อัปเดตเมื่อกดปุ่มค้นหาเท่านั้น)
   const [isSearchFocused, setIsSearchFocused] = useState(false)
   const [displayLimit, setDisplayLimit] = useState(12)
+  const searchInputRef = useRef(null)
+
+  // Auto-debounce effect: อัปเดต debouncedKeyword อัตโนมัติเมื่อผู้ใช้หยุดพิมพ์ 500ms
+  useEffect(() => {
+    if (searchQuery === debouncedKeyword) return
+    
+    const timer = setTimeout(() => {
+      setDebouncedKeyword(searchQuery)
+      // อัปเดต URL ไปด้วยเพื่อให้แชร์ลิงก์ได้ทันที
+      const params = new URLSearchParams(searchParams)
+      if (searchQuery.trim()) {
+        params.set('q', searchQuery.trim())
+      } else {
+        params.delete('q')
+      }
+      prevSearchParamsRef.current = params.toString()
+      navigate(`/properties?${params.toString()}`, { replace: true })
+    }, 500)
+
+    return () => clearTimeout(timer)
+  }, [searchQuery, navigate, searchParams, debouncedKeyword])
 
   // Typing animation สำหรับ placeholder (Decoupled จาก searchQuery)
   const TYPING_PHRASES = [
@@ -266,10 +352,10 @@ export default function Properties() {
     params.delete('search') // Also remove 'search' parameter from tag clicks
     if (typeParam) params.set('type', typeParam)
     navigate(`/properties?${params.toString()}`, { replace: true })
-    // Focus back to input
-    const inputElement = document.querySelector('input[type="text"][placeholder*="ค้นหา"]')
-    if (inputElement) {
-      setTimeout(() => inputElement.focus(), 100)
+    
+    // Focus back to input reliably using ref
+    if (searchInputRef.current) {
+      searchInputRef.current.focus()
     }
   }
 
@@ -440,6 +526,7 @@ export default function Properties() {
               <div className="relative flex-1">
                 <Search className="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-slate-400 pointer-events-none z-10" />
                 <input
+                  ref={searchInputRef}
                   type="search"
                   aria-label="ค้นหาทำเล รหัสทรัพย์ หรือคำสำคัญ"
                   value={searchQuery}
@@ -489,6 +576,67 @@ export default function Properties() {
             )}
           </div>
 
+          {/* Dropdown Filter Bar */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8 bg-white p-5 rounded-[2rem] shadow-sm border border-slate-100">
+            <FilterItem
+              label="ประเภทอสังหาฯ"
+              icon={HomeIcon}
+              value={filters.propertyType || ''}
+              onChange={(val) => updateFilters({ propertyType: val })}
+              options={[
+                { value: '', label: 'ทั้งหมด' },
+                ...PROPERTY_TYPES.map(pt => ({ value: pt.id, label: pt.label }))
+              ]}
+            />
+
+            <FilterItem
+              label="พื้นที่ / ทำเล"
+              icon={MapPin}
+              value={filters.location || ''}
+              onChange={(val) => updateFilters({ location: val })}
+              options={[
+                { value: '', label: 'ทุกทำเล' },
+                { value: 'ชลบุรี', label: 'ชลบุรี' },
+                { value: 'พานทอง', label: 'พานทอง' },
+                { value: 'บ้านบึง', label: 'บ้านบึง' },
+                { value: 'ศรีราชา', label: 'ศรีราชา' },
+                { value: 'ฉะเชิงเทรา', label: 'ฉะเชิงเทรา' },
+                { value: 'ระยอง', label: 'ระยอง' },
+              ]}
+            />
+
+            <FilterItem
+              label="สภาพบ้าน"
+              icon={Sparkles}
+              value={filters.propertySubStatus || ''}
+              onChange={(val) => updateFilters({ propertySubStatus: val })}
+              options={[
+                { value: '', label: 'ทั้งหมด' },
+                { value: 'มือ 1', label: 'มือ 1 (ใหม่)' },
+                { value: 'มือ 2', label: 'มือ 2 (พร้อมอยู่)' },
+              ]}
+            />
+
+            <FilterItem
+              label="เงื่อนไขสัญญา"
+              icon={ShieldCheck}
+              activeColor={filters.subListingType === 'installment_only' ? 'text-yellow-700' : 'text-blue-900'}
+              value={filters.subListingType === 'installment_only' ? 'installment' : (filters.isRental ? 'rent' : (filters.isRental === false ? 'sale' : ''))}
+              onChange={(val) => {
+                if (val === 'installment') updateFilters({ subListingType: 'installment_only', isRental: true })
+                else if (val === 'rent') updateFilters({ isRental: true, subListingType: '' })
+                else if (val === 'sale') updateFilters({ isRental: false, subListingType: '' })
+                else updateFilters({ isRental: null, subListingType: '' })
+              }}
+              options={[
+                { value: '', label: 'ทั้งหมด' },
+                { value: 'sale', label: 'ขายปกติ' },
+                { value: 'rent', label: 'เช่าปกติ' },
+                { value: 'installment', label: '🔥 ผ่อนตรง (เช่าซื้อ)' },
+              ]}
+            />
+          </div>
+
           <div className="flex gap-6">
             {/* Filter Sidebar — below the fold on mobile, lazy loaded */}
             <Suspense
@@ -521,20 +669,27 @@ export default function Properties() {
                 onClearAll={handleClearFilters}
               />
 
-              {/* Properties Map — below the fold, lazy loaded */}
-              {safeFiltered.length > 0 && (
-                <div className="mb-8">
+              {/* Properties Map — ปรับปรุงให้เสถียรขึ้น ไม่หายไปตอน filter */}
+              <div className="mb-8 overflow-hidden rounded-2xl border border-slate-200 shadow-sm bg-white">
+                <div className="h-[320px] relative">
                   <Suspense
                     fallback={
-                      <div className="w-full h-[320px] bg-slate-100 rounded-xl flex items-center justify-center animate-pulse" aria-hidden="true">
-                        <span className="text-slate-500 text-sm">กำลังโหลดแผนที่…</span>
+                      <div className="absolute inset-0 bg-slate-100 flex items-center justify-center animate-pulse">
+                        <span className="text-slate-500 text-sm">กำลังอัปเดตแผนที่…</span>
                       </div>
                     }
                   >
-                    <PropertiesMap properties={safeFiltered} />
+                    {safeFiltered.length > 0 ? (
+                      <PropertiesMap properties={safeFiltered} />
+                    ) : (
+                      <div className="absolute inset-0 bg-slate-50 flex flex-col items-center justify-center text-slate-400">
+                        <MapPin className="h-8 w-8 mb-2 opacity-20" />
+                        <p className="text-sm">ไม่พบตำแหน่งทรัพย์สิน</p>
+                      </div>
+                    )}
                   </Suspense>
                 </div>
-              )}
+              </div>
 
               {/* Properties Grid (Paginated) */}
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">

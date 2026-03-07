@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
-import { X, SlidersHorizontal } from 'lucide-react'
+import { X, SlidersHorizontal, Home as HomeIcon } from 'lucide-react'
+import { PROPERTY_TYPES } from '../constants/propertyTypes'
 
 export default function FilterSidebar({ filters, onUpdateFilters, onApply, onClear, isOpen, onClose }) {
   const [localFilters, setLocalFilters] = useState(filters)
@@ -24,6 +25,9 @@ export default function FilterSidebar({ filters, onUpdateFilters, onApply, onCle
       priceMin: '',
       priceMax: '',
       bedrooms: '',
+      propertyType: '',
+      propertySubStatus: '',
+      subListingType: '',
     }
     setLocalFilters(cleared)
     onUpdateFilters(cleared)
@@ -57,6 +61,58 @@ export default function FilterSidebar({ filters, onUpdateFilters, onApply, onCle
             >
               <X className="h-5 w-5 text-slate-600" />
             </button>
+          </div>
+
+          {/* Property Type Dropdown */}
+          <div className="mb-6">
+            <h3 className="text-sm font-semibold text-slate-700 mb-3">ประเภทอสังหาฯ</h3>
+            <select
+              value={localFilters.propertyType || ''}
+              onChange={(e) => handleChange('propertyType', e.target.value)}
+              className="w-full px-3 py-2.5 rounded-xl bg-gray-100 text-sm focus:outline-none focus:ring-2 focus:ring-blue-200 focus:bg-white transition-all border-0 appearance-none cursor-pointer"
+            >
+              <option value="">ทั้งหมด</option>
+              {PROPERTY_TYPES.map((pt) => (
+                <option key={pt.id} value={pt.id}>{pt.label}</option>
+              ))}
+            </select>
+          </div>
+
+          {/* Special Option: Installment */}
+          <div className="mb-6">
+            <h3 className="text-sm font-semibold text-slate-700 mb-3">การผ่อนชำระ</h3>
+            <button
+              type="button"
+              onClick={() => handleChange('subListingType', localFilters.subListingType === 'installment_only' ? '' : 'installment_only')}
+              className={`w-full px-4 py-2.5 rounded-xl text-sm font-semibold transition-all flex items-center justify-center gap-2 ${
+                localFilters.subListingType === 'installment_only'
+                  ? 'bg-yellow-400 text-blue-900 shadow-sm border-2 border-yellow-500'
+                  : 'bg-gray-100 text-slate-700 hover:bg-gray-200 border-2 border-transparent'
+              }`}
+            >
+              🔥 เน้นเฉพาะผ่อนตรง
+            </button>
+          </div>
+
+          {/* Condition: New/Used */}
+          <div className="mb-6">
+            <h3 className="text-sm font-semibold text-slate-700 mb-3">สภาพบ้าน</h3>
+            <div className="grid grid-cols-2 gap-2">
+              {['มือ 1', 'มือ 2'].map((cond) => (
+                <button
+                  key={cond}
+                  type="button"
+                  onClick={() => handleChange('propertySubStatus', localFilters.propertySubStatus === cond ? '' : cond)}
+                  className={`px-4 py-2 rounded-xl text-sm font-medium transition-all ${
+                    localFilters.propertySubStatus === cond
+                      ? 'bg-blue-900 text-white shadow-sm'
+                      : 'bg-gray-100 text-slate-700 hover:bg-gray-200'
+                  }`}
+                >
+                  {cond}
+                </button>
+              ))}
+            </div>
           </div>
 
           {/* Price Range */}

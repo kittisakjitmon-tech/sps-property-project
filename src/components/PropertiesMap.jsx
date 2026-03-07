@@ -36,7 +36,7 @@ export default function PropertiesMap({ properties, className = '' }) {
   }, [])
 
   useEffect(() => {
-    if (!isMapReady || !mapRef.current || propertiesWithCoords.length === 0) return
+    if (!isMapReady || !mapRef.current) return
     let disposed = false
     const longdo = window.longdo
 
@@ -54,6 +54,13 @@ export default function PropertiesMap({ properties, className = '' }) {
     if (disposed) return
     map.Overlays.clear()
     markersRef.current = []
+
+    // ถ้าไม่มีข้อมูลพิกัด ให้ล้างแผนที่แล้วจบการทำงาน (แต่ยังแสดงตัวแผนที่ว่างไว้)
+    if (propertiesWithCoords.length === 0) {
+      map.location({ lon: 100.5018, lat: 13.7563 }, false)
+      map.zoom(6, false)
+      return
+    }
 
     const locationList = propertiesWithCoords.map((p) => ({
       lon: Number(p.lng),
@@ -157,20 +164,16 @@ export default function PropertiesMap({ properties, className = '' }) {
     )
   }
 
-  if (propertiesWithCoords.length === 0) {
-    return (
-      <div className={`bg-slate-50 rounded-lg border border-slate-200 p-8 text-center ${className}`}>
-        <MapPin className="h-12 w-12 text-slate-400 mx-auto mb-4" />
-        <p className="text-slate-600">ไม่มีทรัพย์สินที่มีพิกัดแผนที่</p>
-      </div>
-    )
-  }
-
   return (
-    <div className={`rounded-lg overflow-hidden border border-slate-200 ${className}`}>
-      <div ref={mapRef} style={{ width: '100%', height: '500px' }} />
-      <div className="bg-slate-50 px-4 py-2 text-sm text-slate-600 border-t border-slate-200">
-        📍 แสดง {propertiesWithCoords.length} ทรัพย์สินบนแผนที่
+    <div className={`relative w-full h-full overflow-hidden ${className}`}>
+      <div ref={mapRef} className="absolute inset-0 w-full h-full" />
+      <div className="absolute bottom-4 left-4 right-4 z-10 pointer-events-none">
+        <div className="inline-flex items-center gap-2 px-3 py-1.5 bg-white/90 backdrop-blur-sm rounded-lg shadow-sm border border-slate-200 text-xs font-semibold text-slate-700 pointer-events-auto">
+          <MapPin className="h-3 w-3 text-blue-900" />
+          {propertiesWithCoords.length > 0 
+            ? `พบ ${propertiesWithCoords.length} ตำแหน่งบนแผนที่` 
+            : 'ไม่พบพิกัดทรัพย์สินในผลการค้นหานี้'}
+        </div>
       </div>
     </div>
   )

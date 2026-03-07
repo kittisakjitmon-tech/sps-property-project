@@ -114,17 +114,60 @@ export function getPropertiesSnapshot(callback) {
   })
 }
 
-/** Properties - one-time fetch for public pages (optional: only available) */
-export async function getPropertiesOnce(availableOnly = false) {
-  const snap = await getDocs(collection(db, PROPERTIES))
-  let list = snap.docs.map((d) => ({ id: d.id, ...d.data() }))
-  list.sort((a, b) => {
-    const ta = a.createdAt?.toMillis?.() ?? 0
-    const tb = b.createdAt?.toMillis?.() ?? 0
+/**
+ * Helper: ตรวจสอบสถานะว่า "ว่าง" หรือไม่ แบบยืดหยุ่น
+ */
+function isAvailable(p) {
+  const s = String(p.status || p.availability || '').toLowerCase()
+  return s === 'available' || s === 'ว่าง' || s === '' // ยอมรับค่าว่างด้วยเพื่อความปลอดภัย
+}
+
+/**
+ * Helper: จัดเรียงข้อมูลตามเวลา (ล่าสุดขึ้นก่อน) แบบรองรับเอกสารที่ไม่มีวันที่
+ */
+function sortByDate(list) {
+  return list.sort((a, b) => {
+    const ta = a.createdAt?.toMillis?.() || a.createdAt || 0
+    const tb = b.createdAt?.toMillis?.() || b.createdAt || 0
     return tb - ta
   })
-  if (availableOnly) list = list.filter((p) => p.status === 'available')
+}
+
+/** Properties - one-time fetch for public pages (optional: only available) */
+export async function getPropertiesOnce(availableOnly = false) {
+  // ดึงข้อมูลโดยเรียงตามเวลาที่ Server เพื่อความแม่นยำ
+  const q = query(collection(db, PROPERTIES), orderBy('createdAt', 'desc'))
+  const snap = await getDocs(q)
+  let list = snap.docs.map((d) => ({ id: d.id, ...d.data() }))
+  
+  if (availableOnly) {
+    list = list.filter(isAvailable)
+  }
   return list
+}
+
+/** ดึงเฉพาะทรัพย์สินแนะนำ (Featured) สำหรับหน้าแรก — จำกัด 10 รายการ */
+export async function getFeaturedPropertiesOnce() {
+  // ดึงล่าสุด 200 รายการมาคัดเลือก เพื่อให้ได้บ้านใหม่ๆ แน่นอน
+  const q = query(collection(db, PROPERTIES), orderBy('createdAt', 'desc'), limit(200))
+  const snap = await getDocs(q)
+  const list = snap.docs.map((d) => ({ id: d.id, ...d.data() }))
+  
+  return list
+    .filter((p) => isAvailable(p) && p.featured === true)
+    .slice(0, 10)
+}
+
+/** ดึงเฉพาะทรัพย์สินล่าสุด สำหรับหน้าแรก — จำกัด 40 รายการ */
+export async function getLatestPropertiesOnce() {
+  // ดึงล่าสุด 200 รายการมาคัดเลือก
+  const q = query(collection(db, PROPERTIES), orderBy('createdAt', 'desc'), limit(200))
+  const snap = await getDocs(q)
+  const list = snap.docs.map((d) => ({ id: d.id, ...d.data() }))
+  
+  return list
+    .filter(isAvailable)
+    .slice(0, 40)
 }
 
 export async function getPropertyByIdOnce(id) {

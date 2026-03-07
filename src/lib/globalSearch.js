@@ -200,12 +200,7 @@ function matchesArrayField(array, query) {
  */
 export function filterProperties(properties = [], filters = {}) {
   try {
-    if (!Array.isArray(properties)) {
-      console.warn('filterProperties: properties is not an array')
-      return []
-    }
-
-    if (properties.length === 0) return []
+    if (!Array.isArray(properties) || properties.length === 0) return []
 
     const {
       keyword = '',
@@ -224,188 +219,124 @@ export function filterProperties(properties = [], filters = {}) {
       areaMax,
     } = filters
 
-    // Parse Natural Language Price from keyword (e.g. "ทาวน์โฮม ไม่เกิน 2 ล้าน")
+    // --- [PRE-CALCULATION STEP] ---
+    // ประมวลผล Filter ครั้งเดียวล่วงหน้า เพื่อไม่ให้ทำใน Loop .filter()
     const { min: parsedMin, max: parsedMax, cleanedQuery } = parsePriceQuery(keyword)
     const keywordForSearch = cleanedQuery || keyword
-    const minPrice = parsedMin ?? filterMinPrice
-    const maxPrice = parsedMax ?? filterMaxPrice
+    const minPrice = Number(parsedMin ?? filterMinPrice) || 0
+    const maxPrice = Number(parsedMax ?? filterMaxPrice) || 0
 
     const normalizedKeyword = normalizeText(keywordForSearch)
     const normalizedLocation = normalizeText(location)
+    const keywordTokens = normalizedKeyword ? smartTokenize(normalizedKeyword) : []
+    const tagVal = tag ? tag.trim() : ''
 
     return properties.filter((property) => {
       try {
         if (!property || typeof property !== 'object') return false
 
-        // 0. Tag Filter (exact match in customTags/tags)
-        if (tag && typeof tag === 'string' && tag.trim()) {
+        // 0. Tag Filter
+        if (tagVal) {
           const propTags = property.customTags || property.tags || []
-          const tagVal = tag.trim()
-          const hasTag = Array.isArray(propTags) && propTags.some((t) => String(t).trim() === tagVal)
-          if (!hasTag) return false
+          if (!propTags.some((t) => String(t).trim() === tagVal)) return false
         }
 
-        // 1. Keyword Search (Multi-word AND Logic with Smart Tokenization)
-        if (normalizedKeyword) {
-          // Use smart tokenization to extract special keywords ('มือ 1', 'มือ 2') first
-          const keywords = smartTokenize(normalizedKeyword)
+        // 1. Keyword Search (Multi-word AND Logic)
+        if (keywordTokens.length > 0) {
+          const allKeywordsMatch = keywordTokens.every((token) => {
+            // เช็คเคสพิเศษ มือ 1 / มือ 2
+            if (token === 'มือ 1' || token === 'มือ 2') {
+              const pc = property.propertyCondition || property.propertySubStatus || ''
+              if (normalizeText(pc) === token) return true
+            }
 
-          if (keywords.length > 0) {
-            // Check if ALL keywords match (AND Logic)
-            const allKeywordsMatch = keywords.every((keyword) => {
-              // For special keywords ('มือ 1', 'มือ 2'), check propertyCondition/propertySubStatus first
-              if (keyword === 'มือ 1' || keyword === 'มือ 2') {
-                const propertyCond = normalizeText(
-                  property.propertyCondition || property.propertySubStatus || ''
-                )
-                const normalizedKeyword = normalizeText(keyword)
-                if (propertyCond === normalizedKeyword) {
-                  return true // Exact match for special keywords
-                }
-                // Also check in other fields as fallback
-              }
+            // ใช้ Cache Searchable Text ถ้ามี (หรือสร้างขึ้นใหม่)
+            // รวมฟิลด์สำคัญเป็นก้อนเดียวเพื่อลดการเรียก String.join/normalize หลายครั้ง
+            if (!property._searchableIndex) {
+              property._searchableIndex = normalizeText([
+                property.title,
+                property.displayId,
+                property.propertyId,
+                property.type,
+                getPropertyLabel(property.type),
+                property.locationDisplay,
+                property.location?.province,
+                property.location?.district,
+                property.description
+              ].join(' '))
+            }
 
-              // Create searchable text from property fields
-              const searchableFields = [
-                property.title || '',
-                property.propertyId || '',
-                property.displayId || '',
-                property.type || '',
-                getPropertyLabel(property.type) || '',
-                property.locationDisplay || '',
-                property.location?.province || '',
-                property.location?.district || '',
-                property.location?.subDistrict || '',
-                property.description || '', // Backward compatibility
-              ]
+            if (property._searchableIndex.includes(token)) return true
+            
+            // เช็คใน Array อื่นๆ
+            if (matchesArrayField(property.customTags, token)) return true
+            if (matchesArrayField(property.nearbyPlace, token)) return true
+            
+            return false
+          })
 
-              // Combine all fields into one searchable string
-              const searchableText = normalizeText(searchableFields.join(' '))
-
-              // Check if keyword exists in searchable text
-              const matchesInText = searchableText.includes(keyword)
-
-              // Check if keyword exists in customTags array
-              const matchesInTags = matchesArrayField(property.customTags, keyword)
-
-              // Check if keyword exists in nearbyPlace array
-              const matchesInNearby = matchesArrayField(property.nearbyPlace, keyword)
-
-              return matchesInText || matchesInTags || matchesInNearby
-            })
-
-            if (!allKeywordsMatch) return false
-          }
+          if (!allKeywordsMatch) return false
         }
 
         // 2. Location Search
         if (normalizedLocation) {
-          const locationMatches =
-            matchesField(property.locationDisplay, normalizedLocation) ||
-            matchesArrayField(property.nearbyPlace, normalizedLocation) ||
-            matchesField(property.location?.province, normalizedLocation) ||
-            matchesField(property.location?.district, normalizedLocation) ||
-            matchesField(property.location?.subDistrict, normalizedLocation)
-
-          if (!locationMatches) return false
+          if (!property._locationIndex) {
+            property._locationIndex = normalizeText([
+              property.locationDisplay,
+              property.location?.province,
+              property.location?.district,
+              property.location?.subDistrict
+            ].join(' '))
+          }
+          const locMatch = property._locationIndex.includes(normalizedLocation) || 
+                           matchesArrayField(property.nearbyPlace, normalizedLocation)
+          if (!locMatch) return false
         }
 
-        // 3. Category & Status Filtering (New Structure)
-        // Listing Type (sale/rent)
+        // 3. Category & Status
         if (listingType) {
-          const propertyListingType =
-            property.listingType || (property.isRental ? 'rent' : 'sale')
+          const pListingType = property.listingType || (property.isRental ? 'rent' : 'sale')
+          if (pListingType !== listingType) return false
 
-          if (propertyListingType !== listingType) return false
-
-          // Sub-listing Type (for rent: rent_only/installment_only)
           if (listingType === 'rent' && subListingType) {
-            const propertySubType = property.subListingType
-            // Backward compatibility: check directInstallment
-            if (!propertySubType) {
-              if (subListingType === 'installment_only' && !property.directInstallment) {
-                return false
-              }
-              if (subListingType === 'rent_only' && property.directInstallment) {
-                return false
-              }
-            } else if (propertySubType !== subListingType) {
-              return false
-            }
+            const pSubType = property.subListingType || (property.directInstallment ? 'installment_only' : 'rent_only')
+            if (pSubType !== subListingType) return false
           }
 
-          // Property Condition (for sale: มือ 1/มือ 2)
           if (listingType === 'sale' && propertyCondition) {
-            const propertyCond =
-              property.propertyCondition || property.propertySubStatus
-            if (propertyCond !== propertyCondition) return false
+            const pCond = property.propertyCondition || property.propertySubStatus
+            if (pCond !== propertyCondition) return false
           }
         }
 
-        // Availability Status
+        // Availability
         if (availability) {
-          const propertyAvailability = property.availability || property.status
-          // Map legacy status to new availability
-          let mappedAvailability = propertyAvailability
-          if (propertyAvailability === 'available' || propertyAvailability === 'ว่าง') {
-            mappedAvailability = 'available'
-          } else if (propertyAvailability === 'sold' || propertyAvailability === 'ขายแล้ว') {
-            mappedAvailability = 'sold'
-          } else if (
-            propertyAvailability === 'reserved' ||
-            propertyAvailability === 'ติดจอง'
-          ) {
-            mappedAvailability = 'reserved'
-          }
-
-          if (mappedAvailability !== availability) return false
+          const pStatus = property.availability || property.status
+          let mapped = pStatus
+          if (pStatus === 'available' || pStatus === 'ว่าง') mapped = 'available'
+          else if (pStatus === 'sold' || pStatus === 'ขายแล้ว') mapped = 'sold'
+          else if (pStatus === 'reserved' || pStatus === 'ติดจอง') mapped = 'reserved'
+          if (mapped !== availability) return false
         }
 
-        // 4. Property Type Filter
+        // 4. Specs & Price
         if (type && property.type !== type) return false
+        
+        const pPrice = Number(property.price) || 0
+        if (minPrice > 0 && pPrice < minPrice) return false
+        if (maxPrice > 0 && pPrice > maxPrice) return false
 
-        // 5. Price Range Filtering
-        const propertyPrice = Number(property.price)
-        if (!isNaN(propertyPrice)) {
-          if (minPrice !== undefined && minPrice !== null && minPrice !== '') {
-            if (propertyPrice < Number(minPrice)) return false
-          }
-          if (maxPrice !== undefined && maxPrice !== null && maxPrice !== '') {
-            if (propertyPrice > Number(maxPrice)) return false
-          }
-        }
+        if (bedrooms && Number(property.bedrooms) !== Number(bedrooms)) return false
+        if (bathrooms && Number(property.bathrooms) !== Number(bathrooms)) return false
 
-        // 6. Bedrooms Filter
-        if (bedrooms !== undefined && bedrooms !== null && bedrooms !== '') {
-          if (Number(property.bedrooms) !== Number(bedrooms)) return false
-        }
-
-        // 7. Bathrooms Filter
-        if (bathrooms !== undefined && bathrooms !== null && bathrooms !== '') {
-          if (Number(property.bathrooms) !== Number(bathrooms)) return false
-        }
-
-        // 8. Area Range Filtering
-        const propertyArea = Number(property.area)
-        if (!isNaN(propertyArea)) {
-          if (areaMin !== undefined && areaMin !== null && areaMin !== '') {
-            if (propertyArea < Number(areaMin)) return false
-          }
-          if (areaMax !== undefined && areaMax !== null && areaMax !== '') {
-            if (propertyArea > Number(areaMax)) return false
-          }
-        }
+        const pArea = Number(property.area) || 0
+        if (areaMin && pArea < Number(areaMin)) return false
+        if (areaMax && pArea > Number(areaMax)) return false
 
         return true
-      } catch (error) {
-        console.error('filterProperties: Error filtering property:', error, property)
-        return false
-      }
+      } catch (e) { return false }
     })
-  } catch (error) {
-    console.error('filterProperties: Critical error:', error)
-    return []
-  }
+  } catch (critical) { return [] }
 }
 
 /**

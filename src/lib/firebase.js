@@ -1,5 +1,5 @@
-import { initializeApp, getApps } from 'firebase/app'
-import { getFirestore } from 'firebase/firestore'
+import { initializeApp, getApps, getApp } from 'firebase/app'
+import { initializeFirestore, persistentLocalCache, persistentMultipleTabManager } from 'firebase/firestore'
 import { getStorage } from 'firebase/storage'
 import { getAuth } from 'firebase/auth'
 
@@ -12,31 +12,29 @@ const firebaseConfig = {
   appId: import.meta.env.VITE_FIREBASE_APP_ID,
 }
 
-// Initialize only once to avoid duplicate app errors (e.g. HMR or double import)
-function getOrCreateApp(name, config) {
-  const existing = getApps().find((app) => app.name === name)
-  return existing || initializeApp(config, name)
-}
+// Initialize Single Firebase App
+const app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApp()
 
-export const publicApp = getOrCreateApp('publicApp', firebaseConfig)
-export const publicAuth = getAuth(publicApp)
-export const publicDb = getFirestore(publicApp)
-export const publicStorage = getStorage(publicApp)
+// Initialize Services
+export const auth = getAuth(app)
+export const db = initializeFirestore(app, {
+  localCache: persistentLocalCache({
+    tabManager: persistentMultipleTabManager(),
+  }),
+})
+export const storage = getStorage(app)
 
-export const adminApp = getOrCreateApp('adminApp', firebaseConfig)
-export const adminAuth = getAuth(adminApp)
-export const adminDb = getFirestore(adminApp)
-export const adminStorage = getStorage(adminApp)
+// --- Backward Compatibility Exports ---
+// ชี้ไปที่ instance เดียวกันทั้งหมดเพื่อให้ไฟล์เก่าที่ import ชื่อเหล่านี้ยังทำงานได้
+export const publicApp = app
+export const publicAuth = auth
+export const publicDb = db
+export const publicStorage = storage
 
-function isAdminPath() {
-  if (typeof window === 'undefined') return false
-  return window.location.pathname.startsWith('/sps-internal-admin')
-}
+export const adminApp = app
+export const adminAuth = auth
+export const adminDb = db
+export const adminStorage = storage
 
-// Keep legacy exports for existing imports.
-// They now resolve to the correct app based on current route.
-export const db = isAdminPath() ? adminDb : publicDb
-export const storage = isAdminPath() ? adminStorage : publicStorage
+export default app
 
-export const auth = publicAuth
-export default publicApp

@@ -38,12 +38,21 @@ export default defineConfig({
       output: {
         manualChunks(id) {
           if (!id.includes('node_modules')) return
+          
+          // แยก Firebase ออกมาเป็นก้อนใหญ่ 1 ก้อน (เพราะใช้หลายที่)
           if (id.includes('firebase')) return 'vendor-firebase'
+          
+          // แยก Lucide icons — ป้องกันไม่ให้ไปรวมกับ vendor หลัก
           if (id.includes('lucide-react')) return 'vendor-icons'
-          if (id.includes('recharts') || id.includes('d3-') || id.includes('victory-')) return 'vendor-charts'
-          if (id.includes('react-router')) return 'vendor-router'
+          
+          // แยกส่วนที่ใช้เฉพาะใน Admin
+          if (id.includes('@dnd-kit') || id.includes('recharts')) {
+            return 'vendor-admin-tools'
+          }
+          
           if (id.includes('swiper')) return 'vendor-swiper'
-          if (id.includes('@dnd-kit')) return 'vendor-dnd'
+          if (id.includes('react-router')) return 'vendor-router'
+          
           return 'vendor'
         },
       },
