@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { getFavorites } from '../lib/favorites'
-import { getPropertiesSnapshot } from '../lib/firestore'
+import { getPropertiesOnce } from '../lib/firestore'
 import PageLayout from '../components/PageLayout'
 import PropertyCard from '../components/PropertyCard'
 import { Heart } from 'lucide-react'
@@ -12,8 +12,21 @@ export default function Favorites() {
 
   useEffect(() => {
     setFavoriteIds(getFavorites())
-    const unsub = getPropertiesSnapshot(setProperties)
-    return () => unsub()
+    let mounted = true
+    const fetchProps = async () => {
+      try {
+        const props = await getPropertiesOnce()
+        if (mounted) {
+          setProperties(props)
+          setLoading(false)
+        }
+      } catch (error) {
+        console.error('Error fetching favorites:', error)
+        if (mounted) setLoading(false)
+      }
+    }
+    fetchProps()
+    return () => { mounted = false }
   }, [])
 
   useEffect(() => {

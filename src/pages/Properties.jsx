@@ -1,7 +1,7 @@
 import { useSearchParams, Link, useNavigate } from 'react-router-dom'
 import { useEffect, useMemo, useState, useCallback, useRef, lazy, Suspense } from 'react'
 import { useSearch } from '../context/SearchContext'
-import { getPropertiesSnapshot } from '../lib/firestore'
+import { getPropertiesOnce } from '../lib/firestore'
 import PageLayout from '../components/PageLayout'
 import PropertyCard from '../components/PropertyCard'
 import ActiveSearchCriteriaBar from '../components/ActiveSearchCriteriaBar'
@@ -71,26 +71,23 @@ export default function Properties() {
   }, [])
 
   useEffect(() => {
-    try {
-      const unsub = getPropertiesSnapshot((props) => {
-        if (Array.isArray(props)) {
-          setProperties(props)
-        } else {
-          setProperties([])
+    let mounted = true
+    const fetchProperties = async () => {
+      try {
+        const props = await getPropertiesOnce(true) // Fetch only available properties
+        if (mounted) {
+          setProperties(Array.isArray(props) ? props : [])
         }
-      })
-      return () => {
-        try {
-          if (unsub && typeof unsub === 'function') {
-            unsub()
-          }
-        } catch (error) {
-          console.error('Error unsubscribing from properties:', error)
-        }
+      } catch (error) {
+        console.error('Error loading properties:', error)
+        if (mounted) setProperties([])
       }
-    } catch (error) {
-      console.error('Error loading properties:', error)
-      setProperties([])
+    }
+    
+    fetchProperties()
+    
+    return () => {
+      mounted = false
     }
   }, [])
 

@@ -115,19 +115,19 @@ export function getOptimizedImageUrl(url, options = {}) {
  * URL รูป thumbnail สำหรับ card/list — WebP, ขนาดพอดีช่อง 4:3
  */
 export function getCloudinaryThumbUrl(url) {
-  return getCloudinaryImageUrl(url, { width: 400, height: 300, crop: 'fill', format: 'webp' })
+  return getOptimizedImageUrl(url, { width: 400, height: 300, crop: 'fill' })
 }
 
 /**
  * URL รูปขนาดกลาง สำหรับ slider/detail — WebP
  */
 export function getCloudinaryMediumUrl(url) {
-  return getCloudinaryImageUrl(url, { width: 800, height: 450, crop: 'fill', format: 'webp' })
+  return getOptimizedImageUrl(url, { width: 800, height: 450, crop: 'fill' })
 }
 
 /**
  * URL รูปขนาดใหญ่ สำหรับหน้า detail gallery — WebP
  */
 export function getCloudinaryLargeUrl(url) {
-  return getCloudinaryImageUrl(url, { width: 1200, height: 675, crop: 'fill', format: 'webp' })
+  return getOptimizedImageUrl(url, { width: 1200, height: 675, crop: 'fill' })
 }
