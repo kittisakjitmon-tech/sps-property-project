@@ -112,6 +112,7 @@ export default function PropertyListPage() {
     propertyCondition: '', // สภาพบ้าน (มือ 1, มือ 2) - สำหรับ sale
     subListingType: '', // รูปแบบ (rent_only, installment_only) - สำหรับ rent
     availability: '', // สถานะ (available, sold, reserved)
+    project: '', // โครงการ
     // Backward compatibility fields
     assetType: '', // ประเภทสินทรัพย์ (มือ 1, มือ 2) - สำหรับข้อมูลเก่า
     status: '', // สถานะ (ว่าง, ติดจอง, ขายแล้ว, รออนุมัติ) - สำหรับข้อมูลเก่า
@@ -276,6 +277,18 @@ export default function PropertyListPage() {
         })
       }
 
+      // Filter: โครงการ
+      if (filters?.project) {
+        filtered = filtered.filter((p) => {
+          try {
+            const pProject = p?.project && typeof p.project === 'string' ? p.project.trim() : ''
+            return pProject === filters.project
+          } catch {
+            return false
+          }
+        })
+      }
+
       // Backward Compatibility: Filter ประเภทสินทรัพย์ (assetType - มือ 1/มือ 2) - สำหรับข้อมูลเก่า
       if (filters?.assetType && !filters.propertyCondition) {
         filtered = filtered.filter((p) => {
@@ -410,6 +423,7 @@ export default function PropertyListPage() {
       propertyCondition: '',
       subListingType: '',
       availability: '',
+      project: '',
       assetType: '',
       status: '',
       category: '',
@@ -434,6 +448,23 @@ export default function PropertyListPage() {
       return Array.from(types).sort()
     } catch (error) {
       console.error('PropertyListPage: uniqueTypes error:', error)
+      return []
+    }
+  }, [properties])
+
+  // Get unique projects for filter dropdown
+  const uniqueProjects = useMemo(() => {
+    try {
+      const safeProps = Array.isArray(properties) ? properties : []
+      if (safeProps.length === 0) return []
+      const projects = safeProps
+        .map((p) => p?.project)
+        .filter((p) => p && typeof p === 'string' && p.trim())
+        .map((p) => p.trim())
+      // Remove duplicates และ sort alphabetically
+      return [...new Set(projects)].sort((a, b) => a.localeCompare(b, 'th'))
+    } catch (error) {
+      console.error('PropertyListPage: uniqueProjects error:', error)
       return []
     }
   }, [properties])
@@ -528,7 +559,7 @@ export default function PropertyListPage() {
           </div>
 
           {/* Filter Dropdowns */}
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4 items-end">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4 items-end">
             {/* ประเภททรัพย์ */}
             <div>
               <label className="block text-sm font-medium text-slate-700 mb-2">ประเภททรัพย์</label>
@@ -624,6 +655,23 @@ export default function PropertyListPage() {
               </select>
             </div>
 
+            {/* โครงการ */}
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-2">โครงการ</label>
+              <select
+                value={filters.project}
+                onChange={(e) => handleFilterChange('project', e.target.value)}
+                className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+              >
+                <option value="">ทั้งหมด</option>
+                {uniqueProjects.map((project) => (
+                  <option key={project} value={project}>
+                    {project}
+                  </option>
+                ))}
+              </select>
+            </div>
+
             {/* Reset Filters Button */}
             <div>
               <button
@@ -637,7 +685,7 @@ export default function PropertyListPage() {
           </div>
 
           {/* Filter Summary (แสดงเมื่อมี filter active) */}
-          {(searchTerm || filters.type || filters.listingType || filters.propertyCondition || filters.subListingType || filters.availability) && (
+          {(searchTerm || filters.type || filters.listingType || filters.propertyCondition || filters.subListingType || filters.availability || filters.project) && (
             <div className="mt-4 pt-4 border-t border-slate-200">
               <p className="text-xs text-slate-500 mb-2">
                 Active Filters: {[
@@ -647,6 +695,7 @@ export default function PropertyListPage() {
                   filters.propertyCondition && `สภาพ: ${filters.propertyCondition}`,
                   filters.subListingType && `รูปแบบ: ${filters.subListingType === 'rent_only' ? 'เช่าเท่านั้น' : 'ผ่อนตรง'}`,
                   filters.availability && `สถานะ: ${filters.availability === 'available' ? 'ว่าง' : filters.availability === 'sold' ? 'ขายแล้ว' : 'ติดจอง'}`,
+                  filters.project && `โครงการ: ${filters.project}`,
                 ].filter(Boolean).join(' • ')}
               </p>
             </div>
@@ -677,6 +726,7 @@ export default function PropertyListPage() {
                       <th className="px-6 py-3 whitespace-nowrap">ID</th>
                       <th className="px-6 py-3">ชื่อประกาศ</th>
                       <th className="px-6 py-3 whitespace-nowrap">ประเภท</th>
+                      <th className="px-6 py-3 whitespace-nowrap">โครงการ</th>
                       <th className="px-6 py-3 whitespace-nowrap">สถานะ</th>
                       <th className="px-6 py-3 whitespace-nowrap text-right">ราคา</th>
                       <th className="px-6 py-3 whitespace-nowrap text-center">แก้ไข</th>
@@ -685,7 +735,7 @@ export default function PropertyListPage() {
                   <tbody>
                     {paginatedProperties.length === 0 ? (
                       <tr>
-                        <td colSpan={6} className="px-6 py-12 text-center text-slate-500">
+                        <td colSpan={7} className="px-6 py-12 text-center text-slate-500">
                           <FileText className="h-12 w-12 mx-auto mb-3 text-slate-400" />
                           <p className="text-lg font-medium">ไม่พบข้อมูลที่ค้นหา</p>
                           <p className="text-sm mt-1">ลองเปลี่ยนคำค้นหาหรือตัวกรอง</p>
@@ -712,6 +762,15 @@ export default function PropertyListPage() {
                                 </p>
                               </td>
                               <td className="px-6 py-4 text-slate-600 text-sm whitespace-nowrap">{getPropertyLabel(property.type)}</td>
+                              <td className="px-6 py-4 text-slate-600 text-sm">
+                                {property.project ? (
+                                  <span className="inline-flex items-center px-2.5 py-1 rounded-md bg-indigo-50 text-indigo-700 text-xs font-medium border border-indigo-200">
+                                    {property.project}
+                                  </span>
+                                ) : (
+                                  <span className="text-slate-400 text-xs">-</span>
+                                )}
+                              </td>
                               <td className="px-6 py-4">
                                 <div className="flex gap-2 flex-wrap">
                                   {badges.map((badge, index) => (

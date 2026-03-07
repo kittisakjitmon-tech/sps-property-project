@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { useAdminAuth } from '../context/AdminAuthContext'
 import LocationAutocomplete from '../components/LocationAutocomplete'
@@ -118,11 +118,32 @@ export default function PropertyForm() {
   const [displayIdManuallyEdited, setDisplayIdManuallyEdited] = useState(false)
   const [deleting, setDeleting] = useState(false)
   const [committedLocationDisplay, setCommittedLocationDisplay] = useState('')
+  const [isCustomProject, setIsCustomProject] = useState(false)
   const progressLoader = useProgressLoader()
 
   useEffect(() => {
     getPropertiesOnce().then(setAllProperties)
   }, [])
+
+  // ดึงรายชื่อโครงการที่ unique จากทรัพย์ทั้งหมด
+  const existingProjects = useMemo(() => {
+    const projects = allProperties
+      .map((p) => p.project)
+      .filter((p) => p && p.trim())
+      .map((p) => p.trim())
+    // Remove duplicates และ sort alphabetically
+    return [...new Set(projects)].sort((a, b) => a.localeCompare(b, 'th'))
+  }, [allProperties])
+
+  // ตรวจสอบว่าโครงการปัจจุบันเป็น custom หรือไม่
+  useEffect(() => {
+    if (form.project && form.project.trim()) {
+      const isExisting = existingProjects.includes(form.project.trim())
+      setIsCustomProject(!isExisting)
+    } else {
+      setIsCustomProject(false)
+    }
+  }, [form.project, existingProjects])
 
   useEffect(() => {
     if (!isEdit && form.type && !displayIdManuallyEdited) {
@@ -340,14 +361,17 @@ export default function PropertyForm() {
 
   const handleLocationSelect = (loc) => {
     if (!loc) return
+    const displayName = loc.displayName || ''
     update({
-      locationDisplay: loc.displayName,
+      locationDisplay: displayName,
       location: {
         province: loc.province ?? '',
         district: loc.district ?? '',
         subDistrict: loc.subDistrict ?? '',
       },
     })
+    // อัปเดต committedLocationDisplay เพื่อให้ tags ถูกต้อง
+    setCommittedLocationDisplay(displayName)
   }
 
   const handleFileSelect = async (e) => {
@@ -462,6 +486,13 @@ export default function PropertyForm() {
 
   const handleSubmit = async (e) => {
     e.preventDefault()
+
+    // ตรวจสอบว่าเลือกพื้นที่แล้วหรือยัง
+    if (!form.locationDisplay.trim() || !form.location.province) {
+      alert('กรุณาเลือกพื้นที่ (จังหวัด/อำเภอ/ตำบล) ก่อนบันทึก')
+      return
+    }
+
     let propertyIdTrimmed = String(form.propertyId || '').trim()
     if (!propertyIdTrimmed && !isEdit) {
       propertyIdTrimmed = generatePropertyID(form.type, allProperties)
@@ -946,14 +977,57 @@ export default function PropertyForm() {
 
             <div>
               <label className="block text-sm font-medium text-slate-700 mb-1">ระบบโครงการ</label>
-              <input
-                type="text"
-                value={form.project}
-                onChange={(e) => update({ project: e.target.value })}
-                placeholder="เช่น โครงการหมู่บ้านจัดสรร..."
-                className="w-full px-4 py-3 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-900/20"
-              />
-              <p className="text-xs text-slate-500 mt-1">ระบุว่าบ้านหลังนี้อยู่โครงการใด (ถ้ามี)</p>
+              {existingProjects.length > 0 ? (
+                <div className="space-y-3">
+                  <select
+                    value={isCustomProject ? '__custom__' : (form.project || '')}
+                    onChange={(e) => {
+                      const value = e.target.value
+                      if (value === '__custom__') {
+                        setIsCustomProject(true)
+                        update({ project: '' })
+                      } else {
+                        setIsCustomProject(false)
+                        update({ project: value })
+                      }
+                    }}
+                    className="w-full px-4 py-3 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-900/20 bg-white"
+                  >
+                    <option value="">-- ไม่มีโครงการ --</option>
+                    {existingProjects.map((project) => (
+                      <option key={project} value={project}>
+                        {project}
+                      </option>
+                    ))}
+                    <option value="__custom__">+ อื่น ๆ (ระบุเอง)</option>
+                  </select>
+
+                  {isCustomProject && (
+                    <input
+                      type="text"
+                      value={form.project}
+                      onChange={(e) => update({ project: e.target.value })}
+                      placeholder="ระบุชื่อโครงการใหม่..."
+                      className="w-full px-4 py-3 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-900/20"
+                      autoFocus
+                    />
+                  )}
+                </div>
+              ) : (
+                <input
+                  type="text"
+                  value={form.project}
+                  onChange={(e) => update({ project: e.target.value })}
+                  placeholder="เช่น โครงการหมู่บ้านจัดสรร..."
+                  className="w-full px-4 py-3 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-900/20"
+                />
+              )}
+              <p className="text-xs text-slate-500 mt-1">
+                {existingProjects.length > 0
+                  ? `มีโครงการในระบบ ${existingProjects.length} โครงการ`
+                  : 'ระบุว่าบ้านหลังนี้อยู่โครงการใด (ถ้ามี)'
+                }
+              </p>
             </div>
             <div>
               <label className="block text-sm font-medium text-slate-700 mb-1">พื้นที่ (จังหวัด/อำเภอ/ตำบล) *</label>
