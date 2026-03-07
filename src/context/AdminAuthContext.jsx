@@ -52,6 +52,29 @@ export function AdminAuthProvider({ children }) {
 
   const login = async (email, password) => {
     const cred = await signInWithEmailAndPassword(adminAuth, email, password)
+
+    // บล็อก role agent จาก login หลังบ้าน
+    try {
+      const userDoc = await getDoc(doc(adminDb, 'users', cred.user.uid))
+      const role = userDoc.exists() ? (userDoc.data().role || 'member') : 'member'
+
+      // Block agent จาก login หลังบ้าน
+      if (role === 'agent') {
+        await signOut(adminAuth)
+        const error = new Error('บัญชี Agent ไม่สามารถเข้าสู่ระบบหลังบ้านได้ กรุณาใช้หน้า Login ปกติ')
+        error.code = 'auth/agent-not-allowed'
+        throw error
+      }
+
+      // อนุญาต admin, super_admin และ member
+    } catch (err) {
+      if (err.code === 'auth/agent-not-allowed') {
+        throw err
+      }
+      await signOut(adminAuth)
+      throw err
+    }
+
     // เซ็ต user ทันทีหลัง sign-in เพื่อไม่ให้ navigate ไป /sps-internal-admin แล้วถูก redirect กลับ login (รอ onAuthStateChanged ช้าเกินไป)
     setUser(cred.user)
     setLoading(true)

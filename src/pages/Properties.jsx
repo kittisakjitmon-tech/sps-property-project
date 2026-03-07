@@ -5,13 +5,14 @@ import { getPropertiesOnce } from '../lib/firestore'
 import PageLayout from '../components/PageLayout'
 import PropertyCard from '../components/PropertyCard'
 import ActiveSearchCriteriaBar from '../components/ActiveSearchCriteriaBar'
-import { 
-  SlidersHorizontal, Search, X, Wallet, Landmark, SearchX, 
+import AdvancedFiltersPanel from '../components/AdvancedFiltersPanel'
+import RecommendedPropertiesSection from '../components/RecommendedPropertiesSection'
+import {
+  SlidersHorizontal, Search, X, Wallet, Landmark, SearchX,
   Home as HomeIcon, MapPin, Sparkles, ShieldCheck, ChevronDown
 } from 'lucide-react'
 
 const PropertiesMap = lazy(() => import('../components/PropertiesMap'))
-const FilterSidebar = lazy(() => import('../components/FilterSidebar'))
 import { searchProperties } from '../lib/smartSearch'
 import { filterProperties } from '../lib/globalSearch'
 import { useTypingPlaceholder } from '../components/TypingPlaceholder'
@@ -98,7 +99,6 @@ export default function Properties() {
   }
 
   const [properties, setProperties] = useState([])
-  const [filterSidebarOpen, setFilterSidebarOpen] = useState(false)
 
   // State Separation: แยกตัวแปรออกเป็น 2 ตัว
   // Priority: 'search' parameter (from tag clicks) > 'q' parameter (from manual search)
@@ -143,18 +143,6 @@ export default function Properties() {
     50,
     2000
   )
-
-  // Auto-open filter sidebar on desktop
-  useEffect(() => {
-    const handleResize = () => {
-      if (window.innerWidth >= 1024) {
-        setFilterSidebarOpen(true)
-      }
-    }
-    handleResize()
-    window.addEventListener('resize', handleResize)
-    return () => window.removeEventListener('resize', handleResize)
-  }, [])
 
   useEffect(() => {
     let mounted = true
@@ -501,23 +489,14 @@ export default function Properties() {
     >
       <div className="min-h-screen bg-slate-50 py-8">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          {/* Header: Title + result count + mobile filter */}
-          <div className="flex items-center justify-between mb-6">
-            <div>
-              <h1 className="text-2xl sm:text-3xl font-bold text-blue-900 tracking-tight">{pageTitle}</h1>
-              {safeFiltered.length > 0 && (
-                <p className="text-slate-500 text-sm mt-1">
-                  พบ <span className="font-semibold text-blue-900">{safeFiltered.length}</span> รายการ
-                </p>
-              )}
-            </div>
-            <button
-              onClick={() => setFilterSidebarOpen(true)}
-              className="lg:hidden inline-flex items-center gap-2 px-4 py-2.5 bg-white border border-slate-200 text-slate-700 rounded-xl hover:bg-slate-50 hover:border-blue-300 transition-all shadow-sm font-medium text-sm"
-            >
-              <SlidersHorizontal className="h-4 w-4" />
-              กรอง
-            </button>
+          {/* Header: Title + result count */}
+          <div className="mb-6">
+            <h1 className="text-2xl sm:text-3xl font-bold text-blue-900 tracking-tight">{pageTitle}</h1>
+            {safeFiltered.length > 0 && (
+              <p className="text-slate-500 text-sm mt-1">
+                พบ <span className="font-semibold text-blue-900">{safeFiltered.length}</span> รายการ
+              </p>
+            )}
           </div>
 
           {/* Global Keyword Search with Button Trigger */}
@@ -637,23 +616,28 @@ export default function Properties() {
             />
           </div>
 
-          <div className="flex gap-6">
-            {/* Filter Sidebar — below the fold on mobile, lazy loaded */}
-            <Suspense
-              fallback={
-                <div className="hidden lg:block w-72 shrink-0 h-[400px] bg-slate-100 rounded-xl animate-pulse" aria-hidden="true" />
-              }
-            >
-              <FilterSidebar
+          {/* Layout: Sidebar (Left) + Main Content (Right) */}
+          <div className="flex flex-col lg:flex-row gap-6">
+            {/* Left Sidebar: Advanced Filters + Recommendations */}
+            <aside className="w-full lg:w-80 shrink-0 space-y-6">
+              {/* Advanced Filters Panel (Collapsible) */}
+              <AdvancedFiltersPanel
                 filters={filters}
                 onUpdateFilters={updateFilters}
                 onApply={handleSearch}
-                onClear={handleClearFilters}
-                isOpen={filterSidebarOpen}
-                onClose={() => setFilterSidebarOpen(false)}
               />
-            </Suspense>
 
+              {/* Recommended Properties Section (Vertical) */}
+              <div className="hidden lg:block">
+                <RecommendedPropertiesSection
+                  allProperties={properties}
+                  currentFilters={filters}
+                  vertical={true}
+                />
+              </div>
+            </aside>
+
+            {/* Main Content: Search Results */}
             <div className="flex-1 min-w-0">
               {/* Active Search Criteria Bar */}
               <ActiveSearchCriteriaBar

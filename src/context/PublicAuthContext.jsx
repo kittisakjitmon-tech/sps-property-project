@@ -51,22 +51,28 @@ export function PublicAuthProvider({ children }) {
   const login = async (email, password) => {
     const cred = await signInWithEmailAndPassword(publicAuth, email, password)
 
-    // อนุญาตให้ล็อกอินฝั่งหน้าบ้านเฉพาะ role = 'agent'
+    // อนุญาตให้ล็อกอินฝั่งหน้าบ้านเฉพาะ role = 'agent' และ 'member'
+    // ห้าม admin, super_admin login หน้าบ้าน
     try {
       const userDoc = await getDoc(doc(publicDb, 'users', cred.user.uid))
       const role = userDoc.exists() ? (userDoc.data().role || 'member') : 'member'
-      if (role !== 'agent') {
+
+      // Block admin และ super_admin จาก login หน้าบ้าน
+      if (role === 'admin' || role === 'super_admin') {
         await signOut(publicAuth)
-        const error = new Error('อนุญาตให้เข้าสู่ระบบเฉพาะ Agent เท่านั้น')
-        error.code = 'auth/not-agent'
+        const error = new Error('บัญชี Admin ไม่สามารถเข้าสู่ระบบหน้าบ้านได้ กรุณาใช้หน้า Admin Login')
+        error.code = 'auth/admin-not-allowed'
         throw error
       }
+
+      // อนุญาต agent และ member
+      // role: 'agent', 'member' -> OK
     } catch (err) {
-      // ถ้าดึง role ไม่ได้ ให้ปิด session ทิ้งและแจ้งว่าไม่อนุญาต
-      await signOut(publicAuth)
-      if (!err.code) {
-        err.code = 'auth/not-agent'
+      // ถ้าดึง role ไม่ได้หรือ error อื่น ๆ
+      if (err.code === 'auth/admin-not-allowed') {
+        throw err
       }
+      await signOut(publicAuth)
       throw err
     }
   }
