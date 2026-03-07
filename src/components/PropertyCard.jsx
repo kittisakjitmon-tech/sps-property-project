@@ -5,22 +5,25 @@ import { formatPriceShort } from '../lib/priceFormat'
 import { getCloudinaryThumbUrl } from '../lib/cloudinary'
 import { getPropertyLabel } from '../constants/propertyTypes'
 
-// --- Modern Emoji Icons (Lightweight & Clear) ---
-const BedIcon = () => <span className="text-base mr-1">🛏</span>
-const BathIcon = () => <span className="text-base mr-1">🛁</span>
-const ParkIcon = () => <span className="text-base mr-1">🚗</span>
-const AreaIcon = () => <span className="text-base mr-1">📐</span>
+// --- Icons (emoji for consistency & clarity) ---
+const BedIcon = () => <span className="text-[15px] leading-none" aria-hidden>🛏</span>
+const BathIcon = () => <span className="text-[15px] leading-none" aria-hidden>🛁</span>
+const ParkIcon = () => <span className="text-[15px] leading-none" aria-hidden>🚗</span>
+const AreaIcon = () => <span className="text-[15px] leading-none" aria-hidden>📐</span>
 
 const HeartIcon = ({ active }) => (
-  <svg 
-    xmlns="http://www.w3.org/2000/svg" 
-    viewBox="0 0 24 24" 
-    fill={active ? "currentColor" : "none"} 
-    stroke="currentColor" 
-    className={`w-6 h-6 transition-all duration-300 ${active ? 'text-red-500 scale-110' : 'text-slate-400'}`}
+  <svg
+    xmlns="http://www.w3.org/2000/svg"
+    viewBox="0 0 24 24"
+    fill={active ? 'currentColor' : 'none'}
+    stroke="currentColor"
     strokeWidth="2"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+    className={`w-6 h-6 transition-all duration-200 ${active ? 'text-red-500' : 'text-slate-500'}`}
+    aria-hidden
   >
-    <path strokeLinecap="round" strokeLinejoin="round" d="M21 8.25c0-2.485-2.099-4.5-4.688-4.5-1.935 0-3.597 1.126-4.312 2.733-.715-1.607-2.377-2.733-4.313-2.733C5.1 3.75 3 5.765 3 8.25c0 7.22 9 12 9 12s9-4.78 9-12z" />
+    <path d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z" />
   </svg>
 )
 
@@ -28,14 +31,28 @@ function PropertyCard({ property }) {
   if (!property?.id) return null
 
   const [favorited, setFavorited] = useState(false)
-  
+
   useEffect(() => {
     setFavorited(isFavorite(property.id))
   }, [property.id])
 
   const listingType = property.listingType || (property.isRental ? 'rent' : 'sale')
   const subListingType = property.subListingType
-  const isNew = property.createdAt && (Date.now() - (property.createdAt?.toMillis?.() || property.createdAt) < 7 * 24 * 60 * 60 * 1000)
+  const isNew =
+    property.createdAt &&
+    Date.now() - (property.createdAt?.toMillis?.() || property.createdAt) < 7 * 24 * 60 * 60 * 1000
+  const isInstallment = subListingType === 'installment_only' || property.directInstallment
+  const loc = property.location || {}
+  const district = [loc.district, loc.province].filter(Boolean).join(' ')
+  const subDistrict = loc.subDistrict || ''
+  const typeLabel = getPropertyLabel(property.type) || 'อสังหาริมทรัพย์'
+  const titleText = subDistrict ? `${typeLabel} ${subDistrict}` : typeLabel
+  const areaSqWa =
+    property.area != null && Number(property.area) > 0 ? (Number(property.area) / 4).toFixed(0) : null
+  const installmentPerMonth =
+    isInstallment && property.price != null && Number(property.price) > 0
+      ? Math.round(Number(property.price) / 120)
+      : null
 
   const handleFavorite = (e) => {
     e.preventDefault()
@@ -44,98 +61,146 @@ function PropertyCard({ property }) {
   }
 
   return (
-    <div className="group bg-white rounded-[2rem] overflow-hidden border border-slate-100 shadow-sm hover:shadow-xl transition-all duration-500 flex flex-col h-full">
-      
-      {/* 1. IMAGE SECTION */}
-      <div className="relative aspect-[4/3] overflow-hidden block">
-        <Link to={`/properties/${property.id}`}>
+    <article className="group flex flex-col h-full bg-white rounded-2xl overflow-hidden border border-slate-100 shadow-sm hover:shadow-lg transition-all duration-300">
+      {/* ─── 1. IMAGE SECTION ───────────────────────────────────────── */}
+      <div className="relative aspect-[4/3] overflow-hidden flex-shrink-0">
+        <Link to={`/properties/${property.id}`} className="block w-full h-full">
           <img
             src={getCloudinaryThumbUrl(property.coverImageUrl || property.images?.[0])}
-            alt={property.title}
-            className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700"
+            alt=""
+            className="w-full h-full object-cover transition-transform duration-500 ease-out group-hover:scale-105"
           />
         </Link>
-        
-        {/* Top Badges (Limit to Max 2) */}
-        <div className="absolute top-4 left-4 flex gap-2 z-10 pointer-events-none">
-          <span className={`px-3 py-1 rounded-full text-[10px] font-black text-white uppercase tracking-wider shadow-md ${
-            subListingType === 'installment_only' ? 'bg-blue-900' : (listingType === 'rent' ? 'bg-orange-600' : 'bg-blue-600')
-          }`}>
-            {subListingType === 'installment_only' ? 'ผ่อนตรง' : (listingType === 'rent' ? 'เช่า' : 'ขาย')}
+
+        {/* Bottom gradient for price readability */}
+        <div
+          className="absolute inset-0 pointer-events-none"
+          style={{
+            background: 'linear-gradient(to top, rgba(0,0,0,0.75) 0%, rgba(0,0,0,0.2) 35%, transparent 55%)',
+          }}
+        />
+
+        {/* Top-left: badges only (max 2) */}
+        <div className="absolute top-3 left-3 flex gap-2 z-10 pointer-events-none">
+          <span
+            className={`px-2.5 py-1 rounded-lg text-[10px] font-bold text-white uppercase tracking-wide shadow-md ${
+              isInstallment ? 'bg-blue-900' : listingType === 'rent' ? 'bg-orange-600' : 'bg-blue-600'
+            }`}
+          >
+            {isInstallment ? 'ผ่อนตรง' : listingType === 'rent' ? 'เช่า' : 'ขาย'}
           </span>
           {isNew && (
-            <span className="bg-emerald-500 px-3 py-1 rounded-full text-[10px] font-black text-white uppercase tracking-wider shadow-md">
+            <span className="px-2.5 py-1 rounded-lg text-[10px] font-bold text-white uppercase tracking-wide shadow-md bg-emerald-500">
               New
             </span>
           )}
         </div>
 
-        {/* Favorite Button (Large Target 44px+) */}
-        <button 
+        {/* Favorite: top-right, 44px tap area, circular, shadow, hover/active */}
+        <button
+          type="button"
           onClick={handleFavorite}
-          className="absolute top-2 right-2 p-3 bg-white/80 backdrop-blur-md rounded-full hover:bg-white transition-all z-10 active:scale-90 shadow-sm"
-          aria-label="Favorite"
+          className="absolute top-3 right-3 z-10 min-w-[44px] min-h-[44px] flex items-center justify-center rounded-full bg-white/90 backdrop-blur-sm shadow-md hover:bg-white hover:scale-105 active:scale-95 transition-all duration-200 [touch-action:manipulation]"
+          aria-label={favorited ? 'ลบออกจากรายการโปรด' : 'เพิ่มในรายการโปรด'}
         >
           <HeartIcon active={favorited} />
         </button>
 
-        {/* Price Overlay with Strong Shadow */}
-        <div className="absolute bottom-0 left-0 right-0 p-4 bg-gradient-to-t from-black/70 to-transparent pointer-events-none">
+        {/* Price overlay: most prominent, bold, large, white + shadow */}
+        <div className="absolute bottom-0 left-0 right-0 p-4 pt-8 z-10 pointer-events-none">
           {property.hotDeal && (
-            <span className="text-yellow-400 font-black text-[10px] uppercase tracking-tighter drop-shadow-md">
+            <div className="text-amber-300 text-xs font-bold uppercase tracking-wide mb-0.5 drop-shadow-md">
               🔥 ราคาดี
-            </span>
+            </div>
           )}
-          <div className="text-2xl font-black text-white tracking-tighter drop-shadow-lg filter">
-            {formatPriceShort(property.price, listingType === 'rent', property.showPrice)}
+          <div
+            className="text-white font-bold text-2xl sm:text-[1.75rem] leading-tight tracking-tight"
+            style={{
+              textShadow: '0 1px 2px rgba(0,0,0,0.8), 0 2px 8px rgba(0,0,0,0.6), 0 0 16px rgba(0,0,0,0.4)',
+            }}
+          >
+            {formatPriceShort(property.price, listingType === 'rent', property.showPrice !== false)}
           </div>
+          {installmentPerMonth != null && (
+            <div
+              className="text-white/95 text-sm font-medium mt-1"
+              style={{ textShadow: '0 1px 2px rgba(0,0,0,0.6)' }}
+            >
+              ≈ ฿{installmentPerMonth.toLocaleString('th-TH')} / ด.
+            </div>
+          )}
         </div>
       </div>
 
-      {/* 2. INFORMATION SECTION */}
-      <div className="p-5 flex flex-col flex-1">
-        
-        {/* Title & Location */}
-        <Link to={`/properties/${property.id}`} className="block mb-3">
-          <h3 className="font-bold text-slate-800 text-lg leading-tight line-clamp-1 group-hover:text-blue-600 transition-colors">
-            {getPropertyLabel(property.type)} {property.location?.subDistrict || ''}
+      {/* ─── 2. CONTENT SECTION ─────────────────────────────────────── */}
+      <div className="flex flex-col flex-1 p-4 sm:p-5 min-w-0">
+        {/* Title: medium-bold, larger, max 2 lines, ellipsis */}
+        <Link to={`/properties/${property.id}`} className="block mb-1">
+          <h3 className="font-semibold text-slate-900 text-base sm:text-lg leading-snug line-clamp-2 group-hover:text-blue-700 transition-colors">
+            {titleText}
           </h3>
-          <p className="text-slate-400 text-sm flex items-center gap-1 mt-1 font-medium">
-            📍 {property.location?.district}, {property.location?.province}
-          </p>
         </Link>
 
-        {/* Property Information Row (Features) */}
-        <div className="flex items-center justify-between py-3 border-y border-slate-50 text-slate-600 mb-4 text-sm font-bold">
-          <div className="flex items-center"><BedIcon /> {property.bedrooms || 0}</div>
-          <div className="flex items-center"><BathIcon /> {property.bathrooms || 0}</div>
-          <div className="flex items-center"><ParkIcon /> {property.parking || 0}</div>
-          <div className="flex items-center"><AreaIcon /> {property.area || 0} ตร.ว.</div>
+        {/* Location: slightly darker, small spacing, readable */}
+        <p className="text-slate-500 text-sm font-medium mb-4">
+          <span aria-hidden>📍</span> {district || '—'}
+        </p>
+
+        {/* Features row: one line, vertical align, separators */}
+        <div className="flex items-center gap-2 sm:gap-3 text-slate-600 text-sm font-medium mb-3 flex-wrap">
+          <span className="flex items-center gap-1">
+            <BedIcon /> {property.bedrooms ?? '-'}
+          </span>
+          <span className="text-slate-300 select-none" aria-hidden>|</span>
+          <span className="flex items-center gap-1">
+            <BathIcon /> {property.bathrooms ?? '-'}
+          </span>
+          <span className="text-slate-300 select-none" aria-hidden>|</span>
+          <span className="flex items-center gap-1">
+            <ParkIcon /> {property.parking ?? '-'}
+          </span>
+          {areaSqWa != null && (
+            <>
+              <span className="text-slate-300 select-none" aria-hidden>|</span>
+              <span className="flex items-center gap-1">
+                <AreaIcon /> {areaSqWa} ตร.ว.
+              </span>
+            </>
+          )}
         </div>
 
-        {/* Secondary Status (Moved from image to bottom) */}
-        <div className="flex gap-2 mb-5">
-          <span className={`text-[9px] font-black px-2 py-0.5 rounded-md uppercase tracking-widest border ${
-            property.availability === 'available' 
-            ? 'bg-green-50 text-green-600 border-green-100' 
-            : 'bg-red-50 text-red-600 border-red-100'
-          }`}>
-            {property.availability === 'available' ? '● ว่าง' : '● ติดจอง'}
+        {/* Status tags: small pills under features */}
+        <div className="flex flex-wrap gap-2 mb-5">
+          <span
+            className={`inline-flex items-center gap-1 text-xs font-medium px-2.5 py-1 rounded-full ${
+              property.availability === 'available'
+                ? 'bg-green-50 text-green-700'
+                : 'bg-amber-50 text-amber-800'
+            }`}
+          >
+            <span
+              className={`w-1.5 h-1.5 rounded-full ${
+                property.availability === 'available' ? 'bg-green-500' : 'bg-amber-500'
+              }`}
+              aria-hidden
+            />
+            {property.availability === 'available' ? 'ว่าง' : 'ติดจอง'}
           </span>
-          <span className="text-[9px] font-black px-2 py-0.5 rounded-md bg-slate-50 text-slate-500 uppercase tracking-widest border border-slate-100">
+          <span className="inline-flex items-center text-xs font-medium px-2.5 py-1 rounded-full bg-slate-100 text-slate-600">
             {property.propertyCondition || 'มือสอง'}
           </span>
         </div>
 
-        {/* CTA Button */}
-        <Link 
+        {/* CTA: lighter, outline or text + arrow */}
+        <Link
           to={`/properties/${property.id}`}
-          className="mt-auto w-full bg-slate-900 hover:bg-blue-700 text-white text-center py-3.5 rounded-2xl font-black transition-all duration-300 active:scale-[0.98] shadow-lg shadow-slate-100"
+          className="mt-auto inline-flex items-center justify-center gap-1.5 min-h-[44px] py-2.5 px-4 rounded-xl border-2 border-slate-200 text-slate-700 font-semibold text-sm hover:border-blue-600 hover:text-blue-700 hover:bg-blue-50/50 active:scale-[0.98] transition-all duration-200 [touch-action:manipulation]"
         >
           ดูรายละเอียด
+          <span aria-hidden>→</span>
         </Link>
       </div>
-    </div>
+    </article>
   )
 }
 
