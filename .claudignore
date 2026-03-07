@@ -9,7 +9,7 @@ build/
 out/
 bin/
 obj/
-
+้hosting.*
 # Logs and databases
 *.log
 *.sqlite

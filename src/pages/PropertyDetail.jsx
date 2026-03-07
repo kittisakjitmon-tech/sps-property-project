@@ -519,7 +519,19 @@ export default function PropertyDetail() {
   const agent = property.agentContact || {}
   const defaultImg = 'https://images.unsplash.com/photo-1564013799919-ab600027ffc6?w=800'
   const rawImgs = property.images && Array.isArray(property.images) ? property.images.filter(isValidImageUrl) : []
-  const imgs = rawImgs.length > 0 ? rawImgs : [defaultImg]
+  
+  // --- จัดลำดับรูปภาพ: ให้รูปปก (coverImageUrl) ขึ้นเป็นรูปแรกเสมอ ---
+  let finalImgs = [...rawImgs]
+  if (property.coverImageUrl && isValidImageUrl(property.coverImageUrl)) {
+    // กรองรูปปกออกจากรายการปกติก่อน (เพื่อไม่ให้รูปซ้ำ) แล้วเอามาวางไว้ลำดับที่ 1
+    finalImgs = [
+      property.coverImageUrl,
+      ...rawImgs.filter(img => img !== property.coverImageUrl)
+    ]
+  }
+  const imgs = finalImgs.length > 0 ? finalImgs : [defaultImg]
+  // ---------------------------------------------------------
+
   const title = `${property.title} | SPS Property Solution`
   const description = (property.description || '').slice(0, 160) + ((property.description || '').length > 160 ? '...' : '')
   const primaryImageRaw = rawImgs.length > 0 ? rawImgs[0] : 'https://spspropertysolution.com/icon.png'
