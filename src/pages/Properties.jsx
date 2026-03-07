@@ -219,7 +219,12 @@ export default function Properties() {
   useEffect(() => {
     try {
       const location = searchParams.get('location') ?? ''
-      const propertyType = searchParams.get('type') || searchParams.get('propertyType') || ''
+      const typeParam = searchParams.get('type') || ''
+      const propertyTypeParam = searchParams.get('propertyType') || ''
+      
+      // If 'type' is 'buy' or 'rent', it's a listing type, not a property type
+      const propertyType = propertyTypeParam || (['buy', 'rent'].includes(typeParam) ? '' : typeParam)
+      
       const listingType = searchParams.get('listingType') || ''
       const subListingType = searchParams.get('subListingType') || ''
       const propertyCondition = searchParams.get('propertyCondition') || ''
@@ -435,8 +440,8 @@ export default function Properties() {
         keyword: debouncedKeyword || '',
         tag: filters?.tag || searchParams.get('tag') || '',
         location: filters?.location || searchParams.get('location') || '',
-        type: filters?.propertyType || searchParams.get('type') || searchParams.get('propertyType') || '',
-        listingType: filters?.listingType || searchParams.get('listingType') || '',
+        type: filters?.propertyType || '',
+        listingType: filters?.listingType || searchParams.get('listingType') || (isRentalFilter === true ? 'rent' : isRentalFilter === false ? 'sale' : ''),
         subListingType: filters?.subListingType || searchParams.get('subListingType') || '',
         propertyCondition: filters?.propertyCondition || searchParams.get('propertyCondition') || '',
         availability: filters?.availability || searchParams.get('availability') || '',
@@ -462,7 +467,7 @@ export default function Properties() {
       // Return empty array instead of crashing
       return []
     }
-  }, [properties, debouncedKeyword, filters, searchParams])
+  }, [properties, debouncedKeyword, filters, searchParams, isRentalFilter])
 
   const pageTitle = isRentalFilter === true ? 'ทรัพย์สินให้เช่า' : isRentalFilter === false ? 'ทรัพย์สินขาย' : 'รายการประกาศ'
   const heroTitle = isRentalFilter === true ? 'ทรัพย์สินให้เช่า' : isRentalFilter === false ? 'ทรัพย์สินขาย' : 'SPS Property Solution'

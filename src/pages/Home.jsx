@@ -114,6 +114,20 @@ const ANIMATE_VISIBLE = 'opacity-100 translate-y-0'
 const ANIMATE_HIDDEN = 'opacity-0 translate-y-6'
 const ANIMATE_TRANSITION = 'transition-all duration-500 ease-out'
 
+// ─── Skeleton card สำหรับ property section ขณะโหลด ───────────────────────
+const PropertySectionSkeleton = () => (
+  <section className="py-8 bg-slate-50 animate-pulse">
+    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+      <div className="h-6 w-40 bg-slate-200 rounded-lg mb-6" />
+      <div className="flex gap-5 overflow-hidden">
+        {[1, 2, 3].map((i) => (
+          <div key={i} className="shrink-0 w-[300px] rounded-2xl bg-slate-200 h-64" />
+        ))}
+      </div>
+    </div>
+  </section>
+)
+
 export default function Home() {
   const [properties, setProperties] = useState([])
   const [popularLocations, setPopularLocations] = useState([])
@@ -235,20 +249,6 @@ export default function Home() {
   const featured = available.filter((p) => p.featured === true).slice(0, 5)
   const hasSections = homepageSections.length > 0
 
-  // ─── Skeleton card สำหรับ property section ขณะโหลด ───────────────────────
-  const PropertySectionSkeleton = () => (
-    <section className="py-8 bg-slate-50 animate-pulse">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="h-6 w-40 bg-slate-200 rounded-lg mb-6" />
-        <div className="flex gap-5 overflow-hidden">
-          {[1, 2, 3].map((i) => (
-            <div key={i} className="shrink-0 w-[300px] rounded-2xl bg-slate-200 h-64" />
-          ))}
-        </div>
-      </div>
-    </section>
-  )
-
   return (
     <>
       <Helmet>
@@ -307,6 +307,7 @@ export default function Home() {
         heroSubtitle=""
         searchComponent={<HomeSearch />}
         useHeroSlider={true}
+        transparentSearch={true}
         heroExtra={
           <div className="max-w-5xl mx-auto w-full space-y-6">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3 sm:gap-4">

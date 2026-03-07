@@ -14,6 +14,7 @@ const Footer = lazy(() => import('./Footer'))
  * @param {ReactNode} heroExtra - เนื้อหาเพิ่มเติมด้านล่าง search (optional)
  * @param {boolean} showHero - แสดง hero section หรือไม่ (default: true)
  * @param {boolean} fullHeight - ใช้ความสูงเต็ม (สำหรับหน้าแรก) หรือไม่ (default: false)
+ * @param {boolean} transparentSearch - ไม่ใช้ wrapper พื้นหลังสีขาวสำหรับ searchComponent (default: false)
  */
 export default function PageLayout({ 
   children, 
@@ -24,7 +25,8 @@ export default function PageLayout({
   showHero = true,
   fullHeight = false,
   useHeroSlider = false,
-  showFooter = true
+  showFooter = true,
+  transparentSearch = false
 }) {
   const [showBackToTop, setShowBackToTop] = useState(false)
 
@@ -65,7 +67,7 @@ export default function PageLayout({
                   {heroSubtitle}
                 </p>
                 {searchComponent && (
-                  <div className="bg-white/90 border border-white/30 shadow-md rounded-2xl p-3 sm:p-5 max-w-3xl mx-auto">
+                  <div className={transparentSearch ? 'max-w-5xl mx-auto' : 'bg-white/90 border border-white/30 shadow-md rounded-2xl p-3 sm:p-5 max-w-3xl mx-auto'}>
                     {searchComponent}
                   </div>
                 )}
@@ -85,7 +87,7 @@ export default function PageLayout({
                 </div>
                 {searchComponent && (
                   <div className="mb-8">
-                    <div className="bg-white/90 border border-white/30 shadow-md rounded-2xl p-3 sm:p-5 max-w-3xl mx-auto">
+                    <div className={transparentSearch ? 'max-w-5xl mx-auto' : 'bg-white/90 border border-white/30 shadow-md rounded-2xl p-3 sm:p-5 max-w-3xl mx-auto'}>
                       {searchComponent}
                     </div>
                   </div>
@@ -109,7 +111,7 @@ export default function PageLayout({
               <p className={`text-slate-200 text-center text-lg ${fullHeight ? 'mb-6' : 'mb-2'}`}>{heroSubtitle}</p>
 
               {searchComponent && (
-                <div className={`bg-white/90 border border-white/30 shadow-md rounded-2xl ${fullHeight ? 'p-4 sm:p-6' : 'p-3 sm:p-4 max-w-2xl mx-auto'}`}>
+                <div className={transparentSearch ? 'max-w-5xl mx-auto' : `bg-white/90 border border-white/30 shadow-md rounded-2xl ${fullHeight ? 'p-4 sm:p-6' : 'p-3 sm:p-4 max-w-2xl mx-auto'}`}>
                   {searchComponent}
                 </div>
               )}
