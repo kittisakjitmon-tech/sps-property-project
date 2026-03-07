@@ -42,19 +42,21 @@ export const adminAuth = initializeAuth(adminApp, {
   persistence: browserSessionPersistence, // sessionStorage สำหรับหลังบ้าน (ปิด tab หาย)
 })
 
-// Initialize Shared Services (ใช้ publicApp เป็น default)
+// Firestore: แยก instance ตาม app เพื่อให้ request.auth ตรงกับ auth ที่ใช้ล็อกอิน
 export const db = initializeFirestore(publicApp, {
   localCache: persistentLocalCache({
     tabManager: persistentMultipleTabManager(),
   }),
 })
+// Admin panel ใช้ adminDb จาก adminApp — ตอนล็อกอินด้วย adminAuth การอ่าน users/ จะได้ request.auth ตรง
+export const adminDb = initializeFirestore(adminApp, {})
+
 export const storage = getStorage(publicApp)
 
 // --- Backward Compatibility Exports ---
 export const auth = publicAuth // default เป็น publicAuth
 export const publicDb = db
 export const publicStorage = storage
-export const adminDb = db
 export const adminStorage = storage
 
 export default publicApp

@@ -28,13 +28,10 @@ service cloud.firestore {
       return isAuthenticated() && request.auth.uid == userId;
     }
     
-    // users: อนุญาตให้ผู้ใช้แก้ไขโปรไฟล์ตนเองได้
-    // โดยห้ามแก้ role/status/email ด้วยตัวเอง
+    // users: อนุญาตให้ผู้ใช้อ่าน/แก้ไข document ของตัวเองได้ (ใช้ดึง role ใน AdminAuthContext)
+    // อย่าใช้ isAdmin() ใน allow read เพราะจะเกิด circular: get(users/uid) ต้องอ่าน document เดียวกัน
     match /users/{userId} {
-      // Allow read if: is admin OR reading own data OR authenticated (for initial setup)
-      allow read: if isAdmin() || 
-                   (isAuthenticated() && request.auth.uid == userId) ||
-                   isAuthenticated(); // Allow all authenticated users to read (for checking if super admin exists)
+      allow read: if isAuthenticated() && request.auth.uid == userId;
       allow create: if isSuperAdmin() || (isAuthenticated() && request.auth.uid == userId);
       // Allow update if: 
       // 1. is super admin, OR

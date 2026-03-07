@@ -1,7 +1,45 @@
 /**
- * Format price for display with optional masking (showPrice = false)
- * Mask format: 2,xxx,xxx (replace digits after first with 'x')
+ * Format price for display in a short format (e.g. ฿2.5 ล้าน)
+ * @param {number|string} price - Price value
+ * @param {boolean|string} isRentalOrListingType - Whether it's rental
+ * @param {boolean} [showPrice=true] - If false, mask the price (฿1.xx ล้าน)
  */
+export function formatPriceShort(price, isRentalOrListingType, showPrice = true) {
+  if (price == null || price === '') return '-'
+  const num = Number(price)
+  if (!Number.isFinite(num)) return '-'
+
+  const isRental = isRentalOrListingType === true || 
+                   isRentalOrListingType === 'rent' ||
+                   (typeof isRentalOrListingType === 'string' && isRentalOrListingType.toLowerCase() === 'rent')
+
+  // Case: Masking (แสดงเฉพาะเลขหลักแรก)
+  if (showPrice === false) {
+    const firstDigit = String(Math.floor(num)).charAt(0)
+    if (!isRental && num >= 1000000) {
+      return `฿${firstDigit}.xx ล้าน`
+    }
+    if (isRental) {
+      return `฿${firstDigit},xxx/ด.`
+    }
+    return `฿${firstDigit}xx,xxx`
+  }
+
+  // Case: Rental (แสดงราคาเต็มแบบคอมม่า)
+  if (isRental) {
+    return `฿${num.toLocaleString('th-TH')}/ด.`
+  }
+
+  // Case: Sale (แปลงเป็นหลักล้าน)
+  if (num >= 1000000) {
+    const millions = num / 1000000
+    const formatted = parseFloat(millions.toFixed(2)).toString()
+    return `฿${formatted} ล้าน`
+  }
+
+  // Fallback for sale under 1M
+  return `฿${num.toLocaleString('th-TH')}`
+}
 
 /**
  * Mask a formatted number string (e.g. "2,500,000" -> "2,xxx,xxx")
@@ -21,10 +59,7 @@ export function maskFormattedNumber(formatted) {
 }
 
 /**
- * Format price for display
- * @param {number|string} price - Price value
- * @param {boolean|string} isRentalOrListingType - Whether it's rental (boolean) or listingType ('rent'/'sale')
- * @param {boolean} [showPrice=true] - If false, mask the price (2,xxx,xxx)
+ * Format price for display (Standard format)
  */
 export function formatPrice(price, isRentalOrListingType, showPrice = true) {
   if (price == null || price === '') return '-'
@@ -33,7 +68,6 @@ export function formatPrice(price, isRentalOrListingType, showPrice = true) {
   const formatted = num.toLocaleString('th-TH')
   const displayNumber = showPrice !== false ? formatted : maskFormattedNumber(formatted)
   
-  // ตรวจสอบว่าเป็น rental หรือไม่ (รองรับทั้ง boolean และ listingType string)
   const isRental = isRentalOrListingType === true || 
                    isRentalOrListingType === 'rent' ||
                    (typeof isRentalOrListingType === 'string' && isRentalOrListingType.toLowerCase() === 'rent')
