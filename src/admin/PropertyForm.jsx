@@ -13,6 +13,7 @@ import {
   deletePropertyById,
   uploadPropertyImageWithProgress,
 } from '../lib/firestore'
+import { adminDb } from '../lib/firebase'
 import { generatePropertyID, checkPropertyIdDuplicate } from '../lib/propertyId'
 import { logActivity } from '../services/activityLogger'
 import { fetchAndCacheNearbyPlaces } from '../services/nearbyPlacesService'
@@ -593,7 +594,7 @@ export default function PropertyForm() {
           // ถ้า coverImageUrl เป็น URL ที่มีอยู่แล้ว ให้ใช้ตามเดิม
           payload.coverImageUrl = form.coverImageUrl && imageUrls.includes(form.coverImageUrl) ? form.coverImageUrl : (imageUrls.length > 0 ? imageUrls[0] : null)
         }
-        await updatePropertyById(id, payload)
+        await updatePropertyById(id, payload, adminDb)
         // Activity Log: แก้ไขทรัพย์ (รวมเปรียบเทียบราคา)
         const oldPrice = Number(form.price) || 0
         const newPrice = payload.price
@@ -632,7 +633,7 @@ export default function PropertyForm() {
           ...payload,
           images: [],
           createdBy: user?.uid || null,
-        })
+        }, adminDb)
         if (totalNew > 0) {
           progressLoader.setStatus('กำลังอัปโหลดรูปภาพ…', '')
           for (let i = 0; i < newFiles.length; i++) {
@@ -649,11 +650,10 @@ export default function PropertyForm() {
           await updatePropertyById(newId, {
             images: imageUrls,
             coverImageUrl: imageUrls.length > 0 ? imageUrls[0] : null,
-          })
+          }, adminDb)
         } else {
-          // ถ้าไม่มีรูปใหม่ แต่มี coverImageUrl ใน form ให้บันทึกด้วย
           if (form.coverImageUrl) {
-            await updatePropertyById(newId, { coverImageUrl: form.coverImageUrl })
+            await updatePropertyById(newId, { coverImageUrl: form.coverImageUrl }, adminDb)
           }
         }
         // Activity Log: เพิ่มทรัพย์ใหม่

@@ -21,6 +21,7 @@ import {
   addTagToProperty,
   removeTagFromProperty,
 } from '../lib/firestore'
+import { adminDb } from '../lib/firebase'
 
 const CATEGORIES = [
   { value: 'บ้านเดี่ยว', label: 'บ้านเดี่ยว' },
@@ -242,8 +243,8 @@ export default function HomepageSectionsAdmin() {
   })
 
   useEffect(() => {
-    const unsubS = getHomepageSectionsSnapshot(setSections)
-    const unsubP = getPropertiesSnapshot(setProperties)
+    const unsubS = getHomepageSectionsSnapshot(setSections, adminDb)
+    const unsubP = getPropertiesSnapshot(setProperties, adminDb)
     setLoading(false)
     return () => {
       unsubS()
@@ -281,7 +282,7 @@ export default function HomepageSectionsAdmin() {
     setSections(newList)
     try {
       const updates = newList.map((s, i) => ({ id: s.id, order: i }))
-      await batchUpdateHomepageSectionOrders(updates)
+      await batchUpdateHomepageSectionOrders(updates, adminDb)
       setSuccessMessage('สลับลำดับสำเร็จ')
     } catch (e) {
       setErrorMessage('เกิดข้อผิดพลาด: ' + e.message)
@@ -357,7 +358,7 @@ export default function HomepageSectionsAdmin() {
           // เพิ่ม tag (ชื่อหัวข้อ) ให้ทรัพย์ที่ถูกเพิ่ม
           for (const id of addedIds) {
             try {
-              await addTagToProperty(id, sectionTitle)
+              await addTagToProperty(id, sectionTitle, adminDb)
             } catch (err) {
               console.error('addTagToProperty failed:', id, err)
               tagErrors.push(`เพิ่ม tag ให้ ${id}: ${err?.message || err}`)
@@ -383,7 +384,7 @@ export default function HomepageSectionsAdmin() {
                 // ลบชื่อเก่า
                 await removeTagFromProperty(id, oldTitle)
                 // เพิ่มชื่อใหม่
-                await addTagToProperty(id, sectionTitle)
+                await addTagToProperty(id, sectionTitle, adminDb)
               } catch (err) {
                 console.error('updateTag failed:', id, err)
                 tagErrors.push(`อัปเดต tag ให้ ${id}: ${err?.message || err}`)
@@ -398,7 +399,7 @@ export default function HomepageSectionsAdmin() {
         await updateHomepageSectionById(editingSection.id, {
           ...payload,
           isActive: editingSection.isActive ?? true,
-        })
+        }, adminDb)
         setSuccessMessage('อัปเดตหัวข้อสำเร็จ')
       } else {
         // Create: add tag (ชื่อหัวข้อ) to all selected properties (manual type)
@@ -407,7 +408,7 @@ export default function HomepageSectionsAdmin() {
           const tagErrors = []
           for (const id of newIds) {
             try {
-              await addTagToProperty(id, sectionTitle)
+              await addTagToProperty(id, sectionTitle, adminDb)
             } catch (err) {
               console.error('addTagToProperty failed:', id, err)
               tagErrors.push(`เพิ่ม tag ให้ ${id}: ${err?.message || err}`)
@@ -418,7 +419,7 @@ export default function HomepageSectionsAdmin() {
           }
         }
         const maxOrder = sections.length > 0 ? Math.max(...sections.map((s) => s.order ?? 0)) + 1 : 0
-        await createHomepageSection({ ...payload, order: maxOrder, isActive: true })
+        await createHomepageSection({ ...payload, order: maxOrder, isActive: true }, adminDb)
         setSuccessMessage('เพิ่มหัวข้อสำเร็จ')
       }
       resetForm()
@@ -440,7 +441,7 @@ export default function HomepageSectionsAdmin() {
         const tagErrors = []
         for (const propertyId of propertyIds) {
           try {
-            await removeTagFromProperty(propertyId, sectionTitle)
+            await removeTagFromProperty(propertyId, sectionTitle, adminDb)
           } catch (err) {
             console.error('removeTagFromProperty failed:', propertyId, err)
             tagErrors.push(`ลบ tag จาก ${propertyId}: ${err?.message || err}`)
@@ -450,7 +451,7 @@ export default function HomepageSectionsAdmin() {
           setErrorMessage('ลบหัวข้อแล้ว แต่ sync tag ไม่สมบูรณ์: ' + tagErrors.join('; '))
         }
       }
-      await deleteHomepageSectionById(id)
+      await deleteHomepageSectionById(id, adminDb)
       setSuccessMessage('ลบหัวข้อสำเร็จ')
     } catch (e) {
       setErrorMessage('เกิดข้อผิดพลาด: ' + e.message)
@@ -461,7 +462,7 @@ export default function HomepageSectionsAdmin() {
 
   const handleToggle = async (id, isActive) => {
     try {
-      await updateHomepageSectionById(id, { isActive })
+      await updateHomepageSectionById(id, { isActive }, adminDb)
       setSuccessMessage(isActive ? 'เปิดใช้งานสำเร็จ' : 'ปิดใช้งานสำเร็จ')
     } catch (e) {
       setErrorMessage('เกิดข้อผิดพลาด: ' + e.message)

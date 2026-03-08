@@ -1,4 +1,7 @@
 rules_version = '2';
+// โปรเจกต์นี้ใช้ 2 App: public (หน้าบ้าน) + admin (หลังบ้าน)
+// เมื่อเรียกจากหลังบ้านต้องใช้ adminDb/adminAuth เพื่อให้ request.auth ตรงกับผู้ใช้ที่ล็อกอิน
+// getUserRole() อ่าน users/(request.auth.uid) — ต้องมี doc นี้ (แอป sync ให้ตอนล็อกอิน)
 service cloud.firestore {
   match /databases/{database}/documents {
     // Helper functions for role checking
@@ -28,10 +31,14 @@ service cloud.firestore {
       return isAuthenticated() && request.auth.uid == userId;
     }
     
-    // users: อนุญาตให้ผู้ใช้อ่าน/แก้ไข document ของตัวเองได้ (ใช้ดึง role ใน AdminAuthContext)
-    // อย่าใช้ isAdmin() ใน allow read เพราะจะเกิด circular: get(users/uid) ต้องอ่าน document เดียวกัน
+    // users: อ่านได้ถ้าเป็น doc ของตัวเอง (รวมกรณี doc ยังไม่มี) / doc ที่ email ตรงกับที่ล็อกอิน / หรือเป็น admin
+    // อย่าเข้าถึง resource.data เมื่อ doc ไม่มี (จะทำให้ permission denied) — ใช้ resource == null ก่อน
     match /users/{userId} {
-      allow read: if isAuthenticated() && request.auth.uid == userId;
+      allow read: if isAuthenticated() && (
+        request.auth.uid == userId
+        || (resource != null && resource.data.email == request.auth.token.email)
+        || (resource != null && (getUserRole() == 'super_admin' || getUserRole() == 'admin'))
+      );
       allow create: if isSuperAdmin() || (isAuthenticated() && request.auth.uid == userId);
       // Allow update if: 
       // 1. is super admin, OR

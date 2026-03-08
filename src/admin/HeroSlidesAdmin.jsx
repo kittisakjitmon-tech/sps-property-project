@@ -23,6 +23,7 @@ import {
   uploadHeroSlideImage,
   batchUpdateHeroSlideOrders,
 } from '../lib/firestore'
+import { adminDb, adminStorage } from '../lib/firebase'
 import { compressImages } from '../lib/imageCompressor'
 
 const MAX_SLIDES = 6
@@ -122,7 +123,7 @@ export default function HeroSlidesAdmin() {
   useEffect(() => {
     const unsub = getHeroSlidesSnapshot((newSlides) => {
       setSlides(newSlides)
-    })
+    }, adminDb)
     return () => unsub()
   }, [])
 
@@ -159,7 +160,7 @@ export default function HeroSlidesAdmin() {
         id: slide.id,
         order: index,
       }))
-      await batchUpdateHeroSlideOrders(updates)
+      await batchUpdateHeroSlideOrders(updates, adminDb)
       setSuccessMessage('สลับลำดับสไลด์สำเร็จ')
     } catch (error) {
       console.error('Error updating order:', error)
@@ -262,12 +263,12 @@ export default function HeroSlidesAdmin() {
     setUploadError(null)
 
     try {
-      const imageUrl = await uploadHeroSlideImage(selectedFile)
+      const imageUrl = await uploadHeroSlideImage(selectedFile, adminStorage)
       const maxOrder = slides.length > 0 ? Math.max(...slides.map((s) => s.order ?? 0)) : -1
       await createHeroSlide({
         imageUrl,
         order: maxOrder + 1,
-      })
+      }, adminDb)
       setPreview(null)
       setSelectedFile(null)
       setSuccessMessage('อัปโหลดสไลด์สำเร็จ')
@@ -286,7 +287,7 @@ export default function HeroSlidesAdmin() {
     setUploadError(null)
 
     try {
-      await deleteHeroSlideById(id, imageUrl)
+      await deleteHeroSlideById(id, imageUrl, adminDb, adminStorage)
       setSuccessMessage('ลบสไลด์สำเร็จ')
     } catch (err) {
       console.error('Error deleting:', err)

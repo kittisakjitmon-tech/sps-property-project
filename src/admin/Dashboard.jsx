@@ -24,10 +24,11 @@ import {
   Legend,
 } from 'recharts'
 import { useDashboardData } from '../hooks/useDashboardData'
+import { adminDb } from '../lib/firebase'
 import { getActivityBadgeClass, getUsernameFromEmail, formatRoleDisplay } from '../data/activityLogsMock'
 import { getActionDisplay, getActionCategory } from '../data/activityActionMap'
 import { useState } from 'react'
-import { getPropertiesOnce, db, writeBatch } from '../lib/firestore'
+import { getPropertiesOnce, writeBatch } from '../lib/firestore'
 import { PROPERTY_TYPES } from '../constants/propertyTypes'
 import { doc, serverTimestamp } from 'firebase/firestore'
 import { generateAutoTags } from '../lib/autoTags'
@@ -159,7 +160,7 @@ export default function Dashboard() {
     recentLeads,
     recentActivities,
     pendingProperties,
-  } = useDashboardData(viewRange)
+  } = useDashboardData(viewRange, adminDb)
 
   const [migrating, setMigrating] = useState(false)
   const [migrationDone, setMigrationDone] = useState(false)
@@ -191,7 +192,7 @@ export default function Dashboard() {
       }
 
       let count = 0
-      const batch = writeBatch(db)
+      const batch = writeBatch(adminDb)
 
       // Find global max sequence among all properties
       let globalMaxSequence = 0
@@ -207,7 +208,7 @@ export default function Dashboard() {
       })
 
       allProps.forEach((property, index) => {
-        const docRef = doc(db, 'properties', property.id)
+        const docRef = doc(adminDb, 'properties', property.id)
         let needsUpdate = false
         const updateData = {}
 
@@ -279,10 +280,10 @@ export default function Dashboard() {
       let totalUpdated = 0
       for (let i = 0; i < allProps.length; i += CHUNK) {
         const chunk = allProps.slice(i, i + CHUNK)
-        const batch = writeBatch(db)
+        const batch = writeBatch(adminDb)
         chunk.forEach((property) => {
           const autoTags = generateAutoTags(property)
-          const docRef = doc(db, 'properties', property.id)
+          const docRef = doc(adminDb, 'properties', property.id)
           batch.update(docRef, {
             customTags: autoTags,
             tags: autoTags,

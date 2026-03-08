@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { useAdminAuth } from '../context/AdminAuthContext'
 import { getSystemSettingsSnapshot, updateSystemSettings } from '../lib/firestore'
+import { adminDb } from '../lib/firebase'
 import {
   Settings as SettingsIcon,
   Database,
@@ -49,7 +50,7 @@ export default function Settings() {
         autoApproveProperties: data.autoApproveProperties || false,
       })
       setInitialLoading(false)
-    })
+    }, adminDb)
 
     return () => unsub()
   }, [isSuperAdmin])
@@ -73,7 +74,7 @@ export default function Settings() {
     setErrorMessage(null)
     
     try {
-      await updateSystemSettings(settings)
+      await updateSystemSettings(settings, adminDb)
       setSuccessMessage('บันทึกการตั้งค่าสำเร็จ')
     } catch (error) {
       console.error('Error saving settings:', error)

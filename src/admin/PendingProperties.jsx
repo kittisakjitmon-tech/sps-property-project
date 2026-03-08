@@ -5,6 +5,7 @@ import {
   approvePendingProperty,
   rejectPendingProperty,
 } from '../lib/firestore'
+import { adminDb } from '../lib/firebase'
 
 export default function PendingProperties() {
   const [pendingProperties, setPendingProperties] = useState([])
@@ -14,7 +15,7 @@ export default function PendingProperties() {
   const [rejectionReason, setRejectionReason] = useState('')
 
   useEffect(() => {
-    const unsub = getPendingPropertiesSnapshot(setPendingProperties)
+    const unsub = getPendingPropertiesSnapshot(setPendingProperties, adminDb)
     return () => unsub()
   }, [])
 
@@ -23,7 +24,7 @@ export default function PendingProperties() {
 
     setProcessingId(id)
     try {
-      await approvePendingProperty(id)
+      await approvePendingProperty(id, adminDb)
       alert('อนุมัติประกาศสำเร็จ')
     } catch (error) {
       console.error('Error approving:', error)
@@ -44,7 +45,7 @@ export default function PendingProperties() {
     setProcessingId(id)
     setRejectingId(id)
     try {
-      await rejectPendingProperty(id, finalReason)
+      await rejectPendingProperty(id, finalReason, adminDb)
       alert('ปฏิเสธประกาศสำเร็จ')
     } catch (error) {
       console.error('Error rejecting:', error)

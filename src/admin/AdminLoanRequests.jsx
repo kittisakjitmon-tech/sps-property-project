@@ -6,6 +6,7 @@ import {
   updateLoanRequestStatus,
   deleteLoanRequest,
 } from '../lib/firestore'
+import { adminDb } from '../lib/firebase'
 import {
   FileText,
   Search,
@@ -146,7 +147,7 @@ export default function AdminLoanRequests() {
   const handleStatusChange = async (id, newStatus) => {
     setUpdatingId(id)
     try {
-      await updateLoanRequestStatus(id, newStatus)
+      await updateLoanRequestStatus(id, newStatus, undefined, adminDb)
       showToast('อัปเดตสถานะเรียบร้อย')
     } catch (err) {
       console.error(err)
@@ -160,7 +161,7 @@ export default function AdminLoanRequests() {
     if (!window.confirm('ต้องการลบคำขอนี้หรือไม่?')) return
     setDeletingId(id)
     try {
-      await deleteLoanRequest(id)
+      await deleteLoanRequest(id, adminDb)
       setDetailModal(null)
       showToast('ลบเรียบร้อย')
     } catch (err) {

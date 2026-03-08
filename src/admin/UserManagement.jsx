@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo } from 'react'
 import { useAdminAuth } from '../context/AdminAuthContext'
 import { getUsersSnapshot, updateUserRole, deleteUser, suspendUser, unsuspendUser } from '../lib/users'
+import { adminDb } from '../lib/firebase'
 import { createAuditLog } from '../lib/firestore'
 import AddMemberModal from '../components/AddMemberModal'
 import {
@@ -115,7 +116,7 @@ export default function UserManagement() {
     const unsub = getUsersSnapshot((userList) => {
       setUsers(userList)
       setLoading(false)
-    })
+    }, adminDb)
     return () => unsub()
   }, [user])
 
@@ -176,7 +177,7 @@ export default function UserManagement() {
           targetUserName,
           action,
           details,
-        })
+        }, adminDb)
       }
     } catch (error) {
       console.error('Error creating audit log:', error)
@@ -204,7 +205,7 @@ export default function UserManagement() {
     setConfirmModal({ isOpen: false, type: null, userId: null, userEmail: null, newRole: null, oldRole: null })
 
     try {
-      await updateUserRole(userId, newRole)
+      await updateUserRole(userId, newRole, adminDb)
       await logAuditAction(
         'CHANGE_ROLE',
         userId,
@@ -257,7 +258,7 @@ export default function UserManagement() {
     setConfirmModal({ isOpen: false, type: null, userId: null, userEmail: null })
 
     try {
-      await deleteUser(userId)
+      await deleteUser(userId, adminDb)
       await logAuditAction('DELETE_USER', userId, userEmail, `Deleted user: ${userEmail}`)
       setSuccessMessage('ลบผู้ใช้สำเร็จ')
     } catch (error) {
@@ -287,11 +288,11 @@ export default function UserManagement() {
 
     try {
       if (type === 'suspend') {
-        await suspendUser(userId)
+        await suspendUser(userId, adminDb)
         await logAuditAction('SUSPEND_USER', userId, userEmail, 'User account suspended')
         setSuccessMessage('ระงับการใช้งานสำเร็จ')
       } else {
-        await unsuspendUser(userId)
+        await unsuspendUser(userId, adminDb)
         await logAuditAction('UNSUSPEND_USER', userId, userEmail, 'User account unsuspended')
         setSuccessMessage('ยกเลิกการระงับการใช้งานสำเร็จ')
       }

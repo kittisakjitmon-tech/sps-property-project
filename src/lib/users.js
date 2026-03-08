@@ -15,6 +15,11 @@ import { initializeApp, deleteApp } from 'firebase/app'
 import { getAuth, createUserWithEmailAndPassword, signOut, deleteUser as deleteAuthUser } from 'firebase/auth'
 import { getFirestore } from 'firebase/firestore'
 import { db } from './firebase'
+
+/** Firestore instance to use; when called from admin pass adminDb so auth context matches. */
+function usersDb(override) {
+  return override || db
+}
 import app from './firebase'
 
 const USERS = 'users'
@@ -33,10 +38,13 @@ export async function getUserById(userId) {
 }
 
 /**
- * Get all users snapshot (real-time)
+ * Get all users snapshot (real-time).
+ * @param {Function} callback - (users) => void
+ * @param {FirebaseFirestore.Firestore} [firestore] - เมื่อเรียกจากหลังบ้านให้ส่ง adminDb เพื่อใช้ auth ของ admin
  */
-export function getUsersSnapshot(callback) {
-  const q = collection(db, USERS)
+export function getUsersSnapshot(callback, firestore) {
+  const firestoreDb = usersDb(firestore)
+  const q = collection(firestoreDb, USERS)
   return onSnapshot(q, (snap) => {
     const list = snap.docs.map((d) => ({ id: d.id, ...d.data() }))
     list.sort((a, b) => {
@@ -173,9 +181,11 @@ export async function updateUser(userId, data) {
 
 /**
  * Update user role
+ * @param {FirebaseFirestore.Firestore} [firestore] - เมื่อเรียกจากหลังบ้านให้ส่ง adminDb
  */
-export async function updateUserRole(userId, role) {
-  await updateDoc(doc(db, USERS, userId), {
+export async function updateUserRole(userId, role, firestore) {
+  const firestoreDb = usersDb(firestore)
+  await updateDoc(doc(firestoreDb, USERS, userId), {
     role,
     updatedAt: serverTimestamp(),
   })
@@ -183,16 +193,20 @@ export async function updateUserRole(userId, role) {
 
 /**
  * Delete user
+ * @param {FirebaseFirestore.Firestore} [firestore] - เมื่อเรียกจากหลังบ้านให้ส่ง adminDb
  */
-export async function deleteUser(userId) {
-  await deleteDoc(doc(db, USERS, userId))
+export async function deleteUser(userId, firestore) {
+  const firestoreDb = usersDb(firestore)
+  await deleteDoc(doc(firestoreDb, USERS, userId))
 }
 
 /**
  * Suspend user (set status to 'suspended')
+ * @param {FirebaseFirestore.Firestore} [firestore] - เมื่อเรียกจากหลังบ้านให้ส่ง adminDb
  */
-export async function suspendUser(userId) {
-  await updateDoc(doc(db, USERS, userId), {
+export async function suspendUser(userId, firestore) {
+  const firestoreDb = usersDb(firestore)
+  await updateDoc(doc(firestoreDb, USERS, userId), {
     status: 'suspended',
     updatedAt: serverTimestamp(),
   })
@@ -200,9 +214,11 @@ export async function suspendUser(userId) {
 
 /**
  * Unsuspend user (remove suspended status)
+ * @param {FirebaseFirestore.Firestore} [firestore] - เมื่อเรียกจากหลังบ้านให้ส่ง adminDb
  */
-export async function unsuspendUser(userId) {
-  await updateDoc(doc(db, USERS, userId), {
+export async function unsuspendUser(userId, firestore) {
+  const firestoreDb = usersDb(firestore)
+  await updateDoc(doc(firestoreDb, USERS, userId), {
     status: 'active',
     updatedAt: serverTimestamp(),
   })

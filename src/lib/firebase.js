@@ -52,12 +52,12 @@ export const db = initializeFirestore(publicApp, {
 export const adminDb = initializeFirestore(adminApp, {})
 
 export const storage = getStorage(publicApp)
+export const adminStorage = getStorage(adminApp)
 
 // --- Backward Compatibility Exports ---
 export const auth = publicAuth // default เป็น publicAuth
 export const publicDb = db
 export const publicStorage = storage
-export const adminStorage = storage
 
 export default publicApp
 export { publicApp, adminApp }

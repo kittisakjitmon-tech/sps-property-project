@@ -21,6 +21,11 @@ import { db, storage } from './firebase'
 
 export { db, writeBatch }
 
+/** เมื่อเรียกจากหลังบ้านให้ส่ง adminDb เพื่อใช้ auth ของ admin */
+function firestoreDb(override) {
+  return override || db
+}
+
 const PROPERTIES = 'properties'
 const LEADS = 'leads'
 const SHARE_LINKS = 'share_links'
@@ -101,8 +106,9 @@ function generateShareToken(length = 20) {
 }
 
 /** Properties - real-time list. Sorts by createdAt if present. */
-export function getPropertiesSnapshot(callback) {
-  const q = collection(db, PROPERTIES)
+export function getPropertiesSnapshot(callback, firestore) {
+  const d = firestoreDb(firestore)
+  const q = collection(d, PROPERTIES)
   return onSnapshot(q, (snap) => {
     const list = snap.docs.map((d) => ({ id: d.id, ...d.data() }))
     list.sort((a, b) => {
@@ -240,19 +246,21 @@ export function isShareLinkExpired(shareLink) {
   return expiresAtMs <= Date.now()
 }
 
-export async function createProperty(data) {
+export async function createProperty(data, firestore) {
+  const d = firestoreDb(firestore)
   const payload = {
     ...data,
     status: data.status ?? 'available',
     createdAt: serverTimestamp(),
     updatedAt: serverTimestamp(),
   }
-  const ref = await addDoc(collection(db, PROPERTIES), payload)
+  const ref = await addDoc(collection(d, PROPERTIES), payload)
   return ref.id
 }
 
-export async function updatePropertyById(id, data) {
-  await updateDoc(doc(db, PROPERTIES, id), {
+export async function updatePropertyById(id, data, firestore) {
+  const d = firestoreDb(firestore)
+  await updateDoc(doc(d, PROPERTIES, id), {
     ...data,
     updatedAt: serverTimestamp(),
   })
@@ -260,19 +268,19 @@ export async function updatePropertyById(id, data) {
 
 /**
  * Add tag to property's customTags and tags (for homepage section sync)
- * Updates both fields for compatibility with filterPropertiesByCriteria (tags) and filterProperties (customTags)
  */
-export async function addTagToProperty(propertyId, tag) {
+export async function addTagToProperty(propertyId, tag, firestore) {
   if (!propertyId || !tag || typeof tag !== 'string' || !tag.trim()) return
+  const d = firestoreDb(firestore)
   const tagVal = tag.trim()
-  const snap = await getDoc(doc(db, PROPERTIES, propertyId))
+  const snap = await getDoc(doc(d, PROPERTIES, propertyId))
   if (!snap.exists()) return
   const current = snap.data()
   const existing = Array.isArray(current.customTags) ? current.customTags : Array.isArray(current.tags) ? current.tags : []
   const tags = [...existing]
   if (tags.some((t) => String(t).trim() === tagVal)) return
   tags.push(tagVal)
-  await updateDoc(doc(db, PROPERTIES, propertyId), {
+  await updateDoc(doc(d, PROPERTIES, propertyId), {
     customTags: tags,
     tags: tags,
     updatedAt: serverTimestamp(),
@@ -282,29 +290,31 @@ export async function addTagToProperty(propertyId, tag) {
 /**
  * Remove tag from property's customTags and tags (for homepage section sync)
  */
-export async function removeTagFromProperty(propertyId, tag) {
+export async function removeTagFromProperty(propertyId, tag, firestore) {
   if (!propertyId || !tag || typeof tag !== 'string' || !tag.trim()) return
+  const d = firestoreDb(firestore)
   const tagVal = tag.trim()
-  const snap = await getDoc(doc(db, PROPERTIES, propertyId))
+  const snap = await getDoc(doc(d, PROPERTIES, propertyId))
   if (!snap.exists()) return
   const current = snap.data()
   const existing = Array.isArray(current.customTags) ? current.customTags : Array.isArray(current.tags) ? current.tags : []
   const filtered = existing.filter((t) => String(t).trim() !== tagVal)
   if (filtered.length === existing.length) return
-  await updateDoc(doc(db, PROPERTIES, propertyId), {
+  await updateDoc(doc(d, PROPERTIES, propertyId), {
     customTags: filtered,
     tags: filtered,
     updatedAt: serverTimestamp(),
   })
 }
 
-export async function deletePropertyById(id) {
-  await deleteDoc(doc(db, PROPERTIES, id))
+export async function deletePropertyById(id, firestore) {
+  const d = firestoreDb(firestore)
+  await deleteDoc(doc(d, PROPERTIES, id))
 }
 
-export async function togglePropertyStatus(id, currentStatus) {
+export async function togglePropertyStatus(id, currentStatus, firestore) {
   const next = currentStatus === 'available' ? 'sold' : 'available'
-  await updatePropertyById(id, { status: next })
+  await updatePropertyById(id, { status: next }, firestore)
 }
 
 /** Upload property image to Cloudinary and return enhanced URL */
@@ -320,8 +330,9 @@ export function uploadPropertyImageWithProgress(file, propertyId, onProgress) {
 }
 
 /** Leads */
-export function getLeadsSnapshot(callback) {
-  const q = collection(db, LEADS)
+export function getLeadsSnapshot(callback, firestore) {
+  const d = firestoreDb(firestore)
+  const q = collection(d, LEADS)
   return onSnapshot(q, (snap) => {
     const list = snap.docs.map((d) => ({ id: d.id, ...d.data() }))
     list.sort((a, b) => {
@@ -357,8 +368,9 @@ export async function markLeadContacted(id) {
 /** Viewing Requests - จองเยี่ยมชม */
 const VIEWING_REQUESTS = 'viewing_requests'
 
-export function getViewingRequestsSnapshot(callback) {
-  return onSnapshot(collection(db, VIEWING_REQUESTS), (snap) => {
+export function getViewingRequestsSnapshot(callback, firestore) {
+  const d = firestoreDb(firestore)
+  return onSnapshot(collection(d, VIEWING_REQUESTS), (snap) => {
     const list = snap.docs.map((d) => ({ id: d.id, ...d.data(), source: 'viewing_requests' }))
     list.sort((a, b) => {
       const ta = a.createdAt?.toMillis?.() ?? 0
@@ -388,15 +400,17 @@ export async function createAppointment(data) {
   })
 }
 
-export function getAppointmentsSnapshot(callback) {
-  return onSnapshot(collection(db, APPOINTMENTS), (snap) => {
-    const list = snap.docs.map((d) => ({ id: d.id, ...d.data() }))
+export function getAppointmentsSnapshot(callback, firestore) {
+  const d = firestoreDb(firestore)
+  return onSnapshot(collection(d, APPOINTMENTS), (snap) => {
+    const list = snap.docs.map((doc) => ({ id: doc.id, ...doc.data() }))
     callback(list)
   })
 }
 
-export async function updateAppointmentStatus(id, status) {
-  await updateDoc(doc(db, APPOINTMENTS, id), {
+export async function updateAppointmentStatus(id, status, firestore) {
+  const d = firestoreDb(firestore)
+  await updateDoc(doc(d, APPOINTMENTS, id), {
     status,
     updatedAt: serverTimestamp(),
   })
@@ -424,9 +438,10 @@ export async function createLoanRequest(data) {
   })
 }
 
-export function getLoanRequestsSnapshot(callback) {
+export function getLoanRequestsSnapshot(callback, firestore) {
+  const d = firestoreDb(firestore)
   const q = query(
-    collection(db, LOAN_REQUESTS),
+    collection(d, LOAN_REQUESTS),
     orderBy('createdAt', 'desc')
   )
   return onSnapshot(q, (snap) => {
@@ -442,21 +457,28 @@ export function getLoanRequestsSnapshot(callback) {
   })
 }
 
-export async function updateLoanRequestStatus(id, status, approvedAmount) {
+export async function updateLoanRequestStatus(id, status, approvedAmount, firestore) {
+  const d = firestoreDb(firestore)
   const payload = { status, updatedAt: serverTimestamp() }
   if (approvedAmount != null) payload.approvedAmount = approvedAmount
-  await updateDoc(doc(db, LOAN_REQUESTS, id), payload)
+  await updateDoc(doc(d, LOAN_REQUESTS, id), payload)
 }
 
-export async function deleteLoanRequest(id) {
-  await deleteDoc(doc(db, LOAN_REQUESTS, id))
+export async function deleteLoanRequest(id, firestore) {
+  const d = firestoreDb(firestore)
+  await deleteDoc(doc(d, LOAN_REQUESTS, id))
 }
 
 /** Hero Slides - สไลด์หน้าแรก */
 const HERO_SLIDES = 'hero_slides'
 
-export function getHeroSlidesSnapshot(callback) {
-  const q = collection(db, HERO_SLIDES)
+function storageRef(override) {
+  return override || storage
+}
+
+export function getHeroSlidesSnapshot(callback, firestore) {
+  const d = firestoreDb(firestore)
+  const q = collection(d, HERO_SLIDES)
   return onSnapshot(q, (snap) => {
     const list = snap.docs.map((d) => ({ id: d.id, ...d.data() }))
     list.sort((a, b) => (a.order ?? 0) - (b.order ?? 0))
@@ -471,56 +493,56 @@ export async function getHeroSlidesOnce() {
   return list
 }
 
-export async function createHeroSlide(data) {
-  await addDoc(collection(db, HERO_SLIDES), {
+export async function createHeroSlide(data, firestore) {
+  const d = firestoreDb(firestore)
+  await addDoc(collection(d, HERO_SLIDES), {
     ...data,
     createdAt: serverTimestamp(),
     updatedAt: serverTimestamp(),
   })
 }
 
-export async function updateHeroSlideById(id, data) {
-  await updateDoc(doc(db, HERO_SLIDES, id), {
+export async function updateHeroSlideById(id, data, firestore) {
+  const d = firestoreDb(firestore)
+  await updateDoc(doc(d, HERO_SLIDES, id), {
     ...data,
     updatedAt: serverTimestamp(),
   })
 }
 
-export async function deleteHeroSlideById(id, imageUrl) {
-  // ลบไฟล์จาก Storage ถ้ามี imageUrl
+export async function deleteHeroSlideById(id, imageUrl, firestore, storageOverride) {
+  const str = storageRef(storageOverride)
+  const d = firestoreDb(firestore)
   if (imageUrl) {
     try {
-      // แปลง URL เป็น path reference
-      // URL format: https://firebasestorage.googleapis.com/v0/b/{bucket}/o/{path}?alt=media&token=...
       const urlObj = new URL(imageUrl)
       const pathMatch = urlObj.pathname.match(/\/o\/(.+)\?/)
       if (pathMatch) {
         const filePath = decodeURIComponent(pathMatch[1])
-        const storageRef = ref(storage, filePath)
-        await deleteObject(storageRef)
+        const fileRef = ref(str, filePath)
+        await deleteObject(fileRef)
       }
     } catch (error) {
       console.error('Error deleting image from Storage:', error)
-      // ยังคงลบ document แม้ลบไฟล์ไม่สำเร็จ
     }
   }
-  // ลบ document จาก Firestore
-  await deleteDoc(doc(db, HERO_SLIDES, id))
+  await deleteDoc(doc(d, HERO_SLIDES, id))
 }
 
-export async function uploadHeroSlideImage(file) {
+export async function uploadHeroSlideImage(file, storageOverride) {
+  const str = storageRef(storageOverride)
   const name = `hero_slides/${Date.now()}_${file.name}`
-  const storageRef = ref(storage, name)
-  await uploadBytes(storageRef, file)
-  return getDownloadURL(storageRef)
+  const fileRef = ref(str, name)
+  await uploadBytes(fileRef, file)
+  return getDownloadURL(fileRef)
 }
 
 /** Batch update order ของ hero slides */
-export async function batchUpdateHeroSlideOrders(updates) {
-  // updates = [{ id: '...', order: 0 }, { id: '...', order: 1 }, ...]
-  const batch = writeBatch(db)
+export async function batchUpdateHeroSlideOrders(updates, firestore) {
+  const d = firestoreDb(firestore)
+  const batch = writeBatch(d)
   updates.forEach(({ id, order }) => {
-    const slideRef = doc(db, HERO_SLIDES, id)
+    const slideRef = doc(d, HERO_SLIDES, id)
     batch.update(slideRef, { order, updatedAt: serverTimestamp() })
   })
   await batch.commit()
@@ -540,8 +562,9 @@ export async function createPendingProperty(data) {
   })
 }
 
-export function getPendingPropertiesSnapshot(callback) {
-  const q = collection(db, PENDING_PROPERTIES)
+export function getPendingPropertiesSnapshot(callback, firestore) {
+  const d = firestoreDb(firestore)
+  const q = collection(d, PENDING_PROPERTIES)
   return onSnapshot(q, (snap) => {
     const list = snap.docs.map((d) => ({ id: d.id, ...d.data() }))
     list.sort((a, b) => {
@@ -553,55 +576,47 @@ export function getPendingPropertiesSnapshot(callback) {
   })
 }
 
-export async function getPendingPropertyByIdOnce(id) {
-  const d = await getDoc(doc(db, PENDING_PROPERTIES, id))
-  if (!d.exists()) return null
-  return { id: d.id, ...d.data() }
+export async function getPendingPropertyByIdOnce(id, firestore) {
+  const d = firestoreDb(firestore)
+  const snap = await getDoc(doc(d, PENDING_PROPERTIES, id))
+  if (!snap.exists()) return null
+  return { id: snap.id, ...snap.data() }
 }
 
-export async function approvePendingProperty(pendingId) {
-  // ดึงข้อมูล pending property
-  const pending = await getPendingPropertyByIdOnce(pendingId)
+export async function approvePendingProperty(pendingId, firestore) {
+  const d = firestoreDb(firestore)
+  const pending = await getPendingPropertyByIdOnce(pendingId, firestore)
   if (!pending) throw new Error('ไม่พบข้อมูลประกาศ')
 
-  // สร้าง property ใหม่ใน collection properties
   const { id, status, createdAt, updatedAt, ...propertyData } = pending
   const newPropertyId = await createProperty({
     ...propertyData,
     status: 'available',
     createdBy: pending.createdBy || pending.userId || null,
-  })
+  }, firestore)
 
-  // อัปโหลดรูปภาพ (ถ้ามี)
   if (pending.images && pending.images.length > 0) {
-    // รูปภาพควรจะถูกอัปโหลดไปแล้วในขั้นตอน submit
-    // แต่ถ้ายังเป็น base64 หรือ file object ต้องอัปโหลดใหม่
-    // สำหรับตอนนี้สมมติว่าเป็น URL แล้ว
-    await updatePropertyById(newPropertyId, { images: pending.images })
+    await updatePropertyById(newPropertyId, { images: pending.images }, firestore)
   }
 
-  // ลบ pending property
-  await deleteDoc(doc(db, PENDING_PROPERTIES, pendingId))
-
+  await deleteDoc(doc(d, PENDING_PROPERTIES, pendingId))
   return newPropertyId
 }
 
-export async function rejectPendingProperty(id, rejectionReason = '') {
-  // ดึงข้อมูล pending property
-  const pending = await getPendingPropertyByIdOnce(id)
+export async function rejectPendingProperty(id, rejectionReason = '', firestore) {
+  const d = firestoreDb(firestore)
+  const pending = await getPendingPropertyByIdOnce(id, firestore)
   if (!pending) throw new Error('ไม่พบข้อมูลประกาศ')
 
-  // สร้าง property ใน properties collection ด้วย status = 'rejected'
   const { id: pendingId, status, createdAt, updatedAt, ...propertyData } = pending
   await createProperty({
     ...propertyData,
     status: 'rejected',
     rejectionReason: rejectionReason || 'ข้อมูลไม่ผ่านเกณฑ์การตรวจสอบ',
     createdBy: pending.createdBy || pending.userId || null,
-  })
+  }, firestore)
 
-  // ลบ pending property
-  await deleteDoc(doc(db, PENDING_PROPERTIES, id))
+  await deleteDoc(doc(d, PENDING_PROPERTIES, id))
 }
 
 export async function uploadPendingPropertyImage(file, pendingId) {
@@ -614,11 +629,11 @@ export async function uploadPendingPropertyImage(file, pendingId) {
 /** Popular Locations - ทำเลยอดฮิต */
 const POPULAR_LOCATIONS = 'popular_locations'
 
-export function getPopularLocationsSnapshot(callback) {
-  const q = collection(db, POPULAR_LOCATIONS)
+export function getPopularLocationsSnapshot(callback, firestore) {
+  const d = firestoreDb(firestore)
+  const q = collection(d, POPULAR_LOCATIONS)
   return onSnapshot(q, (snap) => {
     const list = snap.docs.map((d) => ({ id: d.id, ...d.data() }))
-    // Sort by order, then by createdAt
     list.sort((a, b) => {
       const orderA = a.order ?? 999
       const orderB = b.order ?? 999
@@ -645,13 +660,14 @@ export async function getPopularLocationsOnce() {
   return list
 }
 
-export async function createPopularLocation(data) {
-  const snap = await getDocs(collection(db, POPULAR_LOCATIONS))
+export async function createPopularLocation(data, firestore) {
+  const d = firestoreDb(firestore)
+  const snap = await getDocs(collection(d, POPULAR_LOCATIONS))
   const maxOrder = snap.docs.length > 0
-    ? Math.max(...snap.docs.map((d) => d.data().order ?? 0), -1)
+    ? Math.max(...snap.docs.map((doc) => doc.data().order ?? 0), -1)
     : -1
 
-  await addDoc(collection(db, POPULAR_LOCATIONS), {
+  await addDoc(collection(d, POPULAR_LOCATIONS), {
     ...data,
     order: maxOrder + 1,
     isActive: data.isActive ?? true,
@@ -660,43 +676,47 @@ export async function createPopularLocation(data) {
   })
 }
 
-export async function updatePopularLocationById(id, data) {
-  await updateDoc(doc(db, POPULAR_LOCATIONS, id), {
+export async function updatePopularLocationById(id, data, firestore) {
+  const d = firestoreDb(firestore)
+  await updateDoc(doc(d, POPULAR_LOCATIONS, id), {
     ...data,
     updatedAt: serverTimestamp(),
   })
 }
 
-export async function deletePopularLocationById(id, imageUrl) {
-  // ลบไฟล์จาก Storage ถ้ามี imageUrl
+export async function deletePopularLocationById(id, imageUrl, firestore, storageOverride) {
+  const str = storageRef(storageOverride)
+  const d = firestoreDb(firestore)
   if (imageUrl) {
     try {
       const urlObj = new URL(imageUrl)
       const pathMatch = urlObj.pathname.match(/\/o\/(.+)\?/)
       if (pathMatch) {
         const filePath = decodeURIComponent(pathMatch[1])
-        const storageRef = ref(storage, filePath)
-        await deleteObject(storageRef)
+        const fileRef = ref(str, filePath)
+        await deleteObject(fileRef)
       }
     } catch (error) {
       console.error('Error deleting image from Storage:', error)
     }
   }
-  await deleteDoc(doc(db, POPULAR_LOCATIONS, id))
+  await deleteDoc(doc(d, POPULAR_LOCATIONS, id))
 }
 
-export async function uploadPopularLocationImage(file) {
+export async function uploadPopularLocationImage(file, storageOverride) {
+  const str = storageRef(storageOverride)
   const name = `popular_locations/${Date.now()}_${file.name}`
-  const storageRef = ref(storage, name)
-  await uploadBytes(storageRef, file)
-  return getDownloadURL(storageRef)
+  const fileRef = ref(str, name)
+  await uploadBytes(fileRef, file)
+  return getDownloadURL(fileRef)
 }
 
 /** Batch update order ของ popular locations */
-export async function batchUpdatePopularLocationOrders(updates) {
-  const batch = writeBatch(db)
+export async function batchUpdatePopularLocationOrders(updates, firestore) {
+  const d = firestoreDb(firestore)
+  const batch = writeBatch(d)
   updates.forEach(({ id, order }) => {
-    const locationRef = doc(db, POPULAR_LOCATIONS, id)
+    const locationRef = doc(d, POPULAR_LOCATIONS, id)
     batch.update(locationRef, { order, updatedAt: serverTimestamp() })
   })
   await batch.commit()
@@ -725,9 +745,10 @@ const AUDIT_LOGS = 'audit_logs'
 const ACTIVITIES = 'activities'
 
 /** Activities - Realtime snapshot สำหรับบันทึกกิจกรรม */
-export function getActivitiesSnapshot(callback, limitCount = 20) {
+export function getActivitiesSnapshot(callback, limitCount = 20, firestore) {
+  const d = firestoreDb(firestore)
   const q = query(
-    collection(db, ACTIVITIES),
+    collection(d, ACTIVITIES),
     orderBy('timestamp', 'desc'),
     limit(limitCount)
   )
@@ -761,9 +782,10 @@ export async function recordPropertyView({ propertyId, type }) {
 }
 
 /** ดึง property_views ย้อนหลัง VIEWS_DAYS_LIMIT วัน สำหรับ Dashboard (realtime) */
-export function getPropertyViewsSnapshot(callback) {
+export function getPropertyViewsSnapshot(callback, firestore) {
+  const d = firestoreDb(firestore)
   const q = query(
-    collection(db, PROPERTY_VIEWS),
+    collection(d, PROPERTY_VIEWS),
     orderBy('timestamp', 'desc'),
     limit(5000)
   )
@@ -779,15 +801,17 @@ export function getPropertyViewsSnapshot(callback) {
   })
 }
 
-export async function createAuditLog(data) {
-  await addDoc(collection(db, AUDIT_LOGS), {
+export async function createAuditLog(data, firestore) {
+  const d = firestoreDb(firestore)
+  await addDoc(collection(d, AUDIT_LOGS), {
     ...data,
     timestamp: serverTimestamp(),
   })
 }
 
-export function getAuditLogsSnapshot(callback, limit = 100) {
-  const q = collection(db, AUDIT_LOGS)
+export function getAuditLogsSnapshot(callback, limit = 100, firestore) {
+  const d = firestoreDb(firestore)
+  const q = collection(d, AUDIT_LOGS)
   return onSnapshot(q, (snap) => {
     const list = snap.docs.map((d) => ({ id: d.id, ...d.data() }))
     list.sort((a, b) => {
@@ -822,9 +846,10 @@ export async function getSystemSettings() {
   return { id: settingsDoc.id, ...settingsDoc.data() }
 }
 
-export async function updateSystemSettings(settings) {
+export async function updateSystemSettings(settings, firestore) {
+  const d = firestoreDb(firestore)
   await setDoc(
-    doc(db, SYSTEM_SETTINGS, SETTINGS_DOC_ID),
+    doc(d, SYSTEM_SETTINGS, SETTINGS_DOC_ID),
     {
       ...settings,
       updatedAt: serverTimestamp(),
@@ -833,8 +858,9 @@ export async function updateSystemSettings(settings) {
   )
 }
 
-export function getSystemSettingsSnapshot(callback) {
-  return onSnapshot(doc(db, SYSTEM_SETTINGS, SETTINGS_DOC_ID), (docSnap) => {
+export function getSystemSettingsSnapshot(callback, firestore) {
+  const d = firestoreDb(firestore)
+  return onSnapshot(doc(d, SYSTEM_SETTINGS, SETTINGS_DOC_ID), (docSnap) => {
     if (docSnap.exists()) {
       callback({ id: docSnap.id, ...docSnap.data() })
     } else {
@@ -856,8 +882,9 @@ export function getSystemSettingsSnapshot(callback) {
 /** Homepage Sections - หัวข้อหน้าแรก (ทรัพย์เด่น ฯลฯ) */
 const HOMEPAGE_SECTIONS = 'homepage_sections'
 
-export function getHomepageSectionsSnapshot(callback) {
-  const q = collection(db, HOMEPAGE_SECTIONS)
+export function getHomepageSectionsSnapshot(callback, firestore) {
+  const d = firestoreDb(firestore)
+  const q = collection(d, HOMEPAGE_SECTIONS)
   return onSnapshot(q, (snap) => {
     const list = snap.docs.map((d) => ({ id: d.id, ...d.data() }))
     list.sort((a, b) => (a.order ?? 0) - (b.order ?? 0))
@@ -872,7 +899,8 @@ export async function getHomepageSectionsOnce() {
   return list
 }
 
-export async function createHomepageSection(data) {
+export async function createHomepageSection(data, firestore) {
+  const d = firestoreDb(firestore)
   const payload = {
     ...data,
     propertyIds: data.propertyIds || [],
@@ -882,25 +910,28 @@ export async function createHomepageSection(data) {
     createdAt: serverTimestamp(),
     updatedAt: serverTimestamp(),
   }
-  const ref = await addDoc(collection(db, HOMEPAGE_SECTIONS), payload)
+  const ref = await addDoc(collection(d, HOMEPAGE_SECTIONS), payload)
   return ref.id
 }
 
-export async function updateHomepageSectionById(id, data) {
-  await updateDoc(doc(db, HOMEPAGE_SECTIONS, id), {
+export async function updateHomepageSectionById(id, data, firestore) {
+  const d = firestoreDb(firestore)
+  await updateDoc(doc(d, HOMEPAGE_SECTIONS, id), {
     ...data,
     updatedAt: serverTimestamp(),
   })
 }
 
-export async function deleteHomepageSectionById(id) {
-  await deleteDoc(doc(db, HOMEPAGE_SECTIONS, id))
+export async function deleteHomepageSectionById(id, firestore) {
+  const d = firestoreDb(firestore)
+  await deleteDoc(doc(d, HOMEPAGE_SECTIONS, id))
 }
 
-export async function batchUpdateHomepageSectionOrders(updates) {
-  const batch = writeBatch(db)
+export async function batchUpdateHomepageSectionOrders(updates, firestore) {
+  const d = firestoreDb(firestore)
+  const batch = writeBatch(d)
   updates.forEach(({ id, order }) => {
-    const ref = doc(db, HOMEPAGE_SECTIONS, id)
+    const ref = doc(d, HOMEPAGE_SECTIONS, id)
     batch.update(ref, { order, updatedAt: serverTimestamp() })
   })
   await batch.commit()
@@ -951,9 +982,11 @@ const BLOGS = 'blogs'
 
 /**
  * Get all blogs snapshot (for admin)
+ * @param {FirebaseFirestore.Firestore} [firestore] - เมื่อเรียกจากหลังบ้านให้ส่ง adminDb
  */
-export function getBlogsSnapshot(callback) {
-  const q = query(collection(db, BLOGS), orderBy('createdAt', 'desc'))
+export function getBlogsSnapshot(callback, firestore) {
+  const d = firestoreDb(firestore)
+  const q = query(collection(d, BLOGS), orderBy('createdAt', 'desc'))
   return onSnapshot(q, (snapshot) => {
     const blogs = snapshot.docs.map((doc) => ({
       id: doc.id,
@@ -1032,8 +1065,10 @@ export async function getBlogByIdOnce(id) {
 
 /**
  * Create a new blog
+ * @param {FirebaseFirestore.Firestore} [firestore] - เมื่อเรียกจากหลังบ้านให้ส่ง adminDb
  */
-export async function createBlog(data) {
+export async function createBlog(data, firestore) {
+  const d = firestoreDb(firestore)
   const payload = {
     title: data.title || '',
     content: data.content || '',
@@ -1044,15 +1079,17 @@ export async function createBlog(data) {
     createdAt: serverTimestamp(),
     updatedAt: serverTimestamp(),
   }
-  const ref = await addDoc(collection(db, BLOGS), payload)
+  const ref = await addDoc(collection(d, BLOGS), payload)
   return ref.id
 }
 
 /**
  * Update blog by ID
+ * @param {FirebaseFirestore.Firestore} [firestore] - เมื่อเรียกจากหลังบ้านให้ส่ง adminDb
  */
-export async function updateBlogById(id, data) {
-  await updateDoc(doc(db, BLOGS, id), {
+export async function updateBlogById(id, data, firestore) {
+  const d = firestoreDb(firestore)
+  await updateDoc(doc(d, BLOGS, id), {
     ...data,
     updatedAt: serverTimestamp(),
   })
@@ -1060,16 +1097,20 @@ export async function updateBlogById(id, data) {
 
 /**
  * Delete blog by ID
+ * @param {FirebaseFirestore.Firestore} [firestore] - เมื่อเรียกจากหลังบ้านให้ส่ง adminDb
  */
-export async function deleteBlogById(id) {
-  await deleteDoc(doc(db, BLOGS, id))
+export async function deleteBlogById(id, firestore) {
+  const d = firestoreDb(firestore)
+  await deleteDoc(doc(d, BLOGS, id))
 }
 
 /**
  * Upload blog image to Firebase Storage
+ * @param {FirebaseStorage.Storage} [storageInstance] - เมื่อเรียกจากหลังบ้านให้ส่ง adminStorage เพื่อใช้ auth ของ admin
  */
-export async function uploadBlogImage(file, onProgress) {
-  const storageRef = ref(storage, `blogs/${Date.now()}_${file.name}`)
+export async function uploadBlogImage(file, onProgress, storageInstance) {
+  const s = storageInstance || storage
+  const storageRef = ref(s, `blogs/${Date.now()}_${file.name}`)
   await uploadBytes(storageRef, file)
   const url = await getDownloadURL(storageRef)
   return url

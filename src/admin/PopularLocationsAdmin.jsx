@@ -26,6 +26,7 @@ import {
   uploadPopularLocationImage,
   batchUpdatePopularLocationOrders,
 } from '../lib/firestore'
+import { adminDb, adminStorage } from '../lib/firebase'
 import { compressImage } from '../lib/imageCompressor'
 
 // Sortable Location Card Component
@@ -181,7 +182,7 @@ export default function PopularLocationsAdmin() {
   useEffect(() => {
     const unsub = getPopularLocationsSnapshot((newLocations) => {
       setLocations(newLocations)
-    })
+    }, adminDb)
     return () => unsub()
   }, [])
 
@@ -291,7 +292,7 @@ export default function PopularLocationsAdmin() {
 
       // Upload new image if provided
       if (form.imageFile) {
-        imageUrl = await uploadPopularLocationImage(form.imageFile)
+        imageUrl = await uploadPopularLocationImage(form.imageFile, adminStorage)
       }
 
       const locationData = {
@@ -304,12 +305,10 @@ export default function PopularLocationsAdmin() {
       }
 
       if (editingLocation) {
-        // Update existing
-        await updatePopularLocationById(editingLocation.id, locationData)
+        await updatePopularLocationById(editingLocation.id, locationData, adminDb)
         setSuccessMessage('อัปเดตทำเลสำเร็จ')
       } else {
-        // Create new
-        await createPopularLocation(locationData)
+        await createPopularLocation(locationData, adminDb)
         setSuccessMessage('เพิ่มทำเลสำเร็จ')
       }
 
@@ -329,7 +328,7 @@ export default function PopularLocationsAdmin() {
     setErrorMessage(null)
 
     try {
-      await deletePopularLocationById(id, imageUrl)
+      await deletePopularLocationById(id, imageUrl, adminDb, adminStorage)
       setSuccessMessage('ลบทำเลสำเร็จ')
     } catch (error) {
       console.error('Error deleting:', error)
@@ -341,7 +340,7 @@ export default function PopularLocationsAdmin() {
 
   const handleToggleStatus = async (id, newStatus) => {
     try {
-      await updatePopularLocationById(id, { isActive: newStatus })
+      await updatePopularLocationById(id, { isActive: newStatus }, adminDb)
       setSuccessMessage(newStatus ? 'เปิดใช้งานทำเลสำเร็จ' : 'ปิดใช้งานทำเลสำเร็จ')
     } catch (error) {
       console.error('Error toggling status:', error)

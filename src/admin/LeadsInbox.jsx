@@ -1,5 +1,6 @@
 import { useState, useEffect, useMemo } from 'react'
 import { getAppointmentsSnapshot, updateAppointmentStatus } from '../lib/firestore'
+import { adminDb } from '../lib/firebase'
 import { Search, Phone, Calendar, Clock } from 'lucide-react'
 
 const STATUS_OPTIONS = [
@@ -56,7 +57,7 @@ export default function LeadsInbox() {
     const unsub = getAppointmentsSnapshot((list) => {
       setAppointments(Array.isArray(list) ? list : [])
       setLoading(false)
-    })
+    }, adminDb)
     return () => {
       if (typeof unsub === 'function') unsub()
     }
@@ -110,7 +111,7 @@ export default function LeadsInbox() {
   const handleStatusChange = async (id, newStatus) => {
     setUpdatingId(id)
     try {
-      await updateAppointmentStatus(id, newStatus)
+      await updateAppointmentStatus(id, newStatus, adminDb)
       showToast('อัปเดตสถานะเรียบร้อย')
     } catch (err) {
       console.error(err)

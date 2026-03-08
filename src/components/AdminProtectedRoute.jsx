@@ -5,7 +5,8 @@ export default function AdminProtectedRoute({ children, requiredRoles }) {
   const { user, userRole, loading, hasRole } = useAdminAuth()
   const location = useLocation()
 
-  if (loading) {
+  // โหลดตอนเช็ค auth ครั้งแรก หรือมี user แล้วแต่ยังไม่มี role (หลัง login รอ onAuthStateChanged)
+  if (loading || (user && userRole === null)) {
     return (
       <div className="min-h-screen bg-slate-50 flex items-center justify-center">
         <p className="text-slate-600">กำลังโหลด…</p>

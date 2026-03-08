@@ -1,4 +1,5 @@
 rules_version = '2';
+// อัปโหลดจากหลังบ้านต้องใช้ adminStorage (จาก admin app) เพื่อให้ request.auth เป็น admin ที่ล็อกอิน
 service firebase.storage {
   match /b/{bucket}/o {
     // properties: อ่านได้ทุกคน, เขียนได้เฉพาะ Admin ที่ login แล้ว

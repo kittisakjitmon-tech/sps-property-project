@@ -1,9 +1,50 @@
 import { createContext, useContext, useState, useEffect } from 'react'
 import { signInWithEmailAndPassword, signOut, onAuthStateChanged } from 'firebase/auth'
-import { doc, getDoc, setDoc, serverTimestamp } from 'firebase/firestore'
+import { doc, getDoc, setDoc, serverTimestamp, collection, query, where, getDocs } from 'firebase/firestore'
 import { adminAuth, adminDb } from '../lib/firebase'
 
 const AdminAuthContext = createContext(null)
+
+/** ดึงและ sync role จาก Firestore สำหรับ u (หรือ null). คืนค่า role หรือ null ถ้า sign out */
+async function resolveUserRole(u) {
+  if (!u) return null
+  try {
+    let userDoc = await getDoc(doc(adminDb, 'users', u.uid))
+    if (userDoc.exists()) {
+      const role = userDoc.data().role || 'member'
+      if (role === 'agent') return 'agent'
+      return role
+    }
+    const email = (u.email || '').trim().toLowerCase()
+    let role = 'member'
+    let byEmail = null
+    if (email) {
+      const q = query(collection(adminDb, 'users'), where('email', '==', email))
+      const snap = await getDocs(q)
+      byEmail = snap.docs[0] || null
+      if (byEmail) {
+        role = byEmail.data().role || 'member'
+        await setDoc(doc(adminDb, 'users', u.uid), {
+          ...byEmail.data(),
+          email: u.email,
+          updatedAt: serverTimestamp(),
+        })
+      }
+    }
+    if (role === 'agent') return 'agent'
+    if (!byEmail) {
+      await setDoc(doc(adminDb, 'users', u.uid), {
+        email: u.email,
+        role: 'member',
+        createdAt: serverTimestamp(),
+      })
+    }
+    return role
+  } catch (err) {
+    console.error('Error fetching user role:', err)
+    return 'member'
+  }
+}
 
 export function AdminAuthProvider({ children }) {
   const [user, setUser] = useState(null)
@@ -13,34 +54,15 @@ export function AdminAuthProvider({ children }) {
   useEffect(() => {
     const unsub = onAuthStateChanged(adminAuth, async (u) => {
       if (u) {
-        // ดึง role จาก Firestore users collection
-        try {
-          const userDoc = await getDoc(doc(adminDb, 'users', u.uid))
-          if (userDoc.exists()) {
-            const userData = userDoc.data()
-            const role = userData.role || 'member'
-            // Block agent from admin access
-            if (role === 'agent') {
-              await signOut(adminAuth)
-              setUser(null)
-              setUserRole(null)
-              setLoading(false)
-              return
-            }
-            setUserRole(role)
-          } else {
-            // ถ้ายังไม่มีข้อมูลใน users collection ให้สร้างใหม่
-            await setDoc(doc(adminDb, 'users', u.uid), {
-              email: u.email,
-              role: 'member',
-              createdAt: serverTimestamp(),
-            })
-            setUserRole('member')
-          }
-        } catch (error) {
-          console.error('Error fetching user role:', error)
-          setUserRole('member')
+        const role = await resolveUserRole(u)
+        if (role === 'agent') {
+          await signOut(adminAuth)
+          setUser(null)
+          setUserRole(null)
+          setLoading(false)
+          return
         }
+        setUserRole(role)
       } else {
         setUserRole(null)
       }
@@ -53,32 +75,17 @@ export function AdminAuthProvider({ children }) {
   const login = async (email, password) => {
     const cred = await signInWithEmailAndPassword(adminAuth, email, password)
 
-    // บล็อก role agent จาก login หลังบ้าน
-    try {
-      const userDoc = await getDoc(doc(adminDb, 'users', cred.user.uid))
-      const role = userDoc.exists() ? (userDoc.data().role || 'member') : 'member'
-
-      // Block agent จาก login หลังบ้าน
-      if (role === 'agent') {
-        await signOut(adminAuth)
-        const error = new Error('บัญชี Agent ไม่สามารถเข้าสู่ระบบหลังบ้านได้ กรุณาใช้หน้า Login ปกติ')
-        error.code = 'auth/agent-not-allowed'
-        throw error
-      }
-
-      // อนุญาต admin, super_admin และ member
-    } catch (err) {
-      if (err.code === 'auth/agent-not-allowed') {
-        throw err
-      }
+    const role = await resolveUserRole(cred.user)
+    if (role === 'agent') {
       await signOut(adminAuth)
-      throw err
+      const error = new Error('บัญชี Agent ไม่สามารถเข้าสู่ระบบหลังบ้านได้ กรุณาใช้หน้า Login ปกติ')
+      error.code = 'auth/agent-not-allowed'
+      throw error
     }
 
-    // เซ็ต user ทันทีหลัง sign-in เพื่อไม่ให้ navigate ไป /sps-internal-admin แล้วถูก redirect กลับ login (รอ onAuthStateChanged ช้าเกินไป)
     setUser(cred.user)
-    setLoading(true)
-    // onAuthStateChanged จะรันต่อและดึง role จาก Firestore แล้วค่อย setLoading(false)
+    setUserRole(role)
+    setLoading(false)
   }
 
   const logout = async () => {

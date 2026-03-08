@@ -7,6 +7,7 @@ import {
   deleteBlogById,
   uploadBlogImage,
 } from '../lib/firestore'
+import { adminDb, adminStorage } from '../lib/firebase'
 import { compressImage } from '../lib/imageCompressor'
 
 export default function AdminBlogs() {
@@ -31,7 +32,7 @@ export default function AdminBlogs() {
     const unsubscribe = getBlogsSnapshot((blogsList) => {
       setBlogs(blogsList)
       setLoading(false)
-    })
+    }, adminDb)
     return () => unsubscribe()
   }, [])
 
@@ -72,7 +73,7 @@ export default function AdminBlogs() {
         Array.from(files).map((file) => compressImage(file, { maxWidth: 1920, maxHeight: 1920 }))
       )
 
-      const uploadPromises = compressedFiles.map((file) => uploadBlogImage(file))
+      const uploadPromises = compressedFiles.map((file) => uploadBlogImage(file, undefined, adminStorage))
       const urls = await Promise.all(uploadPromises)
 
       setForm((prev) => ({
@@ -116,7 +117,7 @@ export default function AdminBlogs() {
           images: form.images,
           published: form.published,
           isFeatured: form.isFeatured,
-        })
+        }, adminDb)
         setSuccessMessage('อัปเดตบทความสำเร็จ')
         setTimeout(() => setSuccessMessage(null), 3000)
       } else {
@@ -127,7 +128,7 @@ export default function AdminBlogs() {
           images: form.images,
           published: form.published,
           isFeatured: form.isFeatured,
-        })
+        }, adminDb)
         setSuccessMessage('สร้างบทความสำเร็จ')
         setTimeout(() => setSuccessMessage(null), 3000)
       }
@@ -141,7 +142,7 @@ export default function AdminBlogs() {
 
   const handleTogglePublished = async (blogId, currentStatus) => {
     try {
-      await updateBlogById(blogId, { published: !currentStatus })
+      await updateBlogById(blogId, { published: !currentStatus }, adminDb)
       setSuccessMessage(`${!currentStatus ? 'เผยแพร่' : 'ยกเลิกการเผยแพร่'} บทความสำเร็จ`)
       setTimeout(() => setSuccessMessage(null), 3000)
     } catch (error) {
@@ -162,7 +163,7 @@ export default function AdminBlogs() {
           return
         }
       }
-      await updateBlogById(blogId, { isFeatured: !currentStatus })
+      await updateBlogById(blogId, { isFeatured: !currentStatus }, adminDb)
       setSuccessMessage(`${!currentStatus ? 'ตั้งเป็น' : 'ยกเลิก'} Featured สำเร็จ`)
       setTimeout(() => setSuccessMessage(null), 3000)
     } catch (error) {
@@ -176,7 +177,7 @@ export default function AdminBlogs() {
     if (!confirm('คุณแน่ใจหรือไม่ว่าต้องการลบบทความนี้?')) return
 
     try {
-      await deleteBlogById(blogId)
+      await deleteBlogById(blogId, adminDb)
       setSuccessMessage('ลบบทความสำเร็จ')
       setTimeout(() => setSuccessMessage(null), 3000)
     } catch (error) {

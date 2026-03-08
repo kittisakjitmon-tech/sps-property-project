@@ -190,7 +190,11 @@ function buildPropertyTypeDataWithViews(properties, views) {
     .sort((a, b) => b.count - a.count)
 }
 
-export function useDashboardData(viewRange = '7d') {
+/**
+ * @param {string} [viewRange='7d']
+ * @param {FirebaseFirestore.Firestore} [firestore] - เมื่อเรียกจากหลังบ้านให้ส่ง adminDb เพื่อใช้ auth ของ admin
+ */
+export function useDashboardData(viewRange = '7d', firestore) {
   const [properties, setProperties] = useState([])
   const [leads, setLeads] = useState([])
   const [viewingRequests, setViewingRequests] = useState([])
@@ -205,22 +209,22 @@ export function useDashboardData(viewRange = '7d') {
 
     const unsubP = getPropertiesSnapshot((list) => {
       if (mounted) setProperties(list)
-    })
+    }, firestore)
     const unsubL = getLeadsSnapshot((list) => {
       if (mounted) setLeads(list)
-    })
+    }, firestore)
     const unsubV = getViewingRequestsSnapshot((list) => {
       if (mounted) setViewingRequests(list)
-    })
+    }, firestore)
     const unsubA = getActivitiesSnapshot((list) => {
       if (mounted) setActivities(list)
-    })
+    }, 20, firestore)
     const unsubPending = getPendingPropertiesSnapshot((list) => {
       if (mounted) setPendingProperties(list)
-    })
+    }, firestore)
     const unsubViews = getPropertyViewsSnapshot((list) => {
       if (mounted) setViews(list)
-    })
+    }, firestore)
 
     // ใช้ timeout สั้นเพื่อให้ snapshot ครั้งแรกโหลดเสร็จก่อนปิด loading
     const timer = setTimeout(() => {
@@ -240,7 +244,7 @@ export function useDashboardData(viewRange = '7d') {
       unsubPending()
       unsubViews()
     }
-  }, [])
+  }, [firestore])
 
   const contacts = useMemo(() => mergeContacts(leads, viewingRequests), [leads, viewingRequests])
 
