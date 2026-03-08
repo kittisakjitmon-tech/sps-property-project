@@ -19,6 +19,36 @@ import { useTypingPlaceholder } from '../components/TypingPlaceholder'
 import { Helmet } from 'react-helmet-async'
 import { PROPERTY_TYPES } from '../constants/propertyTypes'
 
+const toSearchableText = (value) => {
+  if (typeof value === 'string') return value
+  if (typeof value === 'number' || typeof value === 'boolean') return String(value)
+  if (Array.isArray(value)) {
+    return value.map((item) => toSearchableText(item)).filter(Boolean).join(' ')
+  }
+  if (value && typeof value === 'object') {
+    const preferred = [
+      value.name,
+      value.label,
+      value.title,
+      value.address,
+      value.fullAddress,
+      value.province,
+      value.district,
+    ]
+      .map((item) => toSearchableText(item))
+      .filter(Boolean)
+      .join(' ')
+
+    if (preferred) return preferred
+    try {
+      return JSON.stringify(value)
+    } catch {
+      return ''
+    }
+  }
+  return ''
+}
+
 // --- Reusable Modern Dropdown Component ---
 const FilterItem = ({ label, value, options, onChange, icon: Icon, activeColor = 'text-blue-900' }) => {
   const [isOpen, setIsOpen] = useState(false)
@@ -264,11 +294,13 @@ export default function Properties() {
     const withCoords = safeFiltered.filter(
       (p) => typeof p.lat === 'number' && typeof p.lng === 'number' && !Number.isNaN(p.lat) && !Number.isNaN(p.lng)
     )
-    const loc = (filters.location || '').trim().toLowerCase()
+    const loc = toSearchableText(filters.location).trim().toLowerCase()
     if (loc) {
       withCoords.sort((a, b) => {
-        const aMatch = (a.location || a.address || '').toLowerCase().includes(loc) ? 1 : 0
-        const bMatch = (b.location || b.address || '').toLowerCase().includes(loc) ? 1 : 0
+        const aText = `${toSearchableText(a.location)} ${toSearchableText(a.address)}`.toLowerCase()
+        const bText = `${toSearchableText(b.location)} ${toSearchableText(b.address)}`.toLowerCase()
+        const aMatch = aText.includes(loc) ? 1 : 0
+        const bMatch = bText.includes(loc) ? 1 : 0
         return bMatch - aMatch
       })
     }
