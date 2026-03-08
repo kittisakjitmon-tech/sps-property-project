@@ -122,10 +122,10 @@ export default function Navbar() {
   }, [])
 
   return (
-    <header className="sticky top-0 z-[100] w-full h-[60px] flex items-center bg-white border-b border-gray-200">
-      <nav className="w-full max-w-7xl mx-auto h-full px-4 sm:px-6 lg:px-8 flex items-center justify-between gap-4">
+    <header className="sticky top-0 z-[100] w-full bg-white border-b border-gray-200">
+      <nav className="w-full mx-auto px-3 sm:px-4 md:px-6 lg:px-8 lg:max-w-7xl min-h-[60px] flex flex-wrap items-center justify-between gap-3 py-2">
         {/* ซ้าย: Logo + ชื่อ */}
-        <Link to="/" className="flex items-center gap-2 shrink-0 min-w-0">
+        <Link to="/" className="flex items-center gap-2 shrink min-w-0 max-w-[calc(100%-56px)] lg:max-w-none">
           <img src={logo} alt="SPS Logo" className="h-8 w-auto" />
           <span className="text-base font-semibold text-gray-900 whitespace-nowrap truncate hidden sm:inline">
             SPS Property Solution
@@ -350,12 +350,12 @@ export default function Navbar() {
 
         {/* Mobile menu */}
         {mobileOpen && (
-          <div className="lg:hidden py-4 border-t border-slate-100">
+          <div className="lg:hidden basis-full w-full py-3 border-t border-slate-100">
             <div className="flex flex-col gap-2">
               <Link
                 to="/"
                 onClick={() => setMobileOpen(false)}
-                className="px-4 py-3 rounded-lg text-slate-700 hover:bg-slate-50 font-medium"
+                className="w-full px-4 py-3 rounded-xl text-slate-700 hover:bg-slate-50 font-medium min-h-[44px] flex items-center"
               >
                 หน้าหลัก
               </Link>
@@ -363,13 +363,13 @@ export default function Navbar() {
               <button
                 type="button"
                 onClick={() => setMobileBuyOpen((prev) => !prev)}
-                className="px-4 py-3 rounded-lg text-slate-700 hover:bg-slate-50 font-medium flex items-center justify-between"
+                className="w-full px-4 py-3 rounded-xl text-slate-700 hover:bg-slate-50 font-medium flex items-center justify-between min-h-[44px]"
               >
                 <span>ซื้อบ้าน</span>
                 <ChevronDown className={`h-4 w-4 transition-transform ${mobileBuyOpen ? 'rotate-180' : ''}`} />
               </button>
               {mobileBuyOpen && (
-                <div className="ml-3 mr-1 rounded-lg border border-slate-200 bg-slate-50/70 overflow-hidden">
+                <div className="w-full space-y-2">
                   {buyHomeLinks.map(({ to, label, icon: Icon, highlight }) => (
                     <Link
                       key={to}
@@ -378,7 +378,7 @@ export default function Navbar() {
                         setMobileOpen(false)
                         setMobileBuyOpen(false)
                       }}
-                      className={`px-4 py-3 border-b border-slate-200 last:border-b-0 flex items-center gap-2 text-sm ${
+                      className={`w-full rounded-xl border px-4 py-3.5 flex items-center gap-3 text-sm min-h-[48px] ${
                         highlight ? 'font-semibold text-red-600' : 'text-slate-700'
                       }`}
                     >
@@ -392,7 +392,7 @@ export default function Navbar() {
               <Link
                 to="/properties?listingType=rent&subListingType=rent_only"
                 onClick={() => setMobileOpen(false)}
-                className="px-4 py-3 rounded-lg text-slate-700 hover:bg-slate-50 font-medium"
+                className="w-full px-4 py-3 rounded-xl text-slate-700 hover:bg-slate-50 font-medium min-h-[44px] flex items-center"
               >
                 เช่า
               </Link>
@@ -400,7 +400,7 @@ export default function Navbar() {
               <Link
                 to="/blogs"
                 onClick={() => setMobileOpen(false)}
-                className="px-4 py-3 rounded-lg text-slate-700 hover:bg-slate-50 font-medium flex items-center gap-2"
+                className="w-full px-4 py-3 rounded-xl text-slate-700 hover:bg-slate-50 font-medium flex items-center gap-2 min-h-[44px]"
               >
                 <BookOpen className="h-4 w-4" />
                 บทความ
@@ -409,13 +409,13 @@ export default function Navbar() {
               <button
                 type="button"
                 onClick={() => setMobileServiceOpen((prev) => !prev)}
-                className="px-4 py-3 rounded-lg text-slate-700 hover:bg-slate-50 font-medium flex items-center justify-between"
+                className="w-full px-4 py-3 rounded-xl text-slate-700 hover:bg-slate-50 font-medium flex items-center justify-between min-h-[44px]"
               >
                 <span>บริการของเรา</span>
                 <ChevronDown className={`h-4 w-4 transition-transform ${mobileServiceOpen ? 'rotate-180' : ''}`} />
               </button>
               {mobileServiceOpen && (
-                <div className="ml-3 mr-1 rounded-lg border border-slate-200 bg-slate-50/70 overflow-hidden">
+                <div className="w-full space-y-2">
                   {serviceLinks.map(({ to, label, icon: Icon }) => (
                     <Link
                       key={to}
@@ -424,7 +424,7 @@ export default function Navbar() {
                         setMobileOpen(false)
                         setMobileServiceOpen(false)
                       }}
-                      className="px-4 py-3 border-b border-slate-200 last:border-b-0 flex items-center gap-2 text-sm text-slate-700"
+                      className="w-full rounded-xl border border-slate-200 bg-white px-4 py-3.5 flex items-center gap-3 text-sm text-slate-700 min-h-[52px] hover:bg-slate-50 transition"
                     >
                       <Icon className="h-4 w-4 text-slate-500" />
                       {label}
@@ -436,14 +436,14 @@ export default function Navbar() {
               <Link
                 to="/contact"
                 onClick={() => setMobileOpen(false)}
-                className="px-4 py-3 rounded-lg text-slate-700 hover:bg-slate-50 font-medium"
+                className="w-full px-4 py-3 rounded-xl text-slate-700 hover:bg-slate-50 font-medium min-h-[44px] flex items-center"
               >
                 ติดต่อเรา
               </Link>
               <Link
                 to="/favorites"
                 onClick={() => setMobileOpen(false)}
-                className="px-4 py-3 rounded-lg text-slate-700 hover:bg-slate-50 font-medium flex items-center gap-2"
+                className="w-full px-4 py-3 rounded-xl text-slate-700 hover:bg-slate-50 font-medium flex items-center gap-2 min-h-[44px]"
               >
                 <Heart className="h-4 w-4" />
                 รายการโปรด
@@ -452,7 +452,7 @@ export default function Navbar() {
                 <Link
                   to="/login"
                   onClick={() => setMobileOpen(false)}
-                  className="px-4 py-3 rounded-lg text-blue-900 hover:bg-blue-50 font-medium flex items-center gap-2"
+                  className="w-full px-4 py-3 rounded-xl text-blue-900 hover:bg-blue-50 font-medium flex items-center gap-2 min-h-[44px]"
                 >
                   <LogIn className="h-4 w-4" />
                   เข้าสู่ระบบ
@@ -463,7 +463,7 @@ export default function Navbar() {
                     <Link
                       to="/profile-settings"
                       onClick={() => setMobileOpen(false)}
-                      className="px-4 py-3 rounded-lg text-slate-700 hover:bg-slate-50 font-medium flex items-center gap-2"
+                      className="w-full px-4 py-3 rounded-xl text-slate-700 hover:bg-slate-50 font-medium flex items-center gap-2 min-h-[44px]"
                     >
                       <Settings className="h-4 w-4" />
                       ตั้งค่าโปรไฟล์
@@ -474,24 +474,17 @@ export default function Navbar() {
                       handleLogout()
                       setMobileOpen(false)
                     }}
-                    className="w-full px-4 py-3 rounded-lg text-red-600 hover:bg-red-50 font-medium flex items-center gap-2 text-left"
+                    className="w-full px-4 py-3 rounded-xl text-red-600 hover:bg-red-50 font-medium flex items-center gap-2 text-left min-h-[44px]"
                   >
                     <LogOut className="h-4 w-4" />
                     ออกจากระบบ
                   </button>
                 </>
               )}
-              <a
-                href="tel:0955520801"
-                onClick={() => setMobileOpen(false)}
-                className="mx-4 inline-flex items-center justify-center px-4 py-3 rounded-xl bg-yellow-400 text-blue-900 font-semibold hover:bg-yellow-300"
-              >
-                โทรหาเรา: 095 552 0801
-              </a>
               <Link
                 to="/post"
                 onClick={() => setMobileOpen(false)}
-                className="mx-4 mt-2 inline-flex items-center justify-center px-4 py-3 rounded-xl bg-gradient-to-r from-blue-900 to-blue-700 text-white font-semibold hover:shadow-md"
+                className="w-full mt-2 inline-flex items-center justify-center px-4 py-3.5 rounded-xl bg-gradient-to-r from-blue-900 to-blue-700 text-white text-sm font-semibold hover:shadow-md min-h-[48px]"
               >
                 ลงประกาศฟรี
               </Link>

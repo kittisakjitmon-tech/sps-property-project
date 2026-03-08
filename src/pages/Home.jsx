@@ -2,7 +2,7 @@ import { useState, useEffect, useMemo, useRef, lazy, Suspense } from 'react'
 import { Link } from 'react-router-dom'
 import {
   CheckCircle2, Building2, Lightbulb, Handshake, TrendingUp,
-  MapPin, MapPinned, Phone, MessageCircle, Users, Star, Award, Clock,
+  MapPin, MapPinned, MessageCircle, Users, Star, Award, Clock,
   Home as HomeIcon, Wallet, BadgeCheck, Zap, Trophy, CalendarDays, Play,
 } from 'lucide-react'
 import { Helmet } from 'react-helmet-async'
@@ -263,7 +263,6 @@ export default function Home() {
             "image": "https://spspropertysolution.com/icon.png",
             "description": "SPS Property Solution ให้บริการรับฝาก ซื้อ-ขาย-เช่า-จำนอง-ขายฝาก อสังหาริมทรัพย์ทุกประเภทในเขตพื้นที่ ชลบุรี ฉะเชิงเทรา ระยอง ปทุมธานี กทม.",
             "url": "https://spspropertysolution.com",
-            "telephone": "0955520801",
             "address": {
               "@type": "PostalAddress",
               "addressLocality": "เมืองชลบุรี",
@@ -515,13 +514,6 @@ export default function Home() {
               {/* Right: Buttons */}
               <div className="flex flex-col sm:flex-row md:flex-col lg:flex-row items-stretch sm:items-center gap-3 md:shrink-0">
                 <a
-                  href="tel:0955520801"
-                  className="inline-flex items-center justify-center gap-2 bg-yellow-400 hover:bg-yellow-300 text-blue-900 font-bold px-7 py-3.5 rounded-xl shadow-md hover:shadow-lg transition-all duration-300 text-base whitespace-nowrap"
-                >
-                  <Phone className="h-5 w-5" />
-                  095 552 0801
-                </a>
-                <a
                   href="https://www.facebook.com/houseamata"
                   target="_blank"
                   rel="noopener noreferrer"
@@ -578,7 +570,7 @@ export default function Home() {
                 {
                   Icon: Zap,
                   title: 'ตอบสนองรวดเร็ว',
-                  desc: 'ทีมงานพร้อมให้คำปรึกษา 24/7 ผ่านโทรศัพท์และ Facebook',
+                  desc: 'ทีมงานพร้อมให้คำปรึกษา 24/7 ผ่าน Facebook',
                   color: 'bg-cyan-50 text-cyan-700 group-hover:bg-cyan-100',
                 },
                 {

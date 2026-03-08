@@ -1,4 +1,4 @@
-import { Phone, Mail, Facebook, Clock } from 'lucide-react'
+import { Mail, Facebook, Clock } from 'lucide-react'
 import logo from '../assets/logo.png'
 
 const MAPS_EMBED_URL = 'https://www.google.com/maps?q=%E0%B8%99%E0%B8%B4%E0%B8%84%E0%B8%A1%E0%B8%AD%E0%B8%B8%E0%B8%95%E0%B8%AA%E0%B8%B2%E0%B8%AB%E0%B8%81%E0%B8%A3%E0%B8%A3%E0%B8%A1%E0%B8%AD%E0%B8%A1%E0%B8%95%E0%B8%B2%E0%B8%8B%E0%B8%B4%E0%B8%95%E0%B8%B5%E0%B9%8E+%E0%B8%8A%E0%B8%A5%E0%B8%9A%E0%B8%B8%E0%B8%A3%E0%B8%B5&output=embed'
@@ -36,13 +36,6 @@ export default function Footer() {
 
             {/* Contact */}
             <div className="flex flex-col sm:flex-row gap-6 text-sm">
-              <a
-                href="tel:0955520801"
-                className="flex items-center gap-2 hover:text-yellow-400 transition"
-              >
-                <Phone className="h-4 w-4 shrink-0" />
-                095 552 0801
-              </a>
               <a
                 href="mailto:propertysommai@gmail.com"
                 className="flex items-center gap-2 hover:text-yellow-400 transition"

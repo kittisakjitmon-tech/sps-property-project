@@ -1,6 +1,6 @@
 import { useState, useId } from 'react'
 import { Helmet } from 'react-helmet-async'
-import { MapPin, Phone, Mail, Facebook, Clock, Globe2, CheckCircle2 } from 'lucide-react'
+import { MapPin, Mail, Facebook, Clock, Globe2, CheckCircle2 } from 'lucide-react'
 import PageLayout from '../components/PageLayout'
 import { createInquiry } from '../lib/firestore'
 
@@ -118,15 +118,6 @@ export default function Contact() {
                     </div>
 
                     <div className="pt-2 space-y-2">
-                      {/* Phone - primary CTA */}
-                      <ContactItem
-                        href="tel:0955520801"
-                        icon={Phone}
-                        className="bg-yellow-400/15 border-yellow-400/50 text-blue-900 hover:bg-yellow-400/25 hover:border-yellow-400 font-semibold"
-                      >
-                        095 552 0801
-                      </ContactItem>
-
                       {/* Email */}
                       <ContactItem
                         href="mailto:propertysommai@gmail.com"

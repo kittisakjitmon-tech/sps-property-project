@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, Link } from 'react-router-dom'
 import { usePublicAuth } from '../context/PublicAuthContext'
-import { ChevronLeft, ChevronRight, Upload, X, Check, AlertCircle, Target, Zap, Shield, Phone, Lock } from 'lucide-react'
+import { ChevronLeft, ChevronRight, Upload, X, Check, AlertCircle, Target, Zap, Shield, Lock } from 'lucide-react'
 import PageLayout from '../components/PageLayout'
 import LocationAutocomplete from '../components/LocationAutocomplete'
 import { createPendingProperty, uploadPendingPropertyImage, createProperty, getPropertiesOnce } from '../lib/firestore'
@@ -283,10 +283,10 @@ export default function PostProperty() {
               <Lock className="h-8 w-8 text-slate-500" />
             </div>
             <h2 className="text-2xl font-bold text-slate-800 mb-3">ปิดรับประกาศชั่วคราว</h2>
-            <p className="text-slate-500 mb-6">ขณะนี้ระบบไม่เปิดรับการลงประกาศใหม่<br />กรุณาติดต่อเจ้าหน้าที่เพื่อสอบถามข้อมูลเพิ่มเติม</p>
-            <a href="tel:0955520801" className="px-6 py-3 bg-blue-900 text-white font-semibold rounded-lg hover:bg-blue-800 transition inline-block">
-              ติดต่อเจ้าหน้าที่
-            </a>
+            <p className="text-slate-500 mb-6">ขณะนี้ระบบไม่เปิดรับการลงประกาศใหม่<br />กรุณาติดต่อเจ้าหน้าที่ผ่านหน้าติดต่อเรา</p>
+            <Link to="/contact" className="px-6 py-3 bg-blue-900 text-white font-semibold rounded-lg hover:bg-blue-800 transition inline-block">
+              ไปหน้าติดต่อเรา
+            </Link>
           </div>
         </div>
       </PageLayout>
@@ -802,17 +802,11 @@ export default function PostProperty() {
                   {/* Contact Help */}
                   <div className="mt-8 pt-6 border-t border-blue-200">
                     <div className="flex items-center gap-3 p-4 bg-white rounded-lg border border-blue-200">
-                      <div className="w-10 h-10 rounded-full bg-yellow-400 flex items-center justify-center shrink-0">
-                        <Phone className="h-5 w-5 text-yellow-900" />
-                      </div>
                       <div className="flex-1 min-w-0">
                         <p className="text-xs text-slate-600 mb-1">ปรึกษาการลงประกาศ</p>
-                        <a
-                          href="tel:0955520801"
-                          className="text-base font-bold text-blue-900 hover:text-blue-700 transition"
-                        >
-                          095 552 0801
-                        </a>
+                        <Link to="/contact" className="text-base font-bold text-blue-900 hover:text-blue-700 transition">
+                          ไปหน้าติดต่อเรา
+                        </Link>
                       </div>
                     </div>
                   </div>

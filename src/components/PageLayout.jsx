@@ -1,6 +1,6 @@
 import { useState, useEffect, Suspense, lazy } from 'react'
 import Navbar from './Navbar'
-import { Phone, ArrowUp } from 'lucide-react'
+import { ArrowUp } from 'lucide-react'
 
 const HeroSlider = lazy(() => import('./HeroSlider'))
 const Footer = lazy(() => import('./Footer'))
@@ -141,15 +141,6 @@ export default function PageLayout({
           <Footer />
         </Suspense>
       )}
-
-      {/* Floating Call Button - Mobile only */}
-      <a
-        href="tel:0955520801"
-        className="md:hidden fixed bottom-6 left-6 z-50 flex items-center justify-center w-14 h-14 rounded-full bg-gradient-to-r from-yellow-400 to-yellow-500 text-blue-900 shadow-lg hover:shadow-xl transition-all duration-300"
-        aria-label="โทรหาเรา"
-      >
-        <Phone className="h-6 w-6" />
-      </a>
 
       {/* Back to Top */}
       {showBackToTop && (
