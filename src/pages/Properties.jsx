@@ -1,7 +1,7 @@
 import { useSearchParams, Link, useNavigate } from 'react-router-dom'
 import { useEffect, useMemo, useState, useCallback, useRef, lazy, Suspense } from 'react'
 import { useSearch } from '../context/SearchContext'
-import { getPropertiesOnce } from '../lib/firestore'
+import { getPropertiesOnceForListing } from '../lib/firestore'
 import PageLayout from '../components/PageLayout'
 import PropertyCard from '../components/PropertyCard'
 import ActiveSearchCriteriaBar from '../components/ActiveSearchCriteriaBar'
@@ -150,7 +150,7 @@ export default function Properties() {
     let mounted = true
     const fetchProperties = async () => {
       try {
-        const props = await getPropertiesOnce(true)
+        const props = await getPropertiesOnceForListing(true, 300)
         if (mounted) setProperties(Array.isArray(props) ? props : [])
       } catch (error) {
         if (mounted) setProperties([])
@@ -258,6 +258,25 @@ export default function Properties() {
 
   const safeFiltered = Array.isArray(filtered) ? filtered : []
   const totalPages = Math.max(1, Math.ceil(safeFiltered.length / ITEMS_PER_PAGE))
+
+  // สำหรับแผนที่: เฉพาะรายการที่มีพิกัด, ไม่เกิน 100; ถ้ามี filters.location ให้เรียงให้ตรงทำเลมาก่อน
+  const { mapProperties, mapShowingMaxCaption } = useMemo(() => {
+    const withCoords = safeFiltered.filter(
+      (p) => typeof p.lat === 'number' && typeof p.lng === 'number' && !Number.isNaN(p.lat) && !Number.isNaN(p.lng)
+    )
+    const loc = (filters.location || '').trim().toLowerCase()
+    if (loc) {
+      withCoords.sort((a, b) => {
+        const aMatch = (a.location || a.address || '').toLowerCase().includes(loc) ? 1 : 0
+        const bMatch = (b.location || b.address || '').toLowerCase().includes(loc) ? 1 : 0
+        return bMatch - aMatch
+      })
+    }
+    return {
+      mapProperties: withCoords.slice(0, 100),
+      mapShowingMaxCaption: withCoords.length > 100
+    }
+  }, [safeFiltered, filters.location])
   
   // Slice properties for current page
   const paginatedProperties = useMemo(() => {
@@ -369,9 +388,12 @@ export default function Properties() {
               <div className="mb-8 overflow-hidden rounded-2xl border border-slate-200 shadow-sm bg-white">
                 <div className="h-[320px] relative">
                   <Suspense fallback={<div className="absolute inset-0 bg-slate-100 flex items-center justify-center animate-pulse"><span className="text-slate-500 text-sm">กำลังอัปเดตแผนที่…</span></div>}>
-                    {safeFiltered.length > 0 ? <PropertiesMap properties={safeFiltered} /> : <div className="absolute inset-0 bg-slate-50 flex flex-col items-center justify-center text-slate-400"><MapPin className="h-8 w-8 mb-2 opacity-20" /><p className="text-sm">ไม่พบตำแหน่งทรัพย์สิน</p></div>}
+                    {safeFiltered.length > 0 ? <PropertiesMap properties={mapProperties} /> : <div className="absolute inset-0 bg-slate-50 flex flex-col items-center justify-center text-slate-400"><MapPin className="h-8 w-8 mb-2 opacity-20" /><p className="text-sm">ไม่พบตำแหน่งทรัพย์สิน</p></div>}
                   </Suspense>
                 </div>
+                {mapShowingMaxCaption && (
+                  <p className="text-xs text-slate-400 px-4 py-2 bg-slate-50 border-t border-slate-100">แสดงตำแหน่งไม่เกิน 100 รายการ</p>
+                )}
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">

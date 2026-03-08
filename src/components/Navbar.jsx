@@ -26,11 +26,14 @@ const buyHomeLinks = [
   { to: '/properties?listingType=sale&propertyCondition=มือ 1', label: 'บ้านมือ 1', icon: Sparkles },
   { to: '/properties?listingType=sale&propertyCondition=มือ 2', label: 'บ้านมือ 2', icon: House },
   { to: '/properties?listingType=rent&subListingType=installment_only', label: 'บ้านผ่อนตรง', icon: Flame, highlight: true },
+
 ]
 
 const serviceLinks = [
   { to: '/loan-services', label: 'สินเชื่อ & ปิดภาระหนี้', icon: CreditCard },
   { to: '/post', label: 'ฝากขาย / เช่า', icon: Megaphone },
+  { to: '/blogs', label: 'บทความ', icon: BookOpen },
+  { to: '/contact', label: 'ติดต่อเรา', icon: Megaphone },
 ]
 
 export default function Navbar() {
@@ -119,32 +122,21 @@ export default function Navbar() {
   }, [])
 
   return (
-    <header className="sticky top-0 z-[100] w-full bg-white border-b border-slate-200 shadow-sm">
-      <nav className="max-w-7xl mx-auto px-3 sm:px-5 lg:px-8">
-        <div className="flex items-center justify-between h-16">
-        
-          <Link to="/" className="flex items-center gap-2 shrink-0 min-w-0">
-          <div className="flex items-center gap-3">
-            {/* ส่วนของรูปภาพโลโก้ */}
-            <img src={logo} alt="SPS Logo" width={100} height={40} className="h-10 w-auto" />
+    <header className="sticky top-0 z-[100] w-full h-[60px] flex items-center bg-white border-b border-gray-200">
+      <nav className="w-full max-w-7xl mx-auto h-full px-4 sm:px-6 lg:px-8 flex items-center justify-between gap-4">
+        {/* ซ้าย: Logo + ชื่อ */}
+        <Link to="/" className="flex items-center gap-2 shrink-0 min-w-0">
+          <img src={logo} alt="SPS Logo" className="h-8 w-auto" />
+          <span className="text-base font-semibold text-gray-900 whitespace-nowrap truncate hidden sm:inline">
+            SPS Property Solution
+          </span>
+        </Link>
 
-            {/* ส่วนของข้อความที่จัดเรียงใหม่ */}
-            <div className="flex flex-col leading-tight min-w-0">
-              <span className="text-base lg:text-lg xl:text-xl font-bold text-slate-800 whitespace-nowrap">
-                SPS Property Solution
-              </span>
-              <span className="hidden xl:block text-xs text-slate-500 font-medium whitespace-nowrap">
-                บ้านคอนโดสวย อมตะซิตี้ ชลบุรี
-              </span>
-            </div>
-          </div>
+        {/* กลาง: เมนูหลัก */}
+        <div ref={desktopMenuRef} className="hidden lg:flex items-center gap-6 flex-1 justify-center min-w-0">
+          <Link to="/" className="nav-link text-[15px] font-medium text-gray-600 hover:text-blue-600 transition-colors duration-200 whitespace-nowrap no-underline py-2">
+            หน้าหลัก
           </Link>
-
-          {/* Desktop */}
-          <div ref={desktopMenuRef} className="hidden lg:flex items-center gap-2 xl:gap-4">
-            <Link to="/" className="text-slate-600 hover:text-blue-900 font-medium transition text-sm whitespace-nowrap">
-              หน้าหลัก
-            </Link>
 
             {/* Buy Dropdown */}
             <div
@@ -162,7 +154,7 @@ export default function Navbar() {
                   setBuyMenuOpen((prev) => !prev)
                   setServiceMenuOpen(false)
                 }}
-                className="inline-flex items-center gap-1 text-slate-600 hover:text-blue-900 font-medium transition text-sm whitespace-nowrap"
+                className="nav-link inline-flex items-center gap-1 text-[15px] font-medium text-gray-600 hover:text-blue-600 transition-colors duration-200 whitespace-nowrap bg-transparent border-0 cursor-pointer py-2"
               >
                 ซื้อบ้าน
                 <ChevronDown className={`h-4 w-4 transition-transform ${buyMenuOpen ? 'rotate-180' : ''}`} />
@@ -194,13 +186,8 @@ export default function Navbar() {
               </div>
             </div>
 
-            <Link to="/properties?listingType=rent&subListingType=rent_only" className="text-slate-600 hover:text-blue-900 font-medium transition text-sm whitespace-nowrap">
+            <Link to="/properties?listingType=rent&subListingType=rent_only" className="nav-link text-[15px] font-medium text-gray-600 hover:text-blue-600 transition-colors duration-200 whitespace-nowrap no-underline py-2">
               เช่า
-            </Link>
-
-            <Link to="/blogs" className="text-slate-600 hover:text-blue-900 font-medium transition text-sm flex items-center gap-1 whitespace-nowrap">
-              <BookOpen className="h-4 w-4" />
-              บทความ
             </Link>
 
             {/* Service Dropdown */}
@@ -219,7 +206,7 @@ export default function Navbar() {
                   setServiceMenuOpen((prev) => !prev)
                   setBuyMenuOpen(false)
                 }}
-                className="inline-flex items-center gap-1 text-slate-600 hover:text-blue-900 font-medium transition text-sm whitespace-nowrap"
+                className="nav-link inline-flex items-center gap-1 text-[15px] font-medium text-gray-600 hover:text-blue-600 transition-colors duration-200 whitespace-nowrap bg-transparent border-0 cursor-pointer py-2"
               >
                 บริการของเรา
                 <ChevronDown className={`h-4 w-4 transition-transform ${serviceMenuOpen ? 'rotate-180' : ''}`} />
@@ -247,30 +234,31 @@ export default function Navbar() {
               </div>
             </div>
 
-            <Link to="/contact" className="text-slate-600 hover:text-blue-900 font-medium transition text-sm whitespace-nowrap">
+            <Link to="/contact" className="nav-link text-[15px] font-medium text-gray-600 hover:text-blue-600 transition-colors duration-200 whitespace-nowrap no-underline py-2">
               ติดต่อเรา
             </Link>
 
             <Link
               to="/favorites"
-              className="text-slate-600 hover:text-red-500 font-medium transition flex items-center gap-1 whitespace-nowrap"
+              className="nav-link text-[15px] font-medium text-gray-600 hover:text-blue-600 transition-colors duration-200 flex items-center gap-1.5 whitespace-nowrap no-underline py-2"
             >
               <Heart className="h-4 w-4" />
               รายการโปรด
             </Link>
+          </div>
 
-            {/* Login Button or User Menu */}
+          {/* ขวา: ปุ่มเข้าสู่ระบบ + ลงประกาศฟรี */}
+          <div className="hidden lg:flex items-center gap-3 shrink-0">
             {!user ? (
               <Link
                 to="/login"
-                className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-blue-900 text-white hover:bg-blue-800 transition font-medium whitespace-nowrap"
+                className="inline-flex items-center gap-1.5 py-1.5 px-3.5 rounded-lg bg-[#1e3a8a] text-white text-sm font-medium hover:bg-blue-900 transition-colors duration-200 whitespace-nowrap no-underline"
               >
                 <LogIn className="h-4 w-4" />
                 เข้าสู่ระบบ
               </Link>
             ) : (
-              /* User Menu (for logged in users, especially agents) */
-              (isAgent() || userRole) && (
+              (isAgent() || userRole) ? (
               <div
                 className="relative"
                 onMouseEnter={() => {
@@ -287,7 +275,7 @@ export default function Navbar() {
                     setBuyMenuOpen(false)
                     setServiceMenuOpen(false)
                   }}
-                  className="flex items-center gap-2 px-3 py-2 rounded-lg hover:bg-slate-100 transition"
+                  className="flex items-center gap-2 px-3 py-2 rounded-lg hover:bg-gray-100 transition min-h-[44px] focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2"
                 >
                   {(userProfile?.photoURL || user.photoURL) ? (
                     <img
@@ -340,27 +328,25 @@ export default function Navbar() {
                   </button>
                 </div>
               </div>
-              )
+              ) : null
             )}
-          
             <Link
               to="/post"
-              className="inline-flex items-center px-4 py-2 rounded-xl bg-gradient-to-r from-blue-900 to-blue-700 text-white font-semibold whitespace-nowrap hover:shadow-md hover:-translate-y-0.5 transition-all duration-300"
+              className="inline-flex items-center py-1.5 px-3.5 rounded-lg bg-blue-600 text-white text-sm font-semibold whitespace-nowrap hover:bg-blue-700 transition-colors duration-200 no-underline"
             >
               ลงประกาศฟรี
             </Link>
           </div>
 
-          {/* Mobile menu button */}
-          <button
-            type="button"
-            onClick={() => setMobileOpen((o) => !o)}
-            className="lg:hidden p-2 rounded-lg text-slate-600 hover:bg-slate-100"
-            aria-label={mobileOpen ? 'ปิดเมนู' : 'เปิดเมนู'}
-          >
-            {mobileOpen ? <X className="h-6 w-6" /> : <Menu className="h-6 w-6" />}
-          </button>
-        </div>
+        {/* Mobile menu button */}
+        <button
+          type="button"
+          onClick={() => setMobileOpen((o) => !o)}
+          className="lg:hidden min-w-[44px] min-h-[44px] flex items-center justify-center rounded-lg text-gray-600 hover:bg-gray-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2"
+          aria-label={mobileOpen ? 'ปิดเมนู' : 'เปิดเมนู'}
+        >
+          {mobileOpen ? <X className="h-6 w-6" /> : <Menu className="h-6 w-6" />}
+        </button>
 
         {/* Mobile menu */}
         {mobileOpen && (

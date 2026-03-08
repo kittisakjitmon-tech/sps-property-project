@@ -146,6 +146,21 @@ export async function getPropertiesOnce(availableOnly = false) {
   return list
 }
 
+/** Bounded fetch for listing page — ลดโหลดครั้งแรก, pagination ยังทำฝั่ง client */
+export async function getPropertiesOnceForListing(availableOnly = false, maxCount = 300) {
+  const q = query(
+    collection(db, PROPERTIES),
+    orderBy('createdAt', 'desc'),
+    limit(maxCount)
+  )
+  const snap = await getDocs(q)
+  let list = snap.docs.map((d) => ({ id: d.id, ...d.data() }))
+  if (availableOnly) {
+    list = list.filter(isAvailable)
+  }
+  return list
+}
+
 /** ดึงเฉพาะทรัพย์สินแนะนำ (Featured) สำหรับหน้าแรก — จำกัด 10 รายการ */
 export async function getFeaturedPropertiesOnce() {
   // ดึงล่าสุด 200 รายการมาคัดเลือก เพื่อให้ได้บ้านใหม่ๆ แน่นอน
