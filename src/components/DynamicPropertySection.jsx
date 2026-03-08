@@ -1,6 +1,8 @@
 import { Link } from 'react-router-dom'
 import { ChevronRight } from 'lucide-react'
-import PropertySlider from './PropertySlider'
+import PropertyCard from './PropertyCard'
+
+const HOMEPAGE_LIMIT = 4
 
 export default function DynamicPropertySection({
   title,
@@ -11,8 +13,13 @@ export default function DynamicPropertySection({
   isHighlighted = false,
   isBlinking = false,
   sectionIndex = 0,
+  homeLayout = false,
+  limit = 0,
 }) {
   if (!properties || properties.length === 0) return null
+
+  const displayProperties = limit > 0 ? properties.slice(0, limit) : properties
+  if (displayProperties.length === 0) return null
 
   // ใช้ targetTag ถ้ามี ถ้าไม่มีใช้ title (ชื่อหัวข้อ)
   const tagForFilter = (targetTag && targetTag.trim()) || title || ''
@@ -100,8 +107,26 @@ export default function DynamicPropertySection({
           </Link>
         </div>
 
-        {/* Property Slider */}
-        <PropertySlider properties={properties} featuredLabel="แนะนำ" />
+        {/* Property grid: home 4/2/1 cols or default auto-fill */}
+        {homeLayout ? (
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-[18px] max-w-[1280px] mx-auto">
+            {displayProperties.slice(0, HOMEPAGE_LIMIT).map((property) => (
+              <PropertyCard key={property.id} property={property} home />
+            ))}
+          </div>
+        ) : (
+          <div
+            className="gap-5"
+            style={{
+              display: 'grid',
+              gridTemplateColumns: 'repeat(auto-fill, minmax(min(100%, 320px), 1fr))',
+            }}
+          >
+            {displayProperties.map((property) => (
+              <PropertyCard key={property.id} property={property} compact />
+            ))}
+          </div>
+        )}
       </div>
     </section>
   )

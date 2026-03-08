@@ -58,7 +58,13 @@ export default function Favorites() {
                   รายการโปรด ({favoriteProperties.length})
                 </h1>
               </div>
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+              <div
+                className="gap-5"
+                style={{
+                  display: 'grid',
+                  gridTemplateColumns: 'repeat(auto-fill, minmax(min(100%, 320px), 1fr))',
+                }}
+              >
                 {favoriteProperties.map((p) => (
                   <PropertyCard key={p.id} property={p} />
                 ))}

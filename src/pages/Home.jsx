@@ -222,11 +222,11 @@ export default function Home() {
         const list = section.propertyIds
           .map((id) => properties.find((p) => p.id === id))
           .filter(Boolean)
-          .slice(0, 5) // จำกัดสูงสุด 5 รายการ
+          .slice(0, 4)
         map[section.id] = list
       } else if (section.type === 'query' && section.criteria) {
         const filtered = filterPropertiesByCriteria(properties, section.criteria)
-        map[section.id] = filtered.slice(0, 5) // จำกัดสูงสุด 5 รายการ
+        map[section.id] = filtered.slice(0, 4)
       } else {
         map[section.id] = []
       }
@@ -246,7 +246,7 @@ export default function Home() {
   }
 
   const available = properties.filter((p) => p.status === 'available')
-  const featured = available.filter((p) => p.featured === true).slice(0, 5)
+  const featured = available.filter((p) => p.featured === true).slice(0, 4)
   const hasSections = homepageSections.length > 0
 
   return (
@@ -470,10 +470,12 @@ export default function Home() {
                       isHighlighted={section.isHighlighted || false}
                       isBlinking={section.isBlinking || false}
                       sectionIndex={idx}
+                      homeLayout
+                      limit={4}
                     />
                   ))
                 ) : (
-                  <DynamicPropertySection title="ทรัพย์เด่น" properties={featured} sectionIndex={0} />
+                  <DynamicPropertySection title="ทรัพย์เด่น" properties={featured} sectionIndex={0} homeLayout limit={4} />
                 )}
               </Suspense>
             </div>

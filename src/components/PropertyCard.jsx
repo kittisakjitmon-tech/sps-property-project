@@ -5,13 +5,13 @@ import { formatPriceShort } from '../lib/priceFormat'
 import { getCloudinaryThumbUrl } from '../lib/cloudinary'
 import { getPropertyLabel } from '../constants/propertyTypes'
 
-// --- Icons (emoji for consistency & clarity) ---
-const BedIcon = () => <span className="text-[15px] leading-none" aria-hidden>🛏</span>
-const BathIcon = () => <span className="text-[15px] leading-none" aria-hidden>🛁</span>
-const ParkIcon = () => <span className="text-[15px] leading-none" aria-hidden>🚗</span>
-const AreaIcon = () => <span className="text-[15px] leading-none" aria-hidden>📐</span>
+// --- Icons (smaller for card) ---
+const BedIcon = () => <span className="text-[13px] leading-none" aria-hidden>🛏</span>
+const BathIcon = () => <span className="text-[13px] leading-none" aria-hidden>🛁</span>
+const ParkIcon = () => <span className="text-[13px] leading-none" aria-hidden>🚗</span>
+const AreaIcon = () => <span className="text-[13px] leading-none" aria-hidden>📐</span>
 
-const HeartIcon = ({ active }) => (
+const HeartIcon = ({ active, size = 'default' }) => (
   <svg
     xmlns="http://www.w3.org/2000/svg"
     viewBox="0 0 24 24"
@@ -20,14 +20,14 @@ const HeartIcon = ({ active }) => (
     strokeWidth="2"
     strokeLinecap="round"
     strokeLinejoin="round"
-    className={`w-6 h-6 transition-all duration-200 ${active ? 'text-red-500' : 'text-slate-500'}`}
+    className={`transition-all duration-200 shrink-0 ${size === 'sm' ? 'w-4 h-4' : size === 'md' ? 'w-5 h-5' : 'w-5 h-5'} ${active ? 'text-red-500' : 'text-slate-500'}`}
     aria-hidden
   >
     <path d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z" />
   </svg>
 )
 
-function PropertyCard({ property }) {
+function PropertyCard({ property, compact = false, home = false }) {
   if (!property?.id) return null
 
   const [favorited, setFavorited] = useState(false)
@@ -60,10 +60,19 @@ function PropertyCard({ property }) {
     setFavorited(toggleFavorite(property.id))
   }
 
+  const isHome = home || false
+
   return (
-    <article className="group flex flex-col h-full bg-white rounded-2xl overflow-hidden border border-slate-100 shadow-sm hover:shadow-lg transition-all duration-300">
-      {/* ─── 1. IMAGE SECTION ───────────────────────────────────────── */}
-      <div className="relative aspect-[4/3] overflow-hidden flex-shrink-0">
+    <article
+      className={`group flex flex-col h-full w-full bg-white overflow-hidden rounded-[10px] transition-all duration-300 ${
+        isHome
+          ? 'max-w-[280px] max-h-[360px] shadow-[0_4px_12px_rgba(0,0,0,0.05)] hover:shadow-[0_8px_20px_rgba(0,0,0,0.08)]'
+          : 'max-w-[340px] shadow-[0_6px_18px_rgba(0,0,0,0.06)] hover:-translate-y-0.5 hover:shadow-[0_12px_24px_rgba(0,0,0,0.1)]'
+      }`}
+      style={{ maxWidth: isHome ? 'min(100%, 280px)' : 'min(100%, 340px)' }}
+    >
+      {/* 1. IMAGE: card-image wrapper — relative, overflow, rounded */}
+      <div className="relative w-full aspect-[4/3] flex-shrink-0 overflow-hidden rounded-[10px]">
         <Link to={`/properties/${property.id}`} className="block w-full h-full">
           <img
             src={getCloudinaryThumbUrl(property.coverImageUrl || property.images?.[0])}
@@ -72,49 +81,49 @@ function PropertyCard({ property }) {
           />
         </Link>
 
-        {/* Bottom gradient for price readability */}
         <div
-          className="absolute inset-0 pointer-events-none"
+          className="absolute inset-0 pointer-events-none rounded-[10px]"
           style={{
             background: 'linear-gradient(to top, rgba(0,0,0,0.75) 0%, rgba(0,0,0,0.2) 35%, transparent 55%)',
           }}
         />
 
-        {/* Top-left: badges only (max 2) */}
-        <div className="absolute top-3 left-3 flex gap-2 z-10 pointer-events-none">
+        {/* Badge: top/left 10px, padding 4px 10px, 12px font, rounded-20px, line-height 1 */}
+        <div className="absolute top-[10px] left-[10px] flex gap-2 z-10 pointer-events-none">
           <span
-            className={`px-2.5 py-1 rounded-lg text-[10px] font-bold text-white uppercase tracking-wide shadow-md ${
-              isInstallment ? 'bg-blue-900' : listingType === 'rent' ? 'bg-orange-600' : 'bg-blue-600'
-            }`}
+            className="inline-flex items-center py-1 px-2.5 text-xs font-semibold text-white leading-none rounded-[20px] shadow-sm"
+            style={{
+              backgroundColor: isInstallment ? '#1e3a8a' : listingType === 'rent' ? '#ea580c' : '#2563eb',
+            }}
           >
             {isInstallment ? 'ผ่อนตรง' : listingType === 'rent' ? 'เช่า' : 'ขาย'}
           </span>
           {isNew && (
-            <span className="px-2.5 py-1 rounded-lg text-[10px] font-bold text-white uppercase tracking-wide shadow-md bg-emerald-500">
+            <span className="inline-flex items-center py-1 px-2.5 text-xs font-semibold text-white leading-none rounded-[20px] shadow-sm bg-emerald-500">
               New
             </span>
           )}
         </div>
 
-        {/* Favorite: top-right, 44px tap area, circular, shadow, hover/active */}
+        {/* Favorite: top/right 10px, 36px button, small icon centered */}
         <button
           type="button"
           onClick={handleFavorite}
-          className="absolute top-3 right-3 z-10 min-w-[44px] min-h-[44px] flex items-center justify-center rounded-full bg-white/90 backdrop-blur-sm shadow-md hover:bg-white hover:scale-105 active:scale-95 transition-all duration-200 [touch-action:manipulation]"
+          className="absolute top-[10px] right-[10px] z-10 w-9 h-9 flex items-center justify-center rounded-full bg-white/95 backdrop-blur-[2px] shadow-sm hover:bg-white hover:shadow hover:scale-105 active:scale-95 transition-all duration-200 [touch-action:manipulation]"
           aria-label={favorited ? 'ลบออกจากรายการโปรด' : 'เพิ่มในรายการโปรด'}
         >
-          <HeartIcon active={favorited} />
+          <HeartIcon active={favorited} size="sm" />
         </button>
 
-        {/* Price overlay: most prominent, bold, large, white + shadow */}
-        <div className="absolute bottom-0 left-0 right-0 p-4 pt-8 z-10 pointer-events-none">
+        {/* Price overlay: smaller */}
+        <div className="absolute bottom-0 left-0 right-0 z-10 pointer-events-none p-2 pt-5">
           {property.hotDeal && (
-            <div className="text-amber-300 text-xs font-bold uppercase tracking-wide mb-0.5 drop-shadow-md">
+            <div className="text-amber-300 text-[10px] font-bold uppercase tracking-wide mb-0.5 drop-shadow-md">
               🔥 ราคาดี
             </div>
           )}
           <div
-            className="text-white font-bold text-2xl sm:text-[1.75rem] leading-tight tracking-tight"
+            className="text-white font-bold text-sm leading-tight tracking-tight"
             style={{
               textShadow: '0 1px 2px rgba(0,0,0,0.8), 0 2px 8px rgba(0,0,0,0.6), 0 0 16px rgba(0,0,0,0.4)',
             }}
@@ -123,7 +132,7 @@ function PropertyCard({ property }) {
           </div>
           {installmentPerMonth != null && (
             <div
-              className="text-white/95 text-sm font-medium mt-1"
+              className="text-white/95 text-xs font-medium mt-0.5"
               style={{ textShadow: '0 1px 2px rgba(0,0,0,0.6)' }}
             >
               ≈ ฿{installmentPerMonth.toLocaleString('th-TH')} / ด.
@@ -132,69 +141,64 @@ function PropertyCard({ property }) {
         </div>
       </div>
 
-      {/* ─── 2. CONTENT SECTION ─────────────────────────────────────── */}
-      <div className="flex flex-col flex-1 p-4 sm:p-5 min-w-0">
-        {/* Title: medium-bold, larger, max 2 lines, ellipsis */}
-        <Link to={`/properties/${property.id}`} className="block mb-1">
-          <h3 className="font-semibold text-slate-900 text-base sm:text-lg leading-snug line-clamp-2 group-hover:text-blue-700 transition-colors">
+      {/* 2. MAIN CONTENT: flex-1 so CTA stays at bottom; home = 12px padding, tighter spacing */}
+      <div className={`flex flex-col flex-1 min-w-0 p-3 ${isHome ? 'gap-0.5' : ''}`}>
+        <Link to={`/properties/${property.id}`} className="block mb-0.5">
+          <h3 className={`font-semibold text-slate-900 leading-snug line-clamp-2 group-hover:text-blue-700 transition-colors ${isHome ? 'text-xs' : 'text-sm'}`}>
             {titleText}
           </h3>
         </Link>
 
-        {/* Location: slightly darker, small spacing, readable */}
-        <p className="text-slate-500 text-sm font-medium mb-4">
+        <p className={`text-slate-500 text-xs font-medium ${isHome ? 'mb-1' : 'mb-1.5'}`}>
           <span aria-hidden>📍</span> {district || '—'}
         </p>
 
-        {/* Features row: one line, vertical align, separators */}
-        <div className="flex items-center gap-2 sm:gap-3 text-slate-600 text-sm font-medium mb-3 flex-wrap">
-          <span className="flex items-center gap-1">
+        <div className={`flex items-center gap-1.5 text-slate-600 text-xs font-medium flex-wrap ${isHome ? 'mb-1' : 'mb-2'}`}>
+          <span className="flex items-center gap-0.5">
             <BedIcon /> {property.bedrooms ?? '-'}
           </span>
           <span className="text-slate-300 select-none" aria-hidden>|</span>
-          <span className="flex items-center gap-1">
+          <span className="flex items-center gap-0.5">
             <BathIcon /> {property.bathrooms ?? '-'}
           </span>
           <span className="text-slate-300 select-none" aria-hidden>|</span>
-          <span className="flex items-center gap-1">
+          <span className="flex items-center gap-0.5">
             <ParkIcon /> {property.parking ?? '-'}
           </span>
           {areaSqWa != null && (
             <>
               <span className="text-slate-300 select-none" aria-hidden>|</span>
-              <span className="flex items-center gap-1">
+              <span className="flex items-center gap-0.5">
                 <AreaIcon /> {areaSqWa} ตร.ว.
               </span>
             </>
           )}
         </div>
 
-        {/* Status tags: small pills under features */}
-        <div className="flex flex-wrap gap-2 mb-5">
+        <div className={`flex flex-wrap gap-1.5 ${isHome ? 'mb-2' : 'mb-3'}`}>
           <span
-            className={`inline-flex items-center gap-1 text-xs font-medium px-2.5 py-1 rounded-full ${
+            className={`inline-flex items-center gap-1 text-[10px] font-medium px-2 py-0.5 rounded-full ${
               property.availability === 'available'
                 ? 'bg-green-50 text-green-700'
                 : 'bg-amber-50 text-amber-800'
             }`}
           >
             <span
-              className={`w-1.5 h-1.5 rounded-full ${
+              className={`w-1 h-1 rounded-full ${
                 property.availability === 'available' ? 'bg-green-500' : 'bg-amber-500'
               }`}
               aria-hidden
             />
             {property.availability === 'available' ? 'ว่าง' : 'ติดจอง'}
           </span>
-          <span className="inline-flex items-center text-xs font-medium px-2.5 py-1 rounded-full bg-slate-100 text-slate-600">
+          <span className="inline-flex text-[10px] font-medium px-2 py-0.5 rounded-full bg-slate-100 text-slate-600">
             {property.propertyCondition || 'มือสอง'}
           </span>
         </div>
 
-        {/* CTA: lighter, outline or text + arrow */}
         <Link
           to={`/properties/${property.id}`}
-          className="mt-auto inline-flex items-center justify-center gap-1.5 min-h-[44px] py-2.5 px-4 rounded-xl border-2 border-slate-200 text-slate-700 font-semibold text-sm hover:border-blue-600 hover:text-blue-700 hover:bg-blue-50/50 active:scale-[0.98] transition-all duration-200 [touch-action:manipulation]"
+          className={`mt-auto inline-flex items-center justify-center gap-1 rounded-lg border-2 border-slate-200 text-slate-700 font-semibold text-xs hover:border-blue-600 hover:text-blue-700 hover:bg-blue-50/50 active:scale-[0.98] transition-all duration-200 [touch-action:manipulation] ${isHome ? 'min-h-[36px] py-1.5 px-2' : 'min-h-[40px] py-2 px-3'}`}
         >
           ดูรายละเอียด
           <span aria-hidden>→</span>
