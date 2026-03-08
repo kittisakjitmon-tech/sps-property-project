@@ -8,7 +8,6 @@ import { getPropertyLabel } from '../constants/propertyTypes'
 // --- Icons (smaller for card) ---
 const BedIcon = () => <span className="text-[13px] leading-none" aria-hidden>🛏</span>
 const BathIcon = () => <span className="text-[13px] leading-none" aria-hidden>🛁</span>
-const ParkIcon = () => <span className="text-[13px] leading-none" aria-hidden>🚗</span>
 const AreaIcon = () => <span className="text-[13px] leading-none" aria-hidden>📐</span>
 
 const HeartIcon = ({ active, size = 'default' }) => (
@@ -160,10 +159,6 @@ function PropertyCard({ property, compact = false, home = false }) {
           <span className="text-slate-300 select-none" aria-hidden>|</span>
           <span className="flex items-center gap-0.5">
             <BathIcon /> {property.bathrooms ?? '-'}
-          </span>
-          <span className="text-slate-300 select-none" aria-hidden>|</span>
-          <span className="flex items-center gap-0.5">
-            <ParkIcon /> {property.parking ?? '-'}
           </span>
           {areaSqWa != null && (
             <>
