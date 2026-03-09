@@ -107,9 +107,9 @@ export default function DynamicPropertySection({
           </Link>
         </div>
 
-        {/* Property grid: home 4/2/1 cols or default auto-fill */}
+        {/* Property grid: home 4/2/2 cols or default auto-fill */}
         {homeLayout ? (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-[18px] max-w-[1280px] mx-auto">
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-2 sm:gap-4 lg:grid-cols-4 lg:gap-[18px] max-w-[1280px] mx-auto">
             {displayProperties.slice(0, HOMEPAGE_LIMIT).map((property) => (
               <PropertyCard key={property.id} property={property} home />
             ))}

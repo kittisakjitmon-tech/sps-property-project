@@ -154,7 +154,7 @@ export default function Home() {
     fetchedBlogsRef.current = true
     setBlogsLoading(true)
     getFeaturedBlogs()
-      .then((blogs) => setFeaturedBlogs(blogs || []))
+      .then((blogs) => setFeaturedBlogs((blogs || []).slice(0, 4)))
       .catch((e) => console.error('Error loading featured blogs:', e))
       .finally(() => setBlogsLoading(false))
   }, [inViewBlogs])
@@ -366,7 +366,7 @@ export default function Home() {
           {blogsLoading && featuredBlogs.length === 0 ? (
             <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
               <div className="h-8 w-48 bg-slate-200 rounded-lg mb-6 animate-pulse" />
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 {[1, 2, 3].map((i) => (
                   <div key={i} className="rounded-2xl bg-slate-100 aspect-video animate-pulse" />
                 ))}
@@ -386,8 +386,8 @@ export default function Home() {
                   <span>→</span>
                 </Link>
               </div>
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                {featuredBlogs.map((blog) => {
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                {featuredBlogs.slice(0, 4).map((blog) => {
                   const rawCover = blog.images?.[0]
                   const coverImage = rawCover && isValidImageUrl(rawCover) ? rawCover : null
                   const hasVideo = !!blog.youtubeUrl

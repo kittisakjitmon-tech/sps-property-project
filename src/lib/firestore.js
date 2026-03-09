@@ -979,6 +979,7 @@ export function filterPropertiesByCriteria(properties, criteria) {
 
 // ==================== BLOG FUNCTIONS ====================
 const BLOGS = 'blogs'
+const MAX_FEATURED_BLOGS = 4
 
 /**
  * Get all blogs snapshot (for admin)
@@ -1037,7 +1038,7 @@ export async function getPublishedBlogs(pageSize = 9, lastDoc = null) {
 }
 
 /**
- * Get featured blogs (max 3)
+ * Get featured blogs (max 4)
  */
 export async function getFeaturedBlogs() {
   const q = query(
@@ -1045,7 +1046,7 @@ export async function getFeaturedBlogs() {
     where('published', '==', true),
     where('isFeatured', '==', true),
     orderBy('createdAt', 'desc'),
-    limit(3)
+    limit(MAX_FEATURED_BLOGS)
   )
   const snapshot = await getDocs(q)
   return snapshot.docs.map((doc) => ({

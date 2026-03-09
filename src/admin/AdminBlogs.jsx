@@ -10,6 +10,8 @@ import {
 import { adminDb, adminStorage } from '../lib/firebase'
 import { compressImage } from '../lib/imageCompressor'
 
+const MAX_FEATURED_BLOGS = 4
+
 export default function AdminBlogs() {
   const [blogs, setBlogs] = useState([])
   const [loading, setLoading] = useState(true)
@@ -24,7 +26,6 @@ export default function AdminBlogs() {
     isFeatured: false,
   })
   const [uploadingImages, setUploadingImages] = useState(false)
-  const [imageFiles, setImageFiles] = useState([])
   const [successMessage, setSuccessMessage] = useState(null)
   const [errorMessage, setErrorMessage] = useState(null)
 
@@ -45,7 +46,6 @@ export default function AdminBlogs() {
       published: false,
       isFeatured: false,
     })
-    setImageFiles([])
     setEditingBlog(null)
     setShowForm(false)
   }
@@ -60,7 +60,6 @@ export default function AdminBlogs() {
       published: blog.published ?? false,
       isFeatured: blog.isFeatured ?? false,
     })
-    setImageFiles([])
     setShowForm(true)
   }
 
@@ -105,6 +104,16 @@ export default function AdminBlogs() {
     
     if (!form.title.trim()) {
       setErrorMessage('กรุณากรอกหัวข้อบทความ')
+      return
+    }
+
+    const featuredCountExcludingCurrent = blogs.filter(
+      (blog) => blog.isFeatured && blog.id !== editingBlog?.id
+    ).length
+
+    if (form.isFeatured && featuredCountExcludingCurrent >= MAX_FEATURED_BLOGS) {
+      setErrorMessage(`สามารถตั้งค่า Featured ได้สูงสุด ${MAX_FEATURED_BLOGS} บทความ`)
+      setTimeout(() => setErrorMessage(null), 5000)
       return
     }
 
@@ -154,11 +163,11 @@ export default function AdminBlogs() {
 
   const handleToggleFeatured = async (blogId, currentStatus) => {
     try {
-      // Check if we're trying to set featured to true and there are already 3 featured blogs
+      // Check if we're trying to set featured to true and there are already 4 featured blogs
       if (!currentStatus) {
         const featuredCount = blogs.filter((b) => b.isFeatured && b.id !== blogId).length
-        if (featuredCount >= 3) {
-          setErrorMessage('สามารถตั้งค่า Featured ได้สูงสุด 3 บทความ')
+        if (featuredCount >= MAX_FEATURED_BLOGS) {
+          setErrorMessage(`สามารถตั้งค่า Featured ได้สูงสุด ${MAX_FEATURED_BLOGS} บทความ`)
           setTimeout(() => setErrorMessage(null), 5000)
           return
         }

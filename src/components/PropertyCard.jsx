@@ -1,5 +1,5 @@
 import { Link } from 'react-router-dom'
-import { useState, useEffect, memo } from 'react'
+import { useState, memo } from 'react'
 import { isFavorite, toggleFavorite } from '../lib/favorites'
 import { formatPriceShort } from '../lib/priceFormat'
 import { getCloudinaryThumbUrl } from '../lib/cloudinary'
@@ -27,19 +27,17 @@ const HeartIcon = ({ active, size = 'default' }) => (
 )
 
 function PropertyCard({ property, compact = false, home = false }) {
-  if (!property?.id) return null
+  const propertyId = property?.id ?? null
+  const [favorited, setFavorited] = useState(() => (propertyId ? isFavorite(propertyId) : false))
+  const [renderedAt] = useState(() => Date.now())
 
-  const [favorited, setFavorited] = useState(false)
-
-  useEffect(() => {
-    setFavorited(isFavorite(property.id))
-  }, [property.id])
+  if (!propertyId) return null
 
   const listingType = property.listingType || (property.isRental ? 'rent' : 'sale')
   const subListingType = property.subListingType
   const isNew =
     property.createdAt &&
-    Date.now() - (property.createdAt?.toMillis?.() || property.createdAt) < 7 * 24 * 60 * 60 * 1000
+    renderedAt - (property.createdAt?.toMillis?.() || property.createdAt) < 7 * 24 * 60 * 60 * 1000
   const isInstallment = subListingType === 'installment_only' || property.directInstallment
   const loc = property.location || {}
   const district = [loc.district, loc.province].filter(Boolean).join(' ')
@@ -56,19 +54,20 @@ function PropertyCard({ property, compact = false, home = false }) {
   const handleFavorite = (e) => {
     e.preventDefault()
     e.stopPropagation()
-    setFavorited(toggleFavorite(property.id))
+    setFavorited(toggleFavorite(propertyId))
   }
 
   const isHome = home || false
+  const contentGapClass = isHome ? 'gap-0.5' : compact ? 'gap-0.5' : ''
 
   return (
     <article
       className={`group flex flex-col h-full w-full bg-white overflow-hidden rounded-[10px] transition-all duration-300 ${
         isHome
-          ? 'max-w-[280px] max-h-[360px] shadow-[0_4px_12px_rgba(0,0,0,0.05)] hover:shadow-[0_8px_20px_rgba(0,0,0,0.08)]'
+          ? 'shadow-[0_4px_12px_rgba(0,0,0,0.05)] hover:shadow-[0_8px_20px_rgba(0,0,0,0.08)]'
           : 'max-w-[340px] shadow-[0_6px_18px_rgba(0,0,0,0.06)] hover:-translate-y-0.5 hover:shadow-[0_12px_24px_rgba(0,0,0,0.1)]'
       }`}
-      style={{ maxWidth: isHome ? 'min(100%, 280px)' : 'min(100%, 340px)' }}
+      style={isHome ? undefined : { maxWidth: 'min(100%, 340px)' }}
     >
       {/* 1. IMAGE: card-image wrapper — relative, overflow, rounded */}
       <div className="relative w-full aspect-[4/3] flex-shrink-0 overflow-hidden rounded-[10px]">
@@ -141,7 +140,7 @@ function PropertyCard({ property, compact = false, home = false }) {
       </div>
 
       {/* 2. MAIN CONTENT: flex-1 so CTA stays at bottom; home = 12px padding, tighter spacing */}
-      <div className={`flex flex-col flex-1 min-w-0 p-3 ${isHome ? 'gap-0.5' : ''}`}>
+      <div className={`flex flex-col flex-1 min-w-0 p-3 ${contentGapClass}`}>
         <Link to={`/properties/${property.id}`} className="block mb-0.5">
           <h3 className={`font-semibold text-slate-900 leading-snug line-clamp-2 group-hover:text-blue-700 transition-colors ${isHome ? 'text-xs' : 'text-sm'}`}>
             {titleText}
