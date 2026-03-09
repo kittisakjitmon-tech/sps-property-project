@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { MapPin } from 'lucide-react'
 import { formatPrice } from '../lib/priceFormat'
 import { loadLongdoMap } from '../lib/longdoMapLoader'
+import { getPropertyPath } from '../lib/propertySlug'
 
 export default function PropertiesMap({ properties, className = '' }) {
   const mapRef = useRef(null)
@@ -70,8 +71,8 @@ export default function PropertiesMap({ properties, className = '' }) {
     // เมื่อแตะ/คลิกมุด → ไปหน้ารายละเอียดทันที (รองรับมือถือ)
     const unbindOverlayClick = map.Event?.bind?.('overlayClick', (overlay) => {
       const entry = markersRef.current.find((e) => e.marker === overlay)
-      if (entry?.propertyId) {
-        window.location.href = `/properties/${entry.propertyId}`
+      if (entry?.url) {
+        window.location.href = entry.url
       }
     })
 
@@ -83,7 +84,7 @@ export default function PropertiesMap({ properties, className = '' }) {
       const locationText = property.location
         ? `${property.location.district || ''}, ${property.location.province || ''}`.trim()
         : ''
-      const detailUrl = `/properties/${property.id}`
+      const detailUrl = getPropertyPath(property)
       // ปุ่มใหญ่ ง่ายต่อการแตะบนมือถือ: min-height 44px, touch-action: manipulation
       const infoContent = `
         <div style="min-width: 200px; padding: 10px;">
@@ -110,7 +111,7 @@ export default function PropertiesMap({ properties, className = '' }) {
         }
       )
       map.Overlays.add(marker)
-      markersRef.current.push({ marker, propertyId: property.id })
+      markersRef.current.push({ marker, propertyId: property.id, url: detailUrl })
     })
 
     if (locationList.length > 0 && longdo.Util && longdo.Util.locationBound) {

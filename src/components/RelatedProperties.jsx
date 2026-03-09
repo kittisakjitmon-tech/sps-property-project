@@ -4,6 +4,7 @@ import { collection, query, where, limit, getDocs } from 'firebase/firestore'
 import { db } from '../lib/firebase'
 import { MapPin, Bed, Bath, Maximize2 } from 'lucide-react'
 import { getCloudinaryThumbUrl, isValidImageUrl } from '../lib/cloudinary'
+import { getPropertyPath } from '../lib/propertySlug'
 
 // Constants
 const formatPrice = (price, isRental, showPrice) => {
@@ -116,7 +117,7 @@ export default function RelatedProperties({ currentPropertyId, district, type })
                     const coverImage = rawCover && isValidImageUrl(rawCover) ? rawCover : null
 
                     return (
-                        <Link key={prop.id} to={`/properties/${prop.id}`} className="group bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden hover:shadow-md transition">
+                        <Link key={prop.id} to={getPropertyPath(prop)} className="group bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden hover:shadow-md transition">
                             <div className="aspect-[4/3] bg-slate-200 overflow-hidden relative">
                                 {coverImage ? (
                                     <img src={getCloudinaryThumbUrl(coverImage)} alt={prop.title} width={400} height={300} loading="lazy" className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" />

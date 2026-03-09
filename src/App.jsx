@@ -70,7 +70,7 @@ function PublicRoutesWrapper() {
       <Routes>
         <Route path="/" element={<Home />} />
         <Route path="/properties" element={<Properties />} />
-        <Route path="/properties/:id" element={<PropertyDetail />} />
+        <Route path="/properties/:slug" element={<PropertyDetail />} />
         <Route path="/share/:id" element={<SharePage />} />
         <Route path="/contact" element={<Contact />} />
         <Route path="/loan-services" element={<LoanService />} />

@@ -11,6 +11,7 @@ import { highlightText, highlightTags } from '../lib/textHighlight'
 import { usePublicAuth } from '../context/PublicAuthContext'
 import { getPropertyLabel } from '../constants/propertyTypes'
 import { getCloudinaryLargeUrl, getCloudinaryThumbUrl, isValidImageUrl } from '../lib/cloudinary'
+import { extractIdFromSlug, generatePropertySlug, getPropertyPath } from '../lib/propertySlug'
 
 const RelatedProperties = lazy(() => import('../components/RelatedProperties'))
 const NeighborhoodData = lazy(() => import('../components/NeighborhoodData'))
@@ -472,12 +473,13 @@ function LeadForm({ propertyId, propertyTitle, propertyPrice, isRental, onSucces
 }
 
 export default function PropertyDetail() {
-  // All hooks must be called unconditionally at the top level (React Rules of Hooks)
-  const { id } = useParams()
+  const { slug } = useParams()
   const navigate = useNavigate()
   const [searchParams] = useSearchParams()
   const { user, isAgent } = usePublicAuth()
   const searchQuery = searchParams.get('q') || ''
+
+  const propertyId = extractIdFromSlug(slug)
 
   const [property, setProperty] = useState(null)
   const [loading, setLoading] = useState(true)
@@ -487,14 +489,22 @@ export default function PropertyDetail() {
 
   useEffect(() => {
     let cancelled = false
-    getPropertyByIdOnce(id).then((p) => {
+    getPropertyByIdOnce(propertyId).then((p) => {
       if (!cancelled) {
         setProperty(p)
         if (p?.id) recordPropertyView({ propertyId: p.id, type: p.type }).catch(() => {})
       }
     }).finally(() => { if (!cancelled) setLoading(false) })
     return () => { cancelled = true }
-  }, [id])
+  }, [propertyId])
+
+  useEffect(() => {
+    if (!property) return
+    const canonical = generatePropertySlug(property)
+    if (canonical && slug !== canonical) {
+      navigate(`/properties/${canonical}`, { replace: true })
+    }
+  }, [property, slug, navigate])
 
   if (loading) {
     return (
@@ -637,11 +647,11 @@ export default function PropertyDetail() {
       <Helmet>
         <title>{title}</title>
         <meta name="description" content={description} />
-        <link rel="canonical" href={`https://spspropertysolution.com/properties/${property.id}`} />
+        <link rel="canonical" href={`https://spspropertysolution.com${getPropertyPath(property)}`} />
         {/* Open Graph for social sharing (e.g., LINE, Facebook) */}
         <meta property="og:title" content={title} />
         <meta property="og:description" content={description} />
-        <meta property="og:url" content={`https://spspropertysolution.com/properties/${property.id}`} />
+        <meta property="og:url" content={`https://spspropertysolution.com${getPropertyPath(property)}`} />
         <meta property="og:type" content="website" />
         <meta property="og:image" content={primaryImage} />
         {/* Twitter Card (บางแพลตฟอร์มอื่นใช้งานร่วมกันได้) */}

@@ -47,7 +47,14 @@ export default function Navbar() {
   const buyCloseTimerRef = useRef(null)
   const serviceCloseTimerRef = useRef(null)
   const userMenuCloseTimerRef = useRef(null)
+  const propertiesPrefetchedRef = useRef(false)
   const { user, userRole, userProfile, logout, isAgent } = usePublicAuth()
+
+  const prefetchProperties = () => {
+    if (propertiesPrefetchedRef.current) return
+    propertiesPrefetchedRef.current = true
+    import('../pages/Properties')
+  }
   const navigate = useNavigate()
 
   const clearBuyCloseTimer = () => {
@@ -126,7 +133,7 @@ export default function Navbar() {
       <nav className="w-full mx-auto px-3 sm:px-4 md:px-6 lg:px-8 lg:max-w-7xl min-h-[60px] flex flex-wrap items-center justify-between gap-3 py-2">
         {/* ซ้าย: Logo + ชื่อ */}
         <Link to="/" className="flex items-center gap-2 shrink min-w-0 max-w-[calc(100%-56px)] lg:max-w-none">
-          <img src={logo} alt="SPS Logo" className="h-8 w-auto" />
+          <img src={logo} alt="SPS Logo" width={120} height={48} className="h-8 w-auto" />
           <span className="text-base font-semibold text-gray-900 whitespace-nowrap truncate hidden sm:inline">
             SPS Property Solution
           </span>
@@ -144,6 +151,7 @@ export default function Navbar() {
               onMouseEnter={() => {
                 clearBuyCloseTimer()
                 setBuyMenuOpen(true)
+                prefetchProperties()
               }}
               onMouseLeave={scheduleBuyClose}
             >
@@ -186,7 +194,7 @@ export default function Navbar() {
               </div>
             </div>
 
-            <Link to="/properties?listingType=rent&subListingType=rent_only" className="nav-link text-[15px] font-medium text-gray-600 hover:text-blue-600 transition-colors duration-200 whitespace-nowrap no-underline py-2">
+            <Link to="/properties?listingType=rent&subListingType=rent_only" className="nav-link text-[15px] font-medium text-gray-600 hover:text-blue-600 transition-colors duration-200 whitespace-nowrap no-underline py-2" onMouseEnter={prefetchProperties}>
               เช่า
             </Link>
 

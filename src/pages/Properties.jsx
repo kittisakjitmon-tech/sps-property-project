@@ -1,5 +1,5 @@
 import { useSearchParams, Link, useNavigate } from 'react-router-dom'
-import { createElement, useEffect, useMemo, useState, useCallback, useRef, lazy, Suspense } from 'react'
+import { createElement, useEffect, useMemo, useState, useCallback, useRef, lazy, Suspense, useTransition } from 'react'
 import { useSearch } from '../context/SearchContext'
 import { getPropertiesOnceForListing } from '../lib/firestore'
 import PageLayout from '../components/PageLayout'
@@ -128,6 +128,7 @@ export default function Properties() {
   }
 
   const [properties, setProperties] = useState([])
+  const [propertiesLoading, setPropertiesLoading] = useState(true)
 
   // State Separation
   const initialKeyword = searchParams.get('search') || searchParams.get('q') || ''
@@ -140,6 +141,7 @@ export default function Properties() {
   const [currentPage, setCurrentPage] = useState(parseInt(searchParams.get('page') || '1'))
   const resultsTopRef = useRef(null)
   const searchInputRef = useRef(null)
+  const [isPending, startTransition] = useTransition()
 
   // Auto-debounce effect
   useEffect(() => {
@@ -177,12 +179,15 @@ export default function Properties() {
 
   useEffect(() => {
     let mounted = true
+    setPropertiesLoading(true)
     const fetchProperties = async () => {
       try {
         const props = await getPropertiesOnceForListing(true, 300)
         if (mounted) setProperties(Array.isArray(props) ? props : [])
       } catch {
         if (mounted) setProperties([])
+      } finally {
+        if (mounted) setPropertiesLoading(false)
       }
     }
     fetchProperties()
@@ -324,94 +329,107 @@ export default function Properties() {
 
   const handlePageChange = (newPage) => {
     if (newPage < 1 || newPage > totalPages) return
-    const params = new URLSearchParams(searchParams)
-    params.set('page', newPage.toString())
-    navigate(`/properties?${params.toString()}`)
-    
-    // Scroll to results top
-    if (resultsTopRef.current) {
-      resultsTopRef.current.scrollIntoView({ behavior: 'smooth', block: 'start' })
-    }
+    startTransition(() => {
+      const params = new URLSearchParams(searchParams)
+      params.set('page', newPage.toString())
+      navigate(`/properties?${params.toString()}`)
+      if (resultsTopRef.current) {
+        resultsTopRef.current.scrollIntoView({ behavior: 'smooth', block: 'start' })
+      }
+    })
   }
 
   const navigateWithParams = useCallback((params) => {
-    const nextQuery = params.toString()
-    prevSearchParamsRef.current = nextQuery
-    navigate(nextQuery ? `/properties?${nextQuery}` : '/properties')
-
-    if (resultsTopRef.current) {
-      resultsTopRef.current.scrollIntoView({ behavior: 'smooth', block: 'start' })
-    }
+    startTransition(() => {
+      const nextQuery = params.toString()
+      prevSearchParamsRef.current = nextQuery
+      navigate(nextQuery ? `/properties?${nextQuery}` : '/properties')
+      if (resultsTopRef.current) {
+        resultsTopRef.current.scrollIntoView({ behavior: 'smooth', block: 'start' })
+      }
+    })
   }, [navigate])
 
   const handleRemoveFilter = useCallback((filter) => {
-    const params = new URLSearchParams(searchParams)
-    params.delete('page')
+    startTransition(() => {
+      const params = new URLSearchParams(searchParams)
+      params.delete('page')
 
-    switch (filter.type) {
-      case 'keyword':
-        setSearchQuery('')
-        setDebouncedKeyword('')
-        params.delete('q')
-        params.delete('search')
-        break
-      case 'tag':
-        updateFilters({ tag: '' })
-        params.delete('tag')
-        break
-      case 'feature':
-        updateFilters({ feature: '' })
-        params.delete('feature')
-        break
-      case 'propertyType':
-        updateFilters({ propertyType: '' })
-        params.delete('propertyType')
-        break
-      case 'location':
-        updateFilters({ location: '' })
-        params.delete('location')
-        break
-      case 'propertySubStatus':
-        updateFilters({ propertySubStatus: '' })
-        params.delete('status')
-        break
-      case 'price':
-        updateFilters({ priceMin: '', priceMax: '' })
-        params.delete('priceMin')
-        params.delete('priceMax')
-        break
-      case 'bedrooms':
-        updateFilters({ bedrooms: '' })
-        params.delete('bedrooms')
-        break
-      case 'bathrooms':
-        updateFilters({ bathrooms: '' })
-        params.delete('bathrooms')
-        break
-      case 'area':
-        updateFilters({ areaMin: '', areaMax: '' })
-        params.delete('areaMin')
-        params.delete('areaMax')
-        break
-      case 'isRental':
-        updateFilters({ isRental: null, subListingType: '' })
-        params.delete('type')
-        params.delete('listingType')
-        params.delete('subListingType')
-        break
-      default:
-        break
-    }
+      switch (filter.type) {
+        case 'keyword':
+          setSearchQuery('')
+          setDebouncedKeyword('')
+          params.delete('q')
+          params.delete('search')
+          break
+          case 'tag':
+          updateFilters({ tag: '' })
+          params.delete('tag')
+          break
+        case 'feature':
+          updateFilters({ feature: '' })
+          params.delete('feature')
+          break
+        case 'propertyType':
+          updateFilters({ propertyType: '' })
+          params.delete('propertyType')
+          break
+        case 'location':
+          updateFilters({ location: '' })
+          params.delete('location')
+          break
+        case 'propertySubStatus':
+          updateFilters({ propertySubStatus: '' })
+          params.delete('status')
+          break
+        case 'price':
+          updateFilters({ priceMin: '', priceMax: '' })
+          params.delete('priceMin')
+          params.delete('priceMax')
+          break
+        case 'bedrooms':
+          updateFilters({ bedrooms: '' })
+          params.delete('bedrooms')
+          break
+        case 'bathrooms':
+          updateFilters({ bathrooms: '' })
+          params.delete('bathrooms')
+          break
+        case 'area':
+          updateFilters({ areaMin: '', areaMax: '' })
+          params.delete('areaMin')
+          params.delete('areaMax')
+          break
+        case 'isRental':
+          updateFilters({ isRental: null, subListingType: '' })
+          params.delete('type')
+          params.delete('listingType')
+          params.delete('subListingType')
+          break
+        default:
+          break
+      }
 
-    navigateWithParams(params)
-  }, [navigateWithParams, searchParams, updateFilters])
+      prevSearchParamsRef.current = params.toString()
+      navigate(params.toString() ? `/properties?${params.toString()}` : '/properties')
+      if (resultsTopRef.current) {
+        resultsTopRef.current.scrollIntoView({ behavior: 'smooth', block: 'start' })
+      }
+    })
+  }, [navigate, searchParams, updateFilters])
 
   const handleClearAllFilters = useCallback(() => {
-    clearFilters()
-    setSearchQuery('')
-    setDebouncedKeyword('')
-    navigateWithParams(new URLSearchParams())
-  }, [clearFilters, navigateWithParams])
+    startTransition(() => {
+      clearFilters()
+      setSearchQuery('')
+      setDebouncedKeyword('')
+      prevSearchParamsRef.current = ''
+      navigate('/properties')
+      if (resultsTopRef.current) {
+        resultsTopRef.current.scrollIntoView({ behavior: 'smooth', block: 'start' })
+      }
+    })
+  }, [navigate, clearFilters])
 
   const getPageNumbers = () => {
     const pages = []
@@ -429,7 +447,7 @@ export default function Properties() {
 
   return (
     <PageLayout heroTitle={heroTitle} heroSubtitle={heroSubtitle} searchComponent={null}>
-      <div className="min-h-screen bg-slate-50 py-8" ref={resultsTopRef}>
+      <div className="min-h-screen bg-slate-50 py-8" ref={resultsTopRef} aria-busy={isPending}>
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="mb-6 flex flex-col sm:flex-row sm:items-end justify-between gap-4">
             <div>
@@ -518,7 +536,19 @@ export default function Properties() {
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-                {paginatedProperties.map((p) => p && p.id && <PropertyCard key={p.id} property={p} searchQuery={debouncedKeyword} />)}
+                {propertiesLoading
+                  ? Array.from({ length: 12 }, (_, i) => (
+                      <div key={`skeleton-${i}`} className="flex flex-col rounded-[10px] overflow-hidden bg-white border border-slate-100 shadow-sm" aria-hidden="true">
+                        <div className="w-full aspect-[4/3] bg-slate-200 animate-pulse" />
+                        <div className="p-3 space-y-2">
+                          <div className="h-4 bg-slate-200 rounded animate-pulse w-3/4" />
+                          <div className="h-3 bg-slate-100 rounded animate-pulse w-1/2" />
+                          <div className="h-3 bg-slate-100 rounded animate-pulse w-full" />
+                          <div className="h-9 bg-slate-200 rounded-lg animate-pulse w-full mt-2" />
+                        </div>
+                      </div>
+                    ))
+                  : paginatedProperties.map((p) => p && p.id && <PropertyCard key={p.id} property={p} searchQuery={debouncedKeyword} />)}
               </div>
 
               {/* Pagination UI */}

@@ -34,23 +34,28 @@ export default defineConfig({
     cssCodeSplit: true,
     sourcemap: false, // ปิด sourcemap ใน prod เพื่อลด build size
     chunkSizeWarningLimit: 1000,
+    // ป้องกัน preload ไปยัง chunk ที่ hash เปลี่ยนหลัง deploy (ลดโอกาส "Unable to preload CSS" บน live)
+    modulePreload: false,
     rollupOptions: {
       output: {
         manualChunks(id) {
           if (!id.includes('node_modules')) return
           
-          // แยก Firebase ออกมาเป็นก้อนใหญ่ 1 ก้อน (เพราะใช้หลายที่)
-          if (id.includes('firebase')) return 'vendor-firebase'
+          // แยก Firebase เป็น chunk ย่อย — โหลดแบบขนาน ลด main-thread parse ครั้งเดียว
+          if (id.includes('firebase')) {
+            if (id.includes('firebase/app')) return 'firebase-app'
+            if (id.includes('firebase/auth')) return 'firebase-auth'
+            if (id.includes('firebase/firestore')) return 'firebase-firestore'
+            if (id.includes('firebase/storage')) return 'firebase-storage'
+            return 'vendor-firebase'
+          }
           
-          // แยก Lucide icons — ป้องกันไม่ให้ไปรวมกับ vendor หลัก
           if (id.includes('lucide-react')) return 'vendor-icons'
           
-          // แยกส่วนที่ใช้เฉพาะใน Admin
           if (id.includes('@dnd-kit') || id.includes('recharts')) {
             return 'vendor-admin-tools'
           }
           
-          if (id.includes('swiper')) return 'vendor-swiper'
           if (id.includes('react-router')) return 'vendor-router'
           
           return 'vendor'
