@@ -1,5 +1,5 @@
 import { useSearchParams, Link, useNavigate } from 'react-router-dom'
-import { useEffect, useMemo, useState, useCallback, useRef, lazy, Suspense } from 'react'
+import { createElement, useEffect, useMemo, useState, useCallback, useRef, lazy, Suspense } from 'react'
 import { useSearch } from '../context/SearchContext'
 import { getPropertiesOnceForListing } from '../lib/firestore'
 import PageLayout from '../components/PageLayout'
@@ -13,7 +13,6 @@ import {
 } from 'lucide-react'
 
 const PropertiesMap = lazy(() => import('../components/PropertiesMap'))
-import { searchProperties } from '../lib/smartSearch'
 import { filterProperties } from '../lib/globalSearch'
 import { useTypingPlaceholder } from '../components/TypingPlaceholder'
 import { Helmet } from 'react-helmet-async'
@@ -76,7 +75,7 @@ const FilterItem = ({ label, value, options, onChange, icon: Icon, activeColor =
       >
         <div className="flex items-center gap-2.5 min-w-0">
           <div className={`p-1.5 rounded-lg ${value ? 'bg-blue-100 ' + activeColor : 'bg-slate-200 text-slate-400'}`}>
-            <Icon className="h-3.5 w-3.5" />
+            {createElement(Icon, { className: 'h-3.5 w-3.5' })}
           </div>
           <span className={`text-sm font-semibold truncate ${value ? 'text-slate-900' : 'text-slate-500'}`}>
             {selectedOption.label}
@@ -111,7 +110,7 @@ const FilterItem = ({ label, value, options, onChange, icon: Icon, activeColor =
 }
 
 export default function Properties() {
-  const [searchParams, setSearchParams] = useSearchParams()
+  const [searchParams] = useSearchParams()
   const navigate = useNavigate()
 
   // Safety check for useSearch context
@@ -121,8 +120,8 @@ export default function Properties() {
     filters = searchContext?.filters || {}
     updateFilters = searchContext?.updateFilters || (() => { })
     clearFilters = searchContext?.clearFilters || (() => { })
-  } catch (error) {
-    console.error('SearchContext error:', error)
+  } catch (_error) {
+    console.error('SearchContext error:', _error)
     filters = {}
     updateFilters = () => { }
     clearFilters = () => { }
@@ -182,7 +181,7 @@ export default function Properties() {
       try {
         const props = await getPropertiesOnceForListing(true, 300)
         if (mounted) setProperties(Array.isArray(props) ? props : [])
-      } catch (error) {
+      } catch {
         if (mounted) setProperties([])
       }
     }
@@ -256,8 +255,8 @@ export default function Properties() {
           propertySubStatus, feature, tag, isRental: isRentalFilter,
         })
       }
-    } catch (error) {
-      console.error('URL Parameter Parsing error:', error)
+    } catch (_error) {
+      console.error('URL Parameter Parsing error:', _error)
     }
   }, [searchParams, updateFilters, isRentalFilter])
 
@@ -281,7 +280,7 @@ export default function Properties() {
         areaMax: filters?.areaMax || searchParams.get('areaMax') || '',
       }
       return filterProperties(properties, searchFilters)
-    } catch (error) {
+    } catch {
       return []
     }
   }, [properties, debouncedKeyword, filters, searchParams, isRentalFilter])
@@ -334,6 +333,85 @@ export default function Properties() {
       resultsTopRef.current.scrollIntoView({ behavior: 'smooth', block: 'start' })
     }
   }
+
+  const navigateWithParams = useCallback((params) => {
+    const nextQuery = params.toString()
+    prevSearchParamsRef.current = nextQuery
+    navigate(nextQuery ? `/properties?${nextQuery}` : '/properties')
+
+    if (resultsTopRef.current) {
+      resultsTopRef.current.scrollIntoView({ behavior: 'smooth', block: 'start' })
+    }
+  }, [navigate])
+
+  const handleRemoveFilter = useCallback((filter) => {
+    const params = new URLSearchParams(searchParams)
+    params.delete('page')
+
+    switch (filter.type) {
+      case 'keyword':
+        setSearchQuery('')
+        setDebouncedKeyword('')
+        params.delete('q')
+        params.delete('search')
+        break
+      case 'tag':
+        updateFilters({ tag: '' })
+        params.delete('tag')
+        break
+      case 'feature':
+        updateFilters({ feature: '' })
+        params.delete('feature')
+        break
+      case 'propertyType':
+        updateFilters({ propertyType: '' })
+        params.delete('propertyType')
+        break
+      case 'location':
+        updateFilters({ location: '' })
+        params.delete('location')
+        break
+      case 'propertySubStatus':
+        updateFilters({ propertySubStatus: '' })
+        params.delete('status')
+        break
+      case 'price':
+        updateFilters({ priceMin: '', priceMax: '' })
+        params.delete('priceMin')
+        params.delete('priceMax')
+        break
+      case 'bedrooms':
+        updateFilters({ bedrooms: '' })
+        params.delete('bedrooms')
+        break
+      case 'bathrooms':
+        updateFilters({ bathrooms: '' })
+        params.delete('bathrooms')
+        break
+      case 'area':
+        updateFilters({ areaMin: '', areaMax: '' })
+        params.delete('areaMin')
+        params.delete('areaMax')
+        break
+      case 'isRental':
+        updateFilters({ isRental: null, subListingType: '' })
+        params.delete('type')
+        params.delete('listingType')
+        params.delete('subListingType')
+        break
+      default:
+        break
+    }
+
+    navigateWithParams(params)
+  }, [navigateWithParams, searchParams, updateFilters])
+
+  const handleClearAllFilters = useCallback(() => {
+    clearFilters()
+    setSearchQuery('')
+    setDebouncedKeyword('')
+    navigateWithParams(new URLSearchParams())
+  }, [clearFilters, navigateWithParams])
 
   const getPageNumbers = () => {
     const pages = []
@@ -415,7 +493,18 @@ export default function Properties() {
             </aside>
 
             <div className="flex-1 min-w-0">
-              <ActiveSearchCriteriaBar keyword={debouncedKeyword} filters={{ ...filters, tag: searchParams.get('tag') || filters.tag || '', isRental: isRentalFilter !== null ? isRentalFilter : filters.isRental, feature: searchParams.get('feature') || filters.feature || '' }} resultCount={safeFiltered.length} onRemoveFilter={() => handlePageChange(1)} onClearAll={() => handlePageChange(1)} />
+              <ActiveSearchCriteriaBar
+                keyword={debouncedKeyword}
+                filters={{
+                  ...filters,
+                  tag: searchParams.get('tag') || filters.tag || '',
+                  isRental: isRentalFilter !== null ? isRentalFilter : filters.isRental,
+                  feature: searchParams.get('feature') || filters.feature || '',
+                }}
+                resultCount={safeFiltered.length}
+                onRemoveFilter={handleRemoveFilter}
+                onClearAll={handleClearAllFilters}
+              />
 
               <div className="mb-8 overflow-hidden rounded-2xl border border-slate-200 shadow-sm bg-white">
                 <div className="h-[320px] relative">
