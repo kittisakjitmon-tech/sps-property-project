@@ -13,6 +13,7 @@ import { getPropertiesOnce, getPopularLocationsOnce, getHomepageSectionsOnce, fi
 const DynamicPropertySection = lazy(() => import('../components/DynamicPropertySection'))
 import { getOptimizedImageUrl, isValidImageUrl } from '../lib/cloudinary'
 import { useInView } from '../hooks/useInView'
+import { getBlogPath } from '../lib/blogSlug'
 
 /** การ์ดทำเลยอดฮิต - placeholder น้ำเงินเป็นพื้นหลังเสมอ รูปทับด้านบนเมื่อโหลดได้ */
 const PLACEHOLDER_BG = 'bg-gradient-to-br from-blue-600 to-blue-500'
@@ -396,7 +397,7 @@ export default function Home() {
                   return (
                     <Link
                       key={blog.id}
-                      to={`/blogs/${blog.id}`}
+                      to={getBlogPath(blog)}
                       className="group bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden hover:shadow-lg hover:-translate-y-1 transition-all duration-300"
                     >
                       <div className="relative aspect-video bg-slate-100 overflow-hidden">

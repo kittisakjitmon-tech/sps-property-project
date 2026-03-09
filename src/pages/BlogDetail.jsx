@@ -1,22 +1,25 @@
 import { useState, useEffect } from 'react'
-import { useParams, Link } from 'react-router-dom'
+import { useParams, Link, useNavigate } from 'react-router-dom'
 import { Calendar, ArrowLeft, Play } from 'lucide-react'
 import PageLayout from '../components/PageLayout'
 import { getBlogByIdOnce } from '../lib/firestore'
 import { Helmet } from 'react-helmet-async'
 import { getCloudinaryLargeUrl, getCloudinaryMediumUrl, isValidImageUrl } from '../lib/cloudinary'
+import { extractIdFromSlug, generateBlogSlug, getBlogPath } from '../lib/blogSlug'
 
 export default function BlogDetail() {
-  const { id } = useParams()
+  const { slug } = useParams()
+  const navigate = useNavigate()
+  const blogId = extractIdFromSlug(slug)
   const [blog, setBlog] = useState(null)
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    if (!id) return
+    if (!blogId) return
 
     const loadBlog = async () => {
       try {
-        const blogData = await getBlogByIdOnce(id)
+        const blogData = await getBlogByIdOnce(blogId)
         if (!blogData || !blogData.published) {
           setBlog(null)
         } else {
@@ -31,7 +34,15 @@ export default function BlogDetail() {
     }
 
     loadBlog()
-  }, [id])
+  }, [blogId])
+
+  useEffect(() => {
+    if (!blog) return
+    const canonical = generateBlogSlug(blog)
+    if (canonical && slug !== canonical) {
+      navigate(`/blogs/${canonical}`, { replace: true })
+    }
+  }, [blog, slug, navigate])
 
   const formatDate = (timestamp) => {
     if (!timestamp) return ''
@@ -99,7 +110,7 @@ export default function BlogDetail() {
 
   const title = `${blog.title} | SPS Property Solution`
   const description = (blog.content || '').substring(0, 160) + '...'
-  const canonicalUrl = `https://spspropertysolution.com/blogs/${blog.id}`
+  const canonicalUrl = `https://spspropertysolution.com${getBlogPath(blog)}`
   const ogImage = coverImage ? getCloudinaryLargeUrl(coverImage) : 'https://spspropertysolution.com/icon.png'
 
   return (

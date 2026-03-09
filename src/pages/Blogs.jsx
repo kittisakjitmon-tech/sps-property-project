@@ -5,6 +5,7 @@ import PageLayout from '../components/PageLayout'
 import { getPublishedBlogs } from '../lib/firestore'
 import { getOptimizedImageUrl, isValidImageUrl } from '../lib/cloudinary'
 import { Helmet } from 'react-helmet-async'
+import { getBlogPath } from '../lib/blogSlug'
 
 export default function Blogs() {
   const [blogs, setBlogs] = useState([])
@@ -119,7 +120,7 @@ export default function Blogs() {
                   return (
                     <Link
                       key={blog.id}
-                      to={`/blogs/${blog.id}`}
+                      to={getBlogPath(blog)}
                       className="group bg-white rounded-lg shadow-sm border border-slate-200 overflow-hidden hover:shadow-md transition-all duration-300"
                     >
                       {/* Cover Image */}
