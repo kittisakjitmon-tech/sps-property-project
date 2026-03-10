@@ -42,6 +42,17 @@ function buildEnhancedImageUrl(cloudName, publicId, format) {
 }
 
 /**
+ * Extract ID from slug format: {content}--{id}
+ * ใช้สำหรับ dynamicMeta และ blogMeta ในการแตก Document ID จาก URL slug
+ * เช่น: 'บางแสน-ชลบุรี-บ้าน-ขาย-2.5m--doc123' → 'doc123'
+ */
+function extractIdFromSlug(slugParam) {
+  if (!slugParam) return null
+  const sep = slugParam.lastIndexOf('--')
+  return sep !== -1 ? slugParam.substring(sep + 2) : slugParam
+}
+
+/**
  * Storage Trigger: เมื่อมีไฟล์รูปใหม่ใน properties/{propertyId}/...
  * 1) กรองเฉพาะรูปภาพในโฟลเดอร์ properties/
  * 2) ดาวน์โหลดไฟล์ -> อัปโหลดไป Cloudinary พร้อม AI enhancement
@@ -486,6 +497,20 @@ exports.sitemap = functions
   })
 
 /**
+ * Escape HTML special characters to prevent meta tag injection
+ * ใช้เพื่อปกป้องจากการทำลาย HTML structure ด้วย special characters ในชื่อ description และ URL
+ */
+function escapeHtml(str) {
+  if (str == null || typeof str !== 'string') return ''
+  return str
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;')
+}
+
+/**
  * Dynamic OG Meta Tags Generator
  * Intercepts requests for /properties/:id
  * If the request is from a social bot (Facebook, LINE, etc.), it queries Firestore and returns an HTML skeleton with correct Open Graph meta tags.
@@ -534,7 +559,7 @@ exports.dynamicMeta = functions
     }
 
     // /properties เท่านั้น (หน้ารายการ) → ส่ง SPA
-    const propertyId = pathSegments[1]
+    const propertyId = extractIdFromSlug(pathSegments[1])
     if (!propertyId) {
       return serveSpaIndex()
     }
@@ -555,36 +580,43 @@ exports.dynamicMeta = functions
         const imageUrl = property.images && property.images.length > 0 ? property.images[0] : 'https://spspropertysolution.com/icon.png'
         const url = `https://spspropertysolution.com/properties/${propertyId}`
 
+        // Escape HTML to prevent special characters from breaking meta tags
+        const safeTitle = escapeHtml(title)
+        const safeDesc = escapeHtml(description)
+        const safeImage = escapeHtml(imageUrl)
+        const safeUrl = escapeHtml(url)
+
         // Return a basic HTML structure with only the meta tags bots care about
         const htmlContent = `
           <!DOCTYPE html>
           <html lang="th">
           <head>
             <meta charset="UTF-8">
-            <title>${title}</title>
-            <meta name="description" content="${description}">
+            <title>${safeTitle}</title>
+            <meta name="description" content="${safeDesc}">
             
             <!-- Open Graph / Facebook / LINE -->
             <meta property="og:type" content="article">
-            <meta property="og:title" content="${title}">
-            <meta property="og:description" content="${description}">
-            <meta property="og:image" content="${imageUrl}">
-            <meta property="og:url" content="${url}">
+            <meta property="og:title" content="${safeTitle}">
+            <meta property="og:description" content="${safeDesc}">
+            <meta property="og:image" content="${safeImage}">
+            <meta property="og:url" content="${safeUrl}">
             
             <!-- Twitter -->
             <meta name="twitter:card" content="summary_large_image">
-            <meta name="twitter:title" content="${title}">
-            <meta name="twitter:description" content="${description}">
-            <meta name="twitter:image" content="${imageUrl}">
+            <meta name="twitter:title" content="${safeTitle}">
+            <meta name="twitter:description" content="${safeDesc}">
+            <meta name="twitter:image" content="${safeImage}">
           </head>
           <body>
-            <h1>${title}</h1>
-            <p>${description}</p>
-            <img src="${imageUrl}" alt="${title}">
+            <h1>${safeTitle}</h1>
+            <p>${safeDesc}</p>
+            <img src="${safeImage}" alt="${safeTitle}">
           </body>
           </html>
         `
 
+        res.set('Content-Type', 'text/html; charset=utf-8')
         res.set('Cache-Control', 'public, max-age=300, s-maxage=600')
         return res.status(200).send(htmlContent)
 
@@ -705,16 +737,6 @@ exports.shareMeta = functions
  * Dynamic OG Meta for Blog Share (Facebook / LINE)
  * เมื่อ bot เข้า /blogs/:id จะได้ HTML ที่มี og:image = รูป cover บทความ
  */
-function escapeHtml(str) {
-  if (str == null || typeof str !== 'string') return ''
-  return str
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#39;')
-}
-
 exports.blogMeta = functions
   .runWith({
     timeoutSeconds: 30,
@@ -734,7 +756,7 @@ exports.blogMeta = functions
     if (pathSegments[0] !== 'blogs' || !pathSegments[1]) {
       return res.status(404).send('Not Found')
     }
-    const blogId = pathSegments[1]
+    const blogId = extractIdFromSlug(pathSegments[1])
 
     if (isBot) {
       try {
