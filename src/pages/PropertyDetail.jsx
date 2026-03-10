@@ -2,6 +2,7 @@ import { useState, useEffect, useId, lazy, Suspense } from 'react'
 import { useParams, Link, useSearchParams, useNavigate } from 'react-router-dom'
 import { Helmet } from 'react-helmet-async'
 import { MapPin, Bed, Bath, Maximize2, Phone, MessageCircle, Share2, CheckCircle2, Copy } from 'lucide-react'
+import { createIsgdShortUrl } from '../lib/isgd'
 import { getPropertyByIdOnce, createAppointment, createOrReuseShareLink, recordPropertyView } from '../lib/firestore'
 import PageLayout from '../components/PageLayout'
 import Toast from '../components/Toast'
@@ -487,6 +488,8 @@ export default function PropertyDetail() {
   const [galleryIndex, setGalleryIndex] = useState(0)
   const [toastMessage, setToastMessage] = useState('')
   const [showToast, setShowToast] = useState(false)
+  const [isCopying, setIsCopying] = useState(false)
+  const [copied, setCopied] = useState(false)
 
   useEffect(() => {
     let cancelled = false
@@ -636,6 +639,35 @@ export default function PropertyDetail() {
       setToastMessage('ไม่สามารถสร้างลิงก์แชร์ได้ กรุณาลองใหม่')
       setShowToast(true)
       setTimeout(() => setShowToast(false), 2500)
+    }
+  }
+
+  const handleCopyLink = async () => {
+    if (!property?.id) return
+    setIsCopying(true)
+    try {
+      const longUrl = window.location.href
+      const shortUrl = await createIsgdShortUrl(longUrl)
+      await navigator.clipboard.writeText(shortUrl)
+      if (shortUrl === longUrl) {
+        console.warn('is.gd shortening returned original URL; copy used long URL')
+        setToastMessage(`คัดลอกลิงก์แล้ว: ${shortUrl}`)
+      } else {
+        setToastMessage(`คัดลอกลิงก์แล้ว: ${shortUrl}`)
+      }
+      setShowToast(true)
+      setCopied(true)
+      setTimeout(() => {
+        setCopied(false)
+        setShowToast(false)
+      }, 3000)
+    } catch (err) {
+      console.error('Copy link error:', err)
+      setToastMessage('ไม่สามารถคัดลอกลิงก์ได้ กรุณาลองใหม่')
+      setShowToast(true)
+      setTimeout(() => setShowToast(false), 2500)
+    } finally {
+      setIsCopying(false)
     }
   }
 
@@ -839,12 +871,26 @@ export default function PropertyDetail() {
                     <button
                       type="button"
                       onClick={handleShare}
-                      className="ml-4 flex items-center gap-2 px-4 py-2.5 min-h-[44px] min-w-[44px] rounded-lg bg-blue-900 text-white hover:bg-blue-800 transition font-medium shrink-0 [touch-action:manipulation]"
+                      className="ml-4 flex items-center gap-2 px-4 py-2.5 min-h-[44px] min-w-[44px] rounded-lg bg-blue-600 text-white hover:bg-blue-700 transition font-medium shrink-0 [touch-action:manipulation]"
                       aria-label="แชร์ให้ลูกค้า"
                     >
                       <Share2 className="h-4 w-4" />
                       <span className="hidden sm:inline">แชร์ให้ลูกค้า</span>
                       <span className="sm:hidden">แชร์</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleCopyLink}
+                      className="ml-3 flex items-center gap-2 px-4 py-2.5 min-h-[44px] min-w-[44px] rounded-xl bg-gray-100 text-gray-800 hover:bg-gray-200 shadow-sm transition-transform transform hover:-translate-y-0.5 active:translate-y-0 duration-150 font-medium shrink-0 [touch-action:manipulation]"
+                      aria-label="คัดลอกลิงก์"
+                    >
+                      {isCopying ? (
+                        <span className="inline-block w-4 h-4 border-2 border-gray-400 border-t-transparent rounded-full animate-spin" />
+                      ) : (
+                        <Copy className="h-4 w-4" />
+                      )}
+                      <span className="hidden sm:inline">คัดลอกลิงก์</span>
+                      <span className="sm:hidden">คัดลอก</span>
                     </button>
                 </div>
 
