@@ -19,7 +19,8 @@ import {
 } from 'lucide-react'
 import { usePublicAuth } from '../context/PublicAuthContext'
 import { useNavigate } from 'react-router-dom'
-import logo from '../assets/logo.png'; // นำเข้าไฟล์โลโก้
+import { useHoverMenu } from '../hooks/useHoverMenu'
+import logo from '../assets/logo.png' // นำเข้าไฟล์โลโก้
 
 const buyHomeLinks = [
   { to: '/properties?listingType=sale', label: 'รวมโครงการทั้งหมด', icon: Home },
@@ -33,100 +34,43 @@ const serviceLinks = [
   { to: '/loan-services', label: 'สินเชื่อ & ปิดภาระหนี้', icon: CreditCard },
   { to: '/post', label: 'ฝากขาย / เช่า', icon: Megaphone },
   { to: '/blogs', label: 'บทความ', icon: BookOpen },
-  { to: '/contact', label: 'ติดต่อเรา', icon: Megaphone },
 ]
 
 export default function Navbar() {
+  const buyMenu = useHoverMenu()
+  const serviceMenu = useHoverMenu()
+  const userMenu = useHoverMenu()
   const [mobileOpen, setMobileOpen] = useState(false)
-  const [buyMenuOpen, setBuyMenuOpen] = useState(false)
-  const [serviceMenuOpen, setServiceMenuOpen] = useState(false)
   const [mobileBuyOpen, setMobileBuyOpen] = useState(false)
   const [mobileServiceOpen, setMobileServiceOpen] = useState(false)
-  const [userMenuOpen, setUserMenuOpen] = useState(false)
   const desktopMenuRef = useRef(null)
-  const buyCloseTimerRef = useRef(null)
-  const serviceCloseTimerRef = useRef(null)
-  const userMenuCloseTimerRef = useRef(null)
   const propertiesPrefetchedRef = useRef(false)
   const { user, userRole, userProfile, logout, isAgent } = usePublicAuth()
+  const navigate = useNavigate()
 
   const prefetchProperties = () => {
     if (propertiesPrefetchedRef.current) return
     propertiesPrefetchedRef.current = true
     import('../pages/Properties')
   }
-  const navigate = useNavigate()
-
-  const clearBuyCloseTimer = () => {
-    if (buyCloseTimerRef.current) {
-      clearTimeout(buyCloseTimerRef.current)
-      buyCloseTimerRef.current = null
-    }
-  }
-
-  const clearServiceCloseTimer = () => {
-    if (serviceCloseTimerRef.current) {
-      clearTimeout(serviceCloseTimerRef.current)
-      serviceCloseTimerRef.current = null
-    }
-  }
-
-  const clearUserMenuCloseTimer = () => {
-    if (userMenuCloseTimerRef.current) {
-      clearTimeout(userMenuCloseTimerRef.current)
-      userMenuCloseTimerRef.current = null
-    }
-  }
-
-  const scheduleBuyClose = () => {
-    clearBuyCloseTimer()
-    buyCloseTimerRef.current = setTimeout(() => {
-      setBuyMenuOpen(false)
-      buyCloseTimerRef.current = null
-    }, 100)
-  }
-
-  const scheduleServiceClose = () => {
-    clearServiceCloseTimer()
-    serviceCloseTimerRef.current = setTimeout(() => {
-      setServiceMenuOpen(false)
-      serviceCloseTimerRef.current = null
-    }, 100)
-  }
-
-  const scheduleUserMenuClose = () => {
-    clearUserMenuCloseTimer()
-    userMenuCloseTimerRef.current = setTimeout(() => {
-      setUserMenuOpen(false)
-      userMenuCloseTimerRef.current = null
-    }, 100)
-  }
 
   const handleLogout = async () => {
     await logout()
-    setUserMenuOpen(false)
+    userMenu.closeMenu()
     navigate('/')
   }
 
   useEffect(() => {
     function handleClickOutside(e) {
       if (desktopMenuRef.current && !desktopMenuRef.current.contains(e.target)) {
-        setBuyMenuOpen(false)
-        setServiceMenuOpen(false)
-        setUserMenuOpen(false)
+        buyMenu.closeMenu()
+        serviceMenu.closeMenu()
+        userMenu.closeMenu()
       }
     }
     document.addEventListener('mousedown', handleClickOutside)
     return () => document.removeEventListener('mousedown', handleClickOutside)
-  }, [])
-
-  useEffect(() => {
-    return () => {
-      clearBuyCloseTimer()
-      clearServiceCloseTimer()
-      clearUserMenuCloseTimer()
-    }
-  }, [])
+  }, [buyMenu, serviceMenu, userMenu])
 
   return (
     <header className="sticky top-0 z-[100] w-full bg-white border-b border-gray-200">
@@ -149,28 +93,26 @@ export default function Navbar() {
             <div
               className="relative"
               onMouseEnter={() => {
-                clearBuyCloseTimer()
-                setBuyMenuOpen(true)
+                buyMenu.openMenu()
                 prefetchProperties()
               }}
-              onMouseLeave={scheduleBuyClose}
+              onMouseLeave={buyMenu.scheduleClose}
             >
               <button
                 type="button"
                 onClick={() => {
-                  clearBuyCloseTimer()
-                  setBuyMenuOpen((prev) => !prev)
-                  setServiceMenuOpen(false)
+                  buyMenu.toggle()
+                  serviceMenu.closeMenu()
                 }}
                 className="nav-link inline-flex items-center gap-1 text-[15px] font-medium text-gray-600 hover:text-blue-600 transition-colors duration-200 whitespace-nowrap bg-transparent border-0 cursor-pointer py-2"
               >
                 ซื้อบ้าน
-                <ChevronDown className={`h-4 w-4 transition-transform ${buyMenuOpen ? 'rotate-180' : ''}`} />
+                <ChevronDown className={`h-4 w-4 transition-transform ${buyMenu.open ? 'rotate-180' : ''}`} />
               </button>
 
               <div
                 className={`absolute left-0 top-full mt-2 w-72 bg-white rounded-xl shadow-lg border border-slate-200 py-2 z-50 transition-all duration-200 ${
-                  buyMenuOpen ? 'opacity-100 translate-y-0 pointer-events-auto' : 'opacity-0 -translate-y-1 pointer-events-none'
+                  buyMenu.open ? 'opacity-100 translate-y-0 pointer-events-auto' : 'opacity-0 -translate-y-1 pointer-events-none'
                 }`}
               >
                 {buyHomeLinks.map(({ to, label, icon: Icon, highlight }) => (
@@ -182,10 +124,7 @@ export default function Navbar() {
                         ? 'font-semibold text-red-600 hover:bg-red-50'
                         : 'text-slate-700 hover:bg-slate-50'
                     }`}
-                    onClick={() => {
-                      clearBuyCloseTimer()
-                      setBuyMenuOpen(false)
-                    }}
+                    onClick={() => buyMenu.closeMenu()}
                   >
                     <Icon className={`h-4 w-4 ${highlight ? 'text-red-500' : 'text-slate-500'}`} />
                     {label}
@@ -201,28 +140,24 @@ export default function Navbar() {
             {/* Service Dropdown */}
             <div
               className="relative"
-              onMouseEnter={() => {
-                clearServiceCloseTimer()
-                setServiceMenuOpen(true)
-              }}
-              onMouseLeave={scheduleServiceClose}
+              onMouseEnter={serviceMenu.openMenu}
+              onMouseLeave={serviceMenu.scheduleClose}
             >
               <button
                 type="button"
                 onClick={() => {
-                  clearServiceCloseTimer()
-                  setServiceMenuOpen((prev) => !prev)
-                  setBuyMenuOpen(false)
+                  serviceMenu.toggle()
+                  buyMenu.closeMenu()
                 }}
                 className="nav-link inline-flex items-center gap-1 text-[15px] font-medium text-gray-600 hover:text-blue-600 transition-colors duration-200 whitespace-nowrap bg-transparent border-0 cursor-pointer py-2"
               >
                 บริการของเรา
-                <ChevronDown className={`h-4 w-4 transition-transform ${serviceMenuOpen ? 'rotate-180' : ''}`} />
+                <ChevronDown className={`h-4 w-4 transition-transform ${serviceMenu.open ? 'rotate-180' : ''}`} />
               </button>
 
               <div
                 className={`absolute left-0 top-full mt-2 w-72 bg-white rounded-xl shadow-lg border border-slate-200 py-2 z-50 transition-all duration-200 ${
-                  serviceMenuOpen ? 'opacity-100 translate-y-0 pointer-events-auto' : 'opacity-0 -translate-y-1 pointer-events-none'
+                  serviceMenu.open ? 'opacity-100 translate-y-0 pointer-events-auto' : 'opacity-0 -translate-y-1 pointer-events-none'
                 }`}
               >
                 {serviceLinks.map(({ to, label, icon: Icon }) => (
@@ -230,10 +165,7 @@ export default function Navbar() {
                     key={to}
                     to={to}
                     className="flex items-center gap-2 px-4 py-2.5 text-sm text-slate-700 hover:bg-slate-50 transition"
-                    onClick={() => {
-                      clearServiceCloseTimer()
-                      setServiceMenuOpen(false)
-                    }}
+                    onClick={() => serviceMenu.closeMenu()}
                   >
                     <Icon className="h-4 w-4 text-slate-500" />
                     {label}
@@ -269,19 +201,15 @@ export default function Navbar() {
               (isAgent() || userRole) ? (
               <div
                 className="relative"
-                onMouseEnter={() => {
-                  clearUserMenuCloseTimer()
-                  setUserMenuOpen(true)
-                }}
-                onMouseLeave={scheduleUserMenuClose}
+                onMouseEnter={userMenu.openMenu}
+                onMouseLeave={userMenu.scheduleClose}
               >
                 <button
                   type="button"
                   onClick={() => {
-                    clearUserMenuCloseTimer()
-                    setUserMenuOpen((prev) => !prev)
-                    setBuyMenuOpen(false)
-                    setServiceMenuOpen(false)
+                    userMenu.toggle()
+                    buyMenu.closeMenu()
+                    serviceMenu.closeMenu()
                   }}
                   className="flex items-center gap-2 px-3 py-2 rounded-lg hover:bg-gray-100 transition min-h-[44px] focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2"
                 >
@@ -299,12 +227,12 @@ export default function Navbar() {
                   <span className="text-sm font-medium text-slate-700 hidden lg:inline">
                     {userProfile?.username || user.displayName || user.email?.split('@')[0] || 'ผู้ใช้'}
                   </span>
-                  <ChevronDown className={`h-4 w-4 text-slate-600 transition-transform ${userMenuOpen ? 'rotate-180' : ''}`} />
+                  <ChevronDown className={`h-4 w-4 text-slate-600 transition-transform ${userMenu.open ? 'rotate-180' : ''}`} />
                 </button>
 
                 <div
                   className={`absolute right-0 top-full mt-2 w-56 bg-white rounded-xl shadow-lg border border-slate-200 py-2 z-50 transition-all duration-200 ${
-                    userMenuOpen ? 'opacity-100 translate-y-0 pointer-events-auto' : 'opacity-0 -translate-y-1 pointer-events-none'
+                    userMenu.open ? 'opacity-100 translate-y-0 pointer-events-auto' : 'opacity-0 -translate-y-1 pointer-events-none'
                   }`}
                 >
                   <div className="px-4 py-2 border-b border-slate-100">
@@ -316,10 +244,7 @@ export default function Navbar() {
                   {isAgent() && (
                     <Link
                       to="/profile-settings"
-                      onClick={() => {
-                        clearUserMenuCloseTimer()
-                        setUserMenuOpen(false)
-                      }}
+                      onClick={() => userMenu.closeMenu()}
                       className="flex items-center gap-2 px-4 py-2.5 text-sm text-slate-700 hover:bg-slate-50 transition"
                     >
                       <Settings className="h-4 w-4 text-slate-500" />

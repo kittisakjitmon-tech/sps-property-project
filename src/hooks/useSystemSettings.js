@@ -19,14 +19,25 @@ const DEFAULT_SETTINGS = {
  * พร้อมระบบ Cache ใน localStorage เพื่อความรวดเร็วในการโหลดครั้งถัดไป
  */
 export function useSystemSettings() {
-    // โหลดค่าจาก cache ก่อนเพื่อความเร็ว (Optimistic)
+    // โหลดค่าจาก cache ก่อนเพื่อความเร็ว (Optimistic) — ใช้ try/catch ป้องกัน JSON เสียหาย
     const [settings, setSettings] = useState(() => {
-        const cached = localStorage.getItem(CACHE_KEY)
-        return cached ? { ...DEFAULT_SETTINGS, ...JSON.parse(cached) } : DEFAULT_SETTINGS
+        try {
+            const cached = localStorage.getItem(CACHE_KEY)
+            return cached ? { ...DEFAULT_SETTINGS, ...JSON.parse(cached) } : DEFAULT_SETTINGS
+        } catch {
+            localStorage.removeItem(CACHE_KEY)
+            return DEFAULT_SETTINGS
+        }
     })
-    
+
     // ถ้ามี cache แล้วให้ loading เป็น false ทันทีเพื่อแสดงหน้าเว็บ
-    const [loading, setLoading] = useState(!localStorage.getItem(CACHE_KEY))
+    const [loading, setLoading] = useState(() => {
+        try {
+            return !localStorage.getItem(CACHE_KEY)
+        } catch {
+            return true
+        }
+    })
 
     useEffect(() => {
         const unsub = getSystemSettingsSnapshot((data) => {

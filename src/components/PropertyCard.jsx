@@ -75,7 +75,7 @@ function PropertyCard({ property, compact = false, home = false }) {
         <Link to={getShortPropertyPath(property)} className="block w-full h-full">
           <img
             src={getCloudinaryThumbUrl(property.coverImageUrl || property.images?.[0])}
-            alt=""
+            alt={`ภาพหน้าปก${typeLabel ? ` ${typeLabel}` : ''}${district ? ` ${district}` : ''}`}
             width={400}
             height={300}
             loading="lazy"

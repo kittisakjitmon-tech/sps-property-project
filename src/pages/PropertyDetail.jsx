@@ -172,7 +172,7 @@ function MortgageCalculator({ price, directInstallment }) {
   )
 }
 
-const GAS_WEBHOOK_URL = 'https://script.google.com/macros/s/AKfycbxXLqx7DQsmWF2WjcQM8OtwVkoFjIg3Vhw_MXtYTvlajlriy82qSIiV5cWisA3dHMDaCQ/exec'
+const GAS_WEBHOOK_URL = import.meta.env.VITE_GAS_WEBHOOK_URL || ''
 
 function validatePhone(phone) {
   const digits = phone.replace(/\D/g, '')
@@ -270,13 +270,8 @@ function LeadForm({ propertyId, propertyTitle, propertyPrice, isRental, onSucces
         setAgentVisitTime('')
       }
 
-      // Show success alert
-      const message = activeTab === 'customer'
-        ? 'ส่งคำขอนัดเยี่ยมชมสำเร็จ! เจ้าหน้าที่จะติดต่อกลับเร็วๆ นี้'
-        : 'ส่งคำขอนัดเยี่ยมชมสำเร็จ! เจ้าหน้าที่จะติดต่อกลับเร็วๆ นี้'
-      alert(message)
-
-      onSuccess?.()
+      // ส่ง message ผ่าน onSuccess callback (parent แสดง Toast แทน alert)
+      onSuccess?.('ส่งคำขอนัดเยี่ยมชมสำเร็จ! เจ้าหน้าที่จะติดต่อกลับเร็วๆ นี้')
     } catch (err) {
       console.error(err)
       onError?.()
@@ -1070,8 +1065,8 @@ export default function PropertyDetail() {
                       propertyTitle={property.title}
                       propertyPrice={property.price}
                       isRental={property.isRental}
-                      onSuccess={() => {
-                        setToastMessage('ส่งข้อมูลสำเร็จ เจ้าหน้าที่จะติดต่อกลับ')
+                      onSuccess={(message) => {
+                        setToastMessage(message || 'ส่งข้อมูลสำเร็จ เจ้าหน้าที่จะติดต่อกลับ')
                         setShowToast(true)
                         setTimeout(() => setShowToast(false), 3000)
                       }}
