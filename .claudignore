@@ -34,3 +34,4 @@ Thumbs.db
 *.jpeg
 *.svg
 docs/
+.continueignore

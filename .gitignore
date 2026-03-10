@@ -44,4 +44,5 @@ functions/.env
 *.njsproj
 *.sln
 *.sw?
+.continueignore
 .env

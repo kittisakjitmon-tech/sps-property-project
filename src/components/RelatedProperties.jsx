@@ -1,5 +1,4 @@
 import { useState, useEffect } from 'react'
-import { Link } from 'react-router-dom'
 import { collection, query, where, limit, getDocs } from 'firebase/firestore'
 import { db } from '../lib/firebase'
 import { MapPin, Bed, Bath, Maximize2 } from 'lucide-react'
@@ -37,8 +36,12 @@ export default function RelatedProperties({ currentPropertyId, district, type })
                     const snap1 = await getDocs(q1)
                     snap1.forEach(doc => {
                         if (!seen.has(doc.id)) {
-                            seen.add(doc.id)
-                            items.push({ id: doc.id, ...doc.data() })
+                            const data = doc.data()
+                            // ตรวจสอบ fields สำคัญ
+                            if (data?.id || data?.location?.district || data?.type) {
+                                seen.add(doc.id)
+                                items.push({ id: doc.id, ...data })
+                            }
                         }
                     })
                 }
@@ -54,8 +57,11 @@ export default function RelatedProperties({ currentPropertyId, district, type })
                     const snap2 = await getDocs(q2)
                     snap2.forEach(doc => {
                         if (!seen.has(doc.id) && items.length < 3) {
-                            seen.add(doc.id)
-                            items.push({ id: doc.id, ...doc.data() })
+                            const data = doc.data()
+                            if (data?.location?.district || data?.type) {
+                                seen.add(doc.id)
+                                items.push({ id: doc.id, ...data })
+                            }
                         }
                     })
                 }
@@ -70,8 +76,11 @@ export default function RelatedProperties({ currentPropertyId, district, type })
                     const snap3 = await getDocs(q3)
                     snap3.forEach(doc => {
                         if (!seen.has(doc.id) && items.length < 3) {
-                            seen.add(doc.id)
-                            items.push({ id: doc.id, ...doc.data() })
+                            const data = doc.data()
+                            if (data?.location?.district || data?.title) {
+                                seen.add(doc.id)
+                                items.push({ id: doc.id, ...data })
+                            }
                         }
                     })
                 }
@@ -108,16 +117,36 @@ export default function RelatedProperties({ currentPropertyId, district, type })
 
     if (related.length === 0) return null
 
+    console.debug('RelatedProperties - Rendering items:', related.map(p => ({ 
+        id: p.id, 
+        title: p.title,
+        path: getPropertyPath(p) 
+    })))
+
     return (
         <div className="mt-12 mb-8">
             <h3 className="text-xl font-bold text-slate-900 mb-6 border-b pb-4">บ้านที่คุณอาจสนใจ</h3>
             <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-6">
                 {related.map(prop => {
+                    if (!prop?.id) return null // ข้ามถ้าไม่มี id
+                    
                     const rawCover = (prop.images && prop.images.length > 0) ? prop.images[0] : null
                     const coverImage = rawCover && isValidImageUrl(rawCover) ? rawCover : null
+                    const propertyPath = getPropertyPath(prop)
+                    
+                    // ตรวจสอบว่า path ถูกต้องหรือไม่
+                    if (!propertyPath || propertyPath === '/properties') {
+                        console.warn('Invalid property path for property:', prop.id, prop)
+                        return null
+                    }
+
+                    const handleLinkClick = (e) => {
+                        console.debug('RelatedProperties link clicked:', prop.id, 'path:', propertyPath)
+                        // Let browser handle navigation naturally
+                    }
 
                     return (
-                        <Link key={prop.id} to={getPropertyPath(prop)} className="group bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden hover:shadow-md transition">
+                        <a key={prop.id} href={propertyPath} onClick={handleLinkClick} className="group bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden hover:shadow-md transition block no-underline cursor-pointer">
                             <div className="aspect-[4/3] bg-slate-200 overflow-hidden relative">
                                 {coverImage ? (
                                     <img src={getCloudinaryThumbUrl(coverImage)} alt={prop.title} width={400} height={300} loading="lazy" className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" />
@@ -139,7 +168,7 @@ export default function RelatedProperties({ currentPropertyId, district, type })
                                     <span className="flex items-center gap-1"><Bath className="h-3.5 w-3.5" /> {prop.bathrooms || '-'}</span>
                                 </div>
                             </div>
-                        </Link>
+                        </a>
                     )
                 })}
             </div>

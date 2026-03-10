@@ -26,24 +26,44 @@ function formatPriceForSlug(price) {
  * Format: {district}-{province}-{typeLabel}-{ขาย|เช่า}-{price}--{id}
  */
 export function generatePropertySlug(property) {
-  if (!property?.id) return ''
+  if (!property?.id) {
+    console.warn('Property missing id:', property)
+    return ''
+  }
 
   const parts = []
 
-  const loc = property.location || {}
-  if (loc.district) parts.push(sanitizeSlugPart(loc.district))
-  if (loc.province) parts.push(sanitizeSlugPart(loc.province))
+  // เพิ่มการตรวจสอบ location ที่อาจจะเป็น string หรือ object
+  let loc = property.location
+  if (typeof loc === 'string') {
+    // ถ้า location เป็น string ให้ใช้เป็น district
+    parts.push(sanitizeSlugPart(loc))
+  } else if (loc && typeof loc === 'object') {
+    if (loc.district) parts.push(sanitizeSlugPart(loc.district))
+    if (loc.province) parts.push(sanitizeSlugPart(loc.province))
+  }
 
   const typeLabel = getPropertyLabel(property.type)
   if (typeLabel) parts.push(sanitizeSlugPart(typeLabel))
 
-  const listingType = property.listingType || (property.isRental ? 'rent' : 'sale')
+  // จัดการกับ listingType - สามารถเป็น string หรือ boolean
+  let listingType = property.listingType
+  if (!listingType) {
+    listingType = property.isRental ? 'rent' : 'sale'
+  }
   parts.push(listingType === 'rent' ? 'เช่า' : 'ขาย')
 
   const priceSlug = formatPriceForSlug(property.price)
   if (priceSlug) parts.push(priceSlug)
 
-  const body = parts.filter(Boolean).join('-').replace(/-{2,}/g, '-')
+  const body = parts.filter(Boolean).join('-').replace(/-{2,}/g, '-').replace(/^-+|-+$/g, '')
+  
+  if (!body) {
+    console.warn('Empty slug body for property:', property.id, property)
+    // ถ้า slug ว่าง ให้ส่งคืนแค่ id เฉพาะ
+    return `property--${property.id}`
+  }
+  
   return `${body}--${property.id}`
 }
 
@@ -56,7 +76,24 @@ export function getPropertyPath(property) {
 
 /** Extract Firestore document ID from a slug param (backward-compatible) */
 export function extractIdFromSlug(slugParam) {
-  if (!slugParam) return null
-  const sep = slugParam.lastIndexOf('--')
-  return sep !== -1 ? slugParam.substring(sep + 2) : slugParam
+  if (!slugParam) {
+    console.warn('extractIdFromSlug: empty slug param')
+    return null
+  }
+  
+  const slug = String(slugParam).trim()
+  const sep = slug.lastIndexOf('--')
+  
+  if (sep === -1) {
+    console.warn('extractIdFromSlug: no -- separator found in slug:', slug)
+    return null
+  }
+  
+  const id = slug.substring(sep + 2)
+  if (!id) {
+    console.warn('extractIdFromSlug: empty id after separator in slug:', slug)
+    return null
+  }
+  
+  return id
 }
