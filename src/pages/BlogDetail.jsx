@@ -8,9 +8,10 @@ import { getCloudinaryLargeUrl, getCloudinaryMediumUrl, isValidImageUrl } from '
 import { extractIdFromSlug, generateBlogSlug, getBlogPath } from '../lib/blogSlug'
 
 export default function BlogDetail() {
-  const { slug } = useParams()
+  const { slug, id } = useParams()
   const navigate = useNavigate()
-  const blogId = extractIdFromSlug(slug)
+  // Support both /blogs/:slug and /b/:id routes
+  const blogId = slug ? extractIdFromSlug(slug) : id
   const [blog, setBlog] = useState(null)
   const [loading, setLoading] = useState(true)
 

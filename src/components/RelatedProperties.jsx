@@ -3,7 +3,7 @@ import { collection, query, where, limit, getDocs } from 'firebase/firestore'
 import { db } from '../lib/firebase'
 import { MapPin, Bed, Bath, Maximize2 } from 'lucide-react'
 import { getCloudinaryThumbUrl, isValidImageUrl } from '../lib/cloudinary'
-import { getPropertyPath } from '../lib/propertySlug'
+import { getShortPropertyPath } from '../lib/propertySlug'
 
 // Constants
 const formatPrice = (price, isRental, showPrice) => {
@@ -120,7 +120,7 @@ export default function RelatedProperties({ currentPropertyId, district, type })
     console.debug('RelatedProperties - Rendering items:', related.map(p => ({ 
         id: p.id, 
         title: p.title,
-        path: getPropertyPath(p) 
+        path: getShortPropertyPath(p) 
     })))
 
     return (
@@ -132,7 +132,7 @@ export default function RelatedProperties({ currentPropertyId, district, type })
                     
                     const rawCover = (prop.images && prop.images.length > 0) ? prop.images[0] : null
                     const coverImage = rawCover && isValidImageUrl(rawCover) ? rawCover : null
-                    const propertyPath = getPropertyPath(prop)
+                    const propertyPath = getShortPropertyPath(prop)
                     
                     // ตรวจสอบว่า path ถูกต้องหรือไม่
                     if (!propertyPath || propertyPath === '/properties') {

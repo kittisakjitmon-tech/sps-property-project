@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { MapPin } from 'lucide-react'
 import { formatPrice } from '../lib/priceFormat'
 import { loadLongdoMap } from '../lib/longdoMapLoader'
-import { getPropertyPath } from '../lib/propertySlug'
+import { getShortPropertyPath } from '../lib/propertySlug'
 
 export default function PropertiesMap({ properties, className = '' }) {
   const mapRef = useRef(null)
@@ -84,7 +84,7 @@ export default function PropertiesMap({ properties, className = '' }) {
       const locationText = property.location
         ? `${property.location.district || ''}, ${property.location.province || ''}`.trim()
         : ''
-      const detailUrl = getPropertyPath(property)
+      const detailUrl = getShortPropertyPath(property)
       // ปุ่มใหญ่ ง่ายต่อการแตะบนมือถือ: min-height 44px, touch-action: manipulation
       const infoContent = `
         <div style="min-width: 200px; padding: 10px;">

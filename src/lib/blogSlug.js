@@ -23,6 +23,12 @@ export function getBlogPath(blog) {
   return `/blogs/${generateBlogSlug(blog)}`
 }
 
+/** Short path for sharing blog via link (just ID) */
+export function getShortBlogPath(blog) {
+  if (!blog?.id) return '/blogs'
+  return `/b/${blog.id}`
+}
+
 /** Extract Firestore document ID from slug param (backward-compatible) */
 export function extractIdFromSlug(slugParam) {
   if (!slugParam) return null

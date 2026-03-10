@@ -473,13 +473,14 @@ function LeadForm({ propertyId, propertyTitle, propertyPrice, isRental, onSucces
 }
 
 export default function PropertyDetail() {
-  const { slug } = useParams()
+  const { slug, id } = useParams()
   const navigate = useNavigate()
   const [searchParams] = useSearchParams()
   const { user, isAgent } = usePublicAuth()
   const searchQuery = searchParams.get('q') || ''
 
-  const propertyId = extractIdFromSlug(slug)
+  // Support both /properties/:slug and /p/:id routes
+  const propertyId = slug ? extractIdFromSlug(slug) : id
 
   const [property, setProperty] = useState(null)
   const [loading, setLoading] = useState(true)

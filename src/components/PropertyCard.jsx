@@ -4,7 +4,7 @@ import { isFavorite, toggleFavorite } from '../lib/favorites'
 import { formatPriceShort } from '../lib/priceFormat'
 import { getCloudinaryThumbUrl } from '../lib/cloudinary'
 import { getPropertyLabel } from '../constants/propertyTypes'
-import { getPropertyPath } from '../lib/propertySlug'
+import { getShortPropertyPath } from '../lib/propertySlug'
 
 // --- Icons (smaller for card) ---
 const BedIcon = () => <span className="text-[13px] leading-none" aria-hidden>🛏</span>
@@ -72,7 +72,7 @@ function PropertyCard({ property, compact = false, home = false }) {
     >
       {/* 1. IMAGE: card-image wrapper — relative, overflow, rounded */}
       <div className="relative w-full aspect-[4/3] flex-shrink-0 overflow-hidden rounded-[10px]">
-        <Link to={getPropertyPath(property)} className="block w-full h-full">
+        <Link to={getShortPropertyPath(property)} className="block w-full h-full">
           <img
             src={getCloudinaryThumbUrl(property.coverImageUrl || property.images?.[0])}
             alt=""
@@ -146,7 +146,7 @@ function PropertyCard({ property, compact = false, home = false }) {
 
       {/* 2. MAIN CONTENT: flex-1 so CTA stays at bottom; home = 12px padding, tighter spacing */}
       <div className={`flex flex-col flex-1 min-w-0 p-3 ${contentGapClass}`}>
-        <Link to={getPropertyPath(property)} className="block mb-0.5">
+        <Link to={getShortPropertyPath(property)} className="block mb-0.5">
           <h3 className={`font-semibold text-slate-900 leading-snug line-clamp-2 group-hover:text-blue-700 transition-colors ${isHome ? 'text-xs' : 'text-sm'}`}>
             {titleText}
           </h3>
@@ -196,7 +196,7 @@ function PropertyCard({ property, compact = false, home = false }) {
         </div>
 
         <Link
-          to={getPropertyPath(property)}
+          to={getShortPropertyPath(property)}
           className={`mt-auto inline-flex items-center justify-center gap-1 rounded-lg border-2 border-slate-200 text-slate-700 font-semibold text-xs hover:border-blue-600 hover:text-blue-700 hover:bg-blue-50/50 active:scale-[0.98] transition-all duration-200 [touch-action:manipulation] ${isHome ? 'min-h-[36px] py-1.5 px-2' : 'min-h-[40px] py-2 px-3'}`}
         >
           ดูรายละเอียด

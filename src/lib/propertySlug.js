@@ -74,6 +74,12 @@ export function getPropertyPath(property) {
   return `/properties/${slug}`
 }
 
+/** Short path for sharing via link (just ID) */
+export function getShortPropertyPath(property) {
+  if (!property?.id) return '/properties'
+  return `/p/${property.id}`
+}
+
 /** Extract Firestore document ID from a slug param (backward-compatible) */
 export function extractIdFromSlug(slugParam) {
   if (!slugParam) {

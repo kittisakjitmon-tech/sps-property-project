@@ -26,6 +26,7 @@
     "react-is": "^19.2.4",
     "react-router-dom": "^7.6.1",
     "recharts": "^3.7.0",
+    "shrtco.de": "^2.0.1",
     "swiper": "^12.1.0"
   },
   "devDependencies": {

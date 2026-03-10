@@ -71,6 +71,7 @@ function PublicRoutesWrapper() {
         <Route path="/" element={<Home />} />
         <Route path="/properties" element={<Properties />} />
         <Route path="/properties/:slug" element={<PropertyDetail />} />
+        <Route path="/p/:id" element={<PropertyDetail />} />
         <Route path="/share/:id" element={<SharePage />} />
         <Route path="/contact" element={<Contact />} />
         <Route path="/loan-services" element={<LoanService />} />
@@ -78,6 +79,7 @@ function PublicRoutesWrapper() {
         <Route path="/favorites" element={<Favorites />} />
         <Route path="/blogs" element={<Blogs />} />
         <Route path="/blogs/:slug" element={<BlogDetail />} />
+        <Route path="/b/:id" element={<BlogDetail />} />
         <Route path="/login" element={<PublicLogin />} />
         <Route
           path="/profile"

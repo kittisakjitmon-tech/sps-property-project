@@ -14,6 +14,7 @@ import {
 } from 'lucide-react'
 import { getPropertyByIdOnce, getShareLinkByToken, isShareLinkExpired } from '../lib/firestore'
 import ProtectedImageContainer from '../components/ProtectedImageContainer'
+import { getShortPropertyPath } from '../lib/propertySlug'
 
 const NeighborhoodData = lazy(() => import('../components/NeighborhoodData'))
 import { formatPrice } from '../lib/priceFormat'
@@ -127,11 +128,14 @@ export default function SharePage() {
     ? primaryImageRaw
     : `https://spspropertysolution.com${primaryImageRaw || ''}`
   const shareUrl = `https://spspropertysolution.com/share/${token}`
+  const shortPropertyUrl = property ? `https://spspropertysolution.com${getShortPropertyPath(property)}` : ''
   const handleContextMenu = (e) => e.preventDefault()
   const handleCopyPropertyId = async () => {
-    if (!property?.propertyId) return
+    if (!property?.id) return
     try {
-      await navigator.clipboard.writeText(property.propertyId)
+      // Copy short URL instead of property ID
+      const urlToCopy = `https://spspropertysolution.com${getShortPropertyPath(property)}`
+      await navigator.clipboard.writeText(urlToCopy)
       setCopied(true)
       setTimeout(() => setCopied(false), 1800)
     } catch {
