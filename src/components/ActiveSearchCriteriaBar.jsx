@@ -69,6 +69,16 @@ export default function ActiveSearchCriteriaBar({
     })
   }
 
+  // 6. โครงการ (NPA etc.)
+  if (filters.project && filters.project.trim()) {
+    activeFilters.push({
+      type: 'project',
+      label: `🏢 โครงการ: ${filters.project}`,
+      value: filters.project,
+      npaHighlight: true,
+    })
+  }
+
   if (filters.propertyType) {
     activeFilters.push({
       type: 'propertyType',
@@ -160,19 +170,23 @@ export default function ActiveSearchCriteriaBar({
             {activeFilters.map((filter, index) => (
               <div
                 key={`${filter.type}-${index}`}
-                className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium transition-all ${filter.highlight
+                className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium transition-all ${
+                  filter.highlight
                     ? 'bg-gradient-to-r from-red-500 to-red-600 text-white shadow-sm'
+                    : filter.npaHighlight
+                    ? 'bg-gradient-to-r from-indigo-500 to-indigo-600 text-white shadow-sm'
                     : 'bg-blue-50 text-blue-900 hover:bg-blue-100'
-                  }`}
+                }`}
               >
                 <span>{filter.label}</span>
                 <button
                   type="button"
                   onClick={() => onRemoveFilter(filter)}
-                  className={`ml-0.5 p-0.5 rounded-full hover:bg-opacity-20 transition ${filter.highlight
+                  className={`ml-0.5 p-0.5 rounded-full hover:bg-opacity-20 transition ${
+                    filter.highlight || filter.npaHighlight
                       ? 'hover:bg-white/30 text-white'
                       : 'hover:bg-blue-200 text-blue-700'
-                    }`}
+                  }`}
                   aria-label={`ลบ ${filter.label}`}
                 >
                   <X className="h-3 w-3" />

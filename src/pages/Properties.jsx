@@ -252,12 +252,13 @@ export default function Properties() {
       const propertySubStatus = normalizeSubStatusFromURL(statusParam)
       const feature = searchParams.get('feature') ?? ''
       const tag = searchParams.get('tag') ?? ''
+      const project = searchParams.get('project') ?? ''
 
       if (updateFilters) {
         updateFilters({
           location, propertyType, listingType, subListingType, propertyCondition,
           availability, priceMin, priceMax, bedrooms, bathrooms, areaMin, areaMax,
-          propertySubStatus, feature, tag, isRental: isRentalFilter,
+          propertySubStatus, feature, tag, project, isRental: isRentalFilter,
         })
       }
     } catch (_error) {
@@ -283,6 +284,7 @@ export default function Properties() {
         bathrooms: filters?.bathrooms || searchParams.get('bathrooms') || '',
         areaMin: filters?.areaMin || searchParams.get('areaMin') || '',
         areaMax: filters?.areaMax || searchParams.get('areaMax') || '',
+        project: filters?.project || searchParams.get('project') || '',
       }
       return filterProperties(properties, searchFilters)
     } catch {
@@ -405,6 +407,10 @@ export default function Properties() {
           params.delete('type')
           params.delete('listingType')
           params.delete('subListingType')
+          break
+        case 'project':
+          updateFilters({ project: '' })
+          params.delete('project')
           break
         default:
           break

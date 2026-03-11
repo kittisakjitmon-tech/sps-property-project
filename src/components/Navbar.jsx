@@ -16,6 +16,7 @@ import {
   Settings,
   LogOut,
   LogIn,
+  Building2,
 } from 'lucide-react'
 import { usePublicAuth } from '../context/PublicAuthContext'
 import { useNavigate } from 'react-router-dom'
@@ -27,7 +28,7 @@ const buyHomeLinks = [
   { to: '/properties?listingType=sale&propertyCondition=มือ 1', label: 'บ้านมือ 1', icon: Sparkles },
   { to: '/properties?listingType=sale&propertyCondition=มือ 2', label: 'บ้านมือ 2', icon: House },
   { to: '/properties?listingType=rent&subListingType=installment_only', label: 'บ้านผ่อนตรง', icon: Flame, highlight: true },
-
+  { to: '/properties?project=NPA', label: 'บ้าน NPA', icon: Building2, npaHighlight: true },
 ]
 
 const serviceLinks = [
@@ -115,19 +116,24 @@ export default function Navbar() {
                   buyMenu.open ? 'opacity-100 translate-y-0 pointer-events-auto' : 'opacity-0 -translate-y-1 pointer-events-none'
                 }`}
               >
-                {buyHomeLinks.map(({ to, label, icon: Icon, highlight }) => (
+                {buyHomeLinks.map(({ to, label, icon: Icon, highlight, npaHighlight }) => (
                   <Link
                     key={to}
                     to={to}
                     className={`flex items-center gap-2 px-4 py-2.5 text-sm transition ${
                       highlight
                         ? 'font-semibold text-red-600 hover:bg-red-50'
+                        : npaHighlight
+                        ? 'font-semibold text-indigo-700 hover:bg-indigo-50'
                         : 'text-slate-700 hover:bg-slate-50'
                     }`}
                     onClick={() => buyMenu.closeMenu()}
                   >
-                    <Icon className={`h-4 w-4 ${highlight ? 'text-red-500' : 'text-slate-500'}`} />
+                    <Icon className={`h-4 w-4 ${highlight ? 'text-red-500' : npaHighlight ? 'text-indigo-500' : 'text-slate-500'}`} />
                     {label}
+                    {npaHighlight && (
+                      <span className="ml-auto text-[10px] font-bold bg-indigo-100 text-indigo-700 px-1.5 py-0.5 rounded-full">NPA</span>
+                    )}
                   </Link>
                 ))}
               </div>
@@ -302,7 +308,7 @@ export default function Navbar() {
               </button>
               {mobileBuyOpen && (
                 <div className="w-full space-y-2">
-                  {buyHomeLinks.map(({ to, label, icon: Icon, highlight }) => (
+                  {buyHomeLinks.map(({ to, label, icon: Icon, highlight, npaHighlight }) => (
                     <Link
                       key={to}
                       to={to}
@@ -311,11 +317,14 @@ export default function Navbar() {
                         setMobileBuyOpen(false)
                       }}
                       className={`w-full rounded-xl border px-4 py-3.5 flex items-center gap-3 text-sm min-h-[48px] ${
-                        highlight ? 'font-semibold text-red-600' : 'text-slate-700'
+                        highlight ? 'font-semibold text-red-600' : npaHighlight ? 'font-semibold text-indigo-700' : 'text-slate-700'
                       }`}
                     >
-                      <Icon className={`h-4 w-4 ${highlight ? 'text-red-500' : 'text-slate-500'}`} />
+                      <Icon className={`h-4 w-4 ${highlight ? 'text-red-500' : npaHighlight ? 'text-indigo-500' : 'text-slate-500'}`} />
                       {label}
+                      {npaHighlight && (
+                        <span className="ml-auto text-[10px] font-bold bg-indigo-100 text-indigo-700 px-1.5 py-0.5 rounded-full">NPA</span>
+                      )}
                     </Link>
                   ))}
                 </div>

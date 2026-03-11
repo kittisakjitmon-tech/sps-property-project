@@ -211,6 +211,7 @@ export function filterProperties(properties = [], filters = {}) {
       availability = '',
       type = '',
       location = '',
+      project = '',
       minPrice: filterMinPrice,
       maxPrice: filterMaxPrice,
       bedrooms,
@@ -239,6 +240,12 @@ export function filterProperties(properties = [], filters = {}) {
         if (tagVal) {
           const propTags = property.customTags || property.tags || []
           if (!propTags.some((t) => String(t).trim() === tagVal)) return false
+        }
+
+        // 0.5. Project Filter (NPA etc.)
+        if (project) {
+          const pProject = property.project || ''
+          if (normalizeText(pProject) !== normalizeText(project)) return false
         }
 
         // 1. Keyword Search (Multi-word AND Logic)
