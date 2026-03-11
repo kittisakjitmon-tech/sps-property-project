@@ -41,14 +41,10 @@ export default defineConfig({
         manualChunks(id) {
           if (!id.includes('node_modules')) return
           
-          // แยก Firebase เป็น chunk ย่อย — โหลดแบบขนาน ลด main-thread parse ครั้งเดียว
-          if (id.includes('firebase')) {
-            if (id.includes('firebase/app')) return 'firebase-app'
-            if (id.includes('firebase/auth')) return 'firebase-auth'
-            if (id.includes('firebase/firestore')) return 'firebase-firestore'
-            if (id.includes('firebase/storage')) return 'firebase-storage'
-            return 'vendor-firebase'
-          }
+          // รวม Firebase ทั้งหมดไว้ใน chunk เดียว — ป้องกัน circular dependency TDZ error
+          // (การแยก firebase/app ออกจาก firebase/auth, firestore ฯลฯ ทำให้เกิด
+          //  "Cannot access 'v' before initialization" ใน minified bundle)
+          if (id.includes('firebase')) return 'vendor-firebase'
           
           if (id.includes('lucide-react')) return 'vendor-icons'
           
