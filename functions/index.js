@@ -915,3 +915,43 @@ exports.scheduledDailyBlog = functions
  * ฟังก์ชันสำหรับทดสอบสร้าง Blog ทันที (รันผ่าน HTTP) - Vertex AI version
  */
 
+/**
+ * checkPropertyLimit — Callable Function (server-side enforcement)
+ * ตรวจสอบว่า user มีประกาศเกิน maxPropertiesPerUser หรือไม่
+ * เรียกจาก client: httpsCallable(functions, 'checkPropertyLimit')()
+ * Response: { allowed: boolean, count: number, limit: number }
+ */
+exports.checkPropertyLimit = functions
+  .runWith({ timeoutSeconds: 30, memory: '256MB' })
+  .https.onCall(async (data, context) => {
+    // ต้อง login ก่อนเรียก function นี้
+    if (!context.auth) {
+      throw new functions.https.HttpsError(
+        'unauthenticated',
+        'ต้องเข้าสู่ระบบก่อนตรวจสอบขีดจำกัดประกาศ'
+      )
+    }
+
+    const uid = context.auth.uid
+    const db = admin.firestore()
+
+    // ดึง system_settings เพื่อรู้ค่า maxPropertiesPerUser
+    const settingsSnap = await db.collection('system_settings').doc('general').get()
+    const limit = settingsSnap.exists
+      ? Number(settingsSnap.data().maxPropertiesPerUser) || 10
+      : 10
+
+    // นับเฉพาะ properties ของ user นี้ (ใช้ count query ประหยัด reads มากกว่า fetch ทั้ง collection)
+    const countSnap = await db
+      .collection('properties')
+      .where('createdBy', '==', uid)
+      .count()
+      .get()
+
+    const count = countSnap.data().count
+
+    functions.logger.info(`checkPropertyLimit: uid=${uid} count=${count} limit=${limit}`)
+
+    return { allowed: count < limit, count, limit }
+  })
+

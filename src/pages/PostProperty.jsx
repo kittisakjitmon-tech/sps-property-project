@@ -4,9 +4,11 @@ import { usePublicAuth } from '../context/PublicAuthContext'
 import { ChevronLeft, ChevronRight, Upload, X, Check, AlertCircle, Target, Zap, Shield, Lock } from 'lucide-react'
 import PageLayout from '../components/PageLayout'
 import LocationAutocomplete from '../components/LocationAutocomplete'
-import { createPendingProperty, uploadPendingPropertyImage, createProperty, getPropertiesOnce } from '../lib/firestore'
+import { createPendingProperty, uploadPendingPropertyImage, createProperty } from '../lib/firestore'
 import { compressImages } from '../lib/imageCompressor'
 import { useSystemSettings } from '../hooks/useSystemSettings'
+import { getFunctions, httpsCallable } from 'firebase/functions'
+import { publicApp } from '../lib/firebase'
 
 const CATEGORIES = [
   { value: 'บ้านเดี่ยว', label: 'บ้านเดี่ยว' },
@@ -173,20 +175,18 @@ export default function PostProperty() {
       return
     }
 
-    // ── Check: maxPropertiesPerUser ──────────────────────────────────────────
+    // ── Check: maxPropertiesPerUser (server-side via Cloud Function) ─────────
     if (user?.uid) {
       try {
-        const allProps = await getPropertiesOnce(false)
-        const userCount = allProps.filter(
-          (p) => p.createdBy === user.uid || p.userId === user.uid
-        ).length
-        const limit = Number(settings.maxPropertiesPerUser) || 10
-        if (userCount >= limit) {
-          setError(`คุณมีประกาศในระบบครบ ${limit} รายการแล้ว ไม่สามารถเพิ่มได้อีก`)
+        const functions = getFunctions(publicApp, 'asia-southeast1')
+        const checkLimit = httpsCallable(functions, 'checkPropertyLimit')
+        const { data } = await checkLimit()
+        if (!data.allowed) {
+          setError(`คุณมีประกาศในระบบครบ ${data.limit} รายการแล้ว ไม่สามารถเพิ่มได้อีก`)
           return
         }
       } catch {
-        // ถ้าโหลดไม่สำเร็จ ให้ผ่านไปก่อน (fail open)
+        // ถ้าเรียก function ไม่สำเร็จ (network/offline) ให้ผ่านไปก่อน — Firestore Rules จะ enforce อีกชั้น
       }
     }
 
@@ -401,10 +401,11 @@ export default function PostProperty() {
                     <div className="space-y-6">
 
                       <div>
-                        <label className="block text-sm font-medium text-slate-700 mb-2">
+                        <label htmlFor="post-title" className="block text-sm font-medium text-slate-700 mb-2">
                           ชื่อประกาศ <span className="text-red-500">*</span>
                         </label>
                         <input
+                          id="post-title"
                           type="text"
                           value={form.title}
                           onChange={(e) => updateForm({ title: e.target.value })}
@@ -415,10 +416,11 @@ export default function PostProperty() {
 
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                         <div>
-                          <label className="block text-sm font-medium text-slate-700 mb-2">
+                          <label htmlFor="post-type" className="block text-sm font-medium text-slate-700 mb-2">
                             ประเภท <span className="text-red-500">*</span>
                           </label>
                           <select
+                            id="post-type"
                             value={form.type}
                             onChange={(e) =>
                               updateForm({
@@ -437,10 +439,11 @@ export default function PostProperty() {
                         </div>
 
                         <div>
-                          <label className="block text-sm font-medium text-slate-700 mb-2">
+                          <label htmlFor="post-price" className="block text-sm font-medium text-slate-700 mb-2">
                             ราคา (บาท) <span className="text-red-500">*</span>
                           </label>
                           <input
+                            id="post-price"
                             type="number"
                             value={form.price}
                             onChange={(e) => updateForm({ price: e.target.value })}
@@ -453,8 +456,9 @@ export default function PostProperty() {
 
                       <div className="grid grid-cols-3 gap-4">
                         <div>
-                          <label className="block text-sm font-medium text-slate-700 mb-2">พื้นที่ (ตร.ว.)</label>
+                          <label htmlFor="post-area" className="block text-sm font-medium text-slate-700 mb-2">พื้นที่ (ตร.ว.)</label>
                           <input
+                            id="post-area"
                             type="number"
                             value={form.area !== '' && form.area != null ? String(Number(form.area) / 4) : ''}
                             onChange={(e) => updateForm({ area: e.target.value ? String(Math.round(Number(e.target.value) * 4)) : '' })}
@@ -466,8 +470,9 @@ export default function PostProperty() {
                         </div>
 
                         <div>
-                          <label className="block text-sm font-medium text-slate-700 mb-2">ห้องนอน</label>
+                          <label htmlFor="post-bedrooms" className="block text-sm font-medium text-slate-700 mb-2">ห้องนอน</label>
                           <input
+                            id="post-bedrooms"
                             type="number"
                             value={form.bedrooms}
                             onChange={(e) => updateForm({ bedrooms: e.target.value })}
@@ -477,8 +482,9 @@ export default function PostProperty() {
                         </div>
 
                         <div>
-                          <label className="block text-sm font-medium text-slate-700 mb-2">ห้องน้ำ</label>
+                          <label htmlFor="post-bathrooms" className="block text-sm font-medium text-slate-700 mb-2">ห้องน้ำ</label>
                           <input
+                            id="post-bathrooms"
                             type="number"
                             value={form.bathrooms}
                             onChange={(e) => updateForm({ bathrooms: e.target.value })}
@@ -504,8 +510,9 @@ export default function PostProperty() {
                       </div>
 
                       <div>
-                        <label className="block text-sm font-medium text-slate-700 mb-2">รายละเอียด</label>
+                        <label htmlFor="post-description" className="block text-sm font-medium text-slate-700 mb-2">รายละเอียด</label>
                         <textarea
+                          id="post-description"
                           value={form.description}
                           onChange={(e) => updateForm({ description: e.target.value })}
                           rows={5}
@@ -515,9 +522,10 @@ export default function PostProperty() {
                       </div>
 
                       <div>
-                        <label className="block text-sm font-medium text-slate-700 mb-2">แท็กที่เกี่ยวข้อง</label>
+                        <label htmlFor="post-tags" className="block text-sm font-medium text-slate-700 mb-2">แท็กที่เกี่ยวข้อง</label>
                         <div className="relative">
                           <input
+                            id="post-tags"
                             type="text"
                             value={tagInput}
                             onChange={(e) => {
@@ -593,10 +601,11 @@ export default function PostProperty() {
                       <h2 className="text-xl font-bold text-blue-900 mb-6">อัปโหลดรูปภาพ</h2>
 
                       <div>
-                        <label className="block text-sm font-medium text-slate-700 mb-2">
+                        <label htmlFor="post-images" className="block text-sm font-medium text-slate-700 mb-2">
                           เลือกรูปภาพ (สูงสุด 10 รูป)
                         </label>
                         <input
+                          id="post-images"
                           type="file"
                           accept="image/*"
                           multiple
@@ -645,10 +654,11 @@ export default function PostProperty() {
                       <h2 className="text-xl font-bold text-blue-900 mb-6">ข้อมูลติดต่อ</h2>
 
                       <div>
-                        <label className="block text-sm font-medium text-slate-700 mb-2">
+                        <label htmlFor="post-contact-name" className="block text-sm font-medium text-slate-700 mb-2">
                           ชื่อผู้ติดต่อ <span className="text-red-500">*</span>
                         </label>
                         <input
+                          id="post-contact-name"
                           type="text"
                           value={form.contactName}
                           onChange={(e) => updateForm({ contactName: e.target.value })}
@@ -658,10 +668,11 @@ export default function PostProperty() {
                       </div>
 
                       <div>
-                        <label className="block text-sm font-medium text-slate-700 mb-2">
+                        <label htmlFor="post-contact-phone" className="block text-sm font-medium text-slate-700 mb-2">
                           เบอร์โทรศัพท์ <span className="text-red-500">*</span>
                         </label>
                         <input
+                          id="post-contact-phone"
                           type="tel"
                           value={form.contactPhone}
                           onChange={(e) => updateForm({ contactPhone: e.target.value })}
@@ -671,8 +682,9 @@ export default function PostProperty() {
                       </div>
 
                       <div>
-                        <label className="block text-sm font-medium text-slate-700 mb-2">LINE ID</label>
+                        <label htmlFor="post-line-id" className="block text-sm font-medium text-slate-700 mb-2">LINE ID</label>
                         <input
+                          id="post-line-id"
                           type="text"
                           value={form.contactLineId}
                           onChange={(e) => updateForm({ contactLineId: e.target.value })}

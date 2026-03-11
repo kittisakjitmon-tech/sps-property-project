@@ -241,16 +241,15 @@ export default function Navbar() {
                       {userProfile?.username || user.displayName || user.email?.split('@')[0] || 'ผู้ใช้'}
                     </p>
                   </div>
-                  {isAgent() && (
-                    <Link
-                      to="/profile-settings"
-                      onClick={() => userMenu.closeMenu()}
-                      className="flex items-center gap-2 px-4 py-2.5 text-sm text-slate-700 hover:bg-slate-50 transition"
-                    >
-                      <Settings className="h-4 w-4 text-slate-500" />
-                      ตั้งค่าโปรไฟล์
-                    </Link>
-                  )}
+                  {/* ตั้งค่าโปรไฟล์ — แสดงสำหรับทุก role ที่ login */}
+                  <Link
+                    to="/profile-settings"
+                    onClick={() => userMenu.closeMenu()}
+                    className="flex items-center gap-2 px-4 py-2.5 text-sm text-slate-700 hover:bg-slate-50 transition"
+                  >
+                    <Settings className="h-4 w-4 text-slate-500" />
+                    ตั้งค่าโปรไฟล์
+                  </Link>
                   <button
                     type="button"
                     onClick={handleLogout}

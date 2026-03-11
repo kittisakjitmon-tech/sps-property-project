@@ -1,12 +1,14 @@
-import { useState, useEffect, useId, lazy, Suspense } from 'react'
+import { useState, useEffect, lazy, Suspense } from 'react'
 import { useParams, Link, useSearchParams, useNavigate } from 'react-router-dom'
 import { Helmet } from 'react-helmet-async'
 import { MapPin, Bed, Bath, Maximize2, Phone, MessageCircle, Share2, CheckCircle2, Copy } from 'lucide-react'
 import { createIsgdShortUrl } from '../lib/isgd'
-import { getPropertyByIdOnce, createAppointment, createOrReuseShareLink, recordPropertyView } from '../lib/firestore'
+import { getPropertyByIdOnce, createOrReuseShareLink, recordPropertyView } from '../lib/firestore'
 import PageLayout from '../components/PageLayout'
 import Toast from '../components/Toast'
 import ProtectedImageContainer from '../components/ProtectedImageContainer'
+import MortgageCalculator from '../components/MortgageCalculator'
+import LeadForm from '../components/LeadForm'
 import { formatPrice } from '../lib/priceFormat'
 import { highlightText, highlightTags } from '../lib/textHighlight'
 import { usePublicAuth } from '../context/PublicAuthContext'
@@ -16,457 +18,6 @@ import { extractIdFromSlug, generatePropertySlug, getPropertyPath } from '../lib
 
 const RelatedProperties = lazy(() => import('../components/RelatedProperties'))
 const NeighborhoodData = lazy(() => import('../components/NeighborhoodData'))
-
-function MortgageCalculator({ price, directInstallment }) {
-  const [loanType, setLoanType] = useState(directInstallment ? 'direct' : 'bank')
-  const [downPercent, setDownPercent] = useState(20)
-  const [years, setYears] = useState(20)
-  const [bankInterestRate, setBankInterestRate] = useState(3.5)
-  const [directInterestRate, setDirectInterestRate] = useState(2.5)
-
-  const down = Math.round((price * downPercent) / 100)
-  const loan = price - down
-  const interestRate = loanType === 'direct' ? directInterestRate : bankInterestRate
-  const monthlyRate = interestRate / 100 / 12
-  const numPayments = years * 12
-  const monthlyPayment =
-    monthlyRate === 0 ? loan / numPayments : (loan * monthlyRate * Math.pow(1 + monthlyRate, numPayments)) / (Math.pow(1 + monthlyRate, numPayments) - 1)
-
-  // Generate payment schedule table
-  const paymentSchedule = []
-  let remainingBalance = loan
-  for (let i = 1; i <= Math.min(12, numPayments); i++) {
-    const interestPayment = remainingBalance * monthlyRate
-    const principalPayment = monthlyPayment - interestPayment
-    remainingBalance -= principalPayment
-    paymentSchedule.push({
-      month: i,
-      payment: monthlyPayment,
-      principal: principalPayment,
-      interest: interestPayment,
-      balance: Math.max(0, remainingBalance),
-    })
-  }
-
-  return (
-    <div className="bg-white rounded-xl border border-slate-200 p-6 shadow-md">
-      <h3 className="text-lg font-bold text-blue-900 mb-4">คำนวณสินเชื่อบ้าน</h3>
-      <div className="space-y-4">
-        {/* Loan Type Selection */}
-        <div>
-          <label className="block text-sm font-medium text-slate-700 mb-2">ประเภทสินเชื่อ</label>
-          <div className="grid grid-cols-2 gap-3">
-            <button
-              type="button"
-              onClick={() => setLoanType('bank')}
-              className={`px-4 py-3 rounded-lg border-2 transition ${loanType === 'bank'
-                ? 'border-blue-900 bg-blue-50 text-blue-900 font-semibold'
-                : 'border-slate-200 bg-white text-slate-600 hover:border-blue-300'
-                }`}
-            >
-              กู้แบงก์
-            </button>
-            <button
-              type="button"
-              onClick={() => setLoanType('direct')}
-              className={`px-4 py-3 rounded-lg border-2 transition ${loanType === 'direct'
-                ? 'border-blue-900 bg-blue-50 text-blue-900 font-semibold'
-                : 'border-slate-200 bg-white text-slate-600 hover:border-blue-300'
-                }`}
-            >
-              ผ่อนตรง
-            </button>
-          </div>
-        </div>
-
-        <div>
-          <label className="block text-sm font-medium text-slate-700 mb-1">เงินดาวน์ (%)</label>
-          <input
-            type="range"
-            min="10"
-            max="50"
-            value={downPercent}
-            onChange={(e) => setDownPercent(Number(e.target.value))}
-            className="w-full"
-          />
-          <span className="text-sm text-slate-600">{downPercent}% = {(down / 1_000_000).toFixed(1)} ล้านบาท</span>
-        </div>
-        <div>
-          <label className="block text-sm font-medium text-slate-700 mb-1">ระยะเวลากู้ (ปี)</label>
-          <select
-            value={years}
-            onChange={(e) => setYears(Number(e.target.value))}
-            className="w-full px-3 py-2 border border-slate-200 rounded-lg"
-          >
-            {[5, 10, 15, 20, 25, 30].map((y) => (
-              <option key={y} value={y}>{y} ปี</option>
-            ))}
-          </select>
-        </div>
-        <div>
-          <label className="block text-sm font-medium text-slate-700 mb-1">
-            อัตราดอกเบี้ย (% ต่อปี) - {loanType === 'direct' ? 'ผ่อนตรง' : 'กู้แบงก์'}
-          </label>
-          <input
-            type="number"
-            step="0.1"
-            value={loanType === 'direct' ? directInterestRate : bankInterestRate}
-            onChange={(e) => {
-              if (loanType === 'direct') {
-                setDirectInterestRate(Number(e.target.value))
-              } else {
-                setBankInterestRate(Number(e.target.value))
-              }
-            }}
-            className="w-full px-3 py-2 border border-slate-200 rounded-lg"
-          />
-        </div>
-        <div className="pt-4 border-t border-slate-200">
-          <p className="text-slate-600 text-sm mb-1">ค่างวดโดยประมาณ</p>
-          <p className="text-2xl font-bold text-yellow-900">
-            {monthlyPayment.toLocaleString('th-TH', { maximumFractionDigits: 0 })} บาท/เดือน
-          </p>
-          <p className="text-xs text-slate-500 mt-1">
-            รวมทั้งสิ้น {((monthlyPayment * numPayments) / 1_000_000).toFixed(1)} ล้านบาท ({years} ปี)
-          </p>
-        </div>
-
-        {/* Payment Schedule Table */}
-        <div className="pt-4 border-t border-slate-200">
-          <h4 className="text-sm font-semibold text-blue-900 mb-3">ตารางค่างวด 12 เดือนแรก</h4>
-          <div className="overflow-x-auto">
-            <table className="w-full text-xs">
-              <thead>
-                <tr className="bg-slate-50">
-                  <th className="px-2 py-2 text-left font-medium text-slate-700">เดือน</th>
-                  <th className="px-2 py-2 text-right font-medium text-slate-700">ค่างวด</th>
-                  <th className="px-2 py-2 text-right font-medium text-slate-700">เงินต้น</th>
-                  <th className="px-2 py-2 text-right font-medium text-slate-700">ดอกเบี้ย</th>
-                  <th className="px-2 py-2 text-right font-medium text-slate-700">คงเหลือ</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100">
-                {paymentSchedule.map((row) => (
-                  <tr key={row.month} className="hover:bg-slate-50">
-                    <td className="px-2 py-2 text-slate-600">{row.month}</td>
-                    <td className="px-2 py-2 text-right font-medium text-blue-900">
-                      {row.payment.toLocaleString('th-TH', { maximumFractionDigits: 0 })}
-                    </td>
-                    <td className="px-2 py-2 text-right text-slate-600">
-                      {row.principal.toLocaleString('th-TH', { maximumFractionDigits: 0 })}
-                    </td>
-                    <td className="px-2 py-2 text-right text-slate-600">
-                      {row.interest.toLocaleString('th-TH', { maximumFractionDigits: 0 })}
-                    </td>
-                    <td className="px-2 py-2 text-right text-slate-500">
-                      {row.balance.toLocaleString('th-TH', { maximumFractionDigits: 0 })}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      </div>
-    </div>
-  )
-}
-
-const GAS_WEBHOOK_URL = import.meta.env.VITE_GAS_WEBHOOK_URL || ''
-
-function validatePhone(phone) {
-  const digits = phone.replace(/\D/g, '')
-  return digits.length === 10 && /^0\d{9}$/.test(digits)
-}
-
-function LeadForm({ propertyId, propertyTitle, propertyPrice, isRental, onSuccess, onError }) {
-  const { user, isAgent } = usePublicAuth()
-  const activeTab = (user && isAgent()) ? 'agent' : 'customer'
-  const baseId = useId()
-
-  // Form fields for Customer tab
-  const [customerName, setCustomerName] = useState('')
-  const [customerPhone, setCustomerPhone] = useState('')
-  const [visitDate, setVisitDate] = useState('')
-  const [visitTime, setVisitTime] = useState('')
-
-  // Form fields for Agent tab
-  const [agentCustomerName, setAgentCustomerName] = useState('')
-  const [agentName, setAgentName] = useState('')
-  const [agentPhone, setAgentPhone] = useState('')
-  const [agentVisitDate, setAgentVisitDate] = useState('')
-  const [agentVisitTime, setAgentVisitTime] = useState('')
-
-  const [isLoading, setIsLoading] = useState(false)
-  const [errors, setErrors] = useState({})
-
-  const priceFormatted = propertyPrice != null
-    ? isRental
-      ? `${(propertyPrice / 1000).toFixed(0)}K บาท/เดือน`
-      : `${(propertyPrice / 1_000_000).toFixed(1)} ล้านบาท`
-    : ''
-
-  const handleSubmit = async (e) => {
-    e.preventDefault()
-    const newErrors = {}
-
-    if (activeTab === 'customer') {
-      // Customer form validation
-      if (!customerName.trim()) newErrors.customerName = 'กรุณากรอกชื่อลูกค้า'
-      if (!customerPhone.trim()) newErrors.customerPhone = 'กรุณากรอกเบอร์โทร'
-      else if (!validatePhone(customerPhone.trim())) newErrors.customerPhone = 'เบอร์โทรต้องเป็นตัวเลข 10 หลัก (เช่น 0812345678)'
-      if (!visitDate.trim()) newErrors.visitDate = 'กรุณาเลือกวันที่เข้าชม'
-      if (!visitTime.trim()) newErrors.visitTime = 'กรุณาเลือกเวลา'
-    } else {
-      // Agent form validation
-      if (!agentCustomerName.trim()) newErrors.agentCustomerName = 'กรุณากรอกชื่อลูกค้า'
-      if (!agentName.trim()) newErrors.agentName = 'กรุณากรอกชื่อเอเจ้นท์ที่ดูแล'
-      if (!agentPhone.trim()) newErrors.agentPhone = 'กรุณากรอกเบอร์โทรเอเจ้นท์'
-      else if (!validatePhone(agentPhone.trim())) newErrors.agentPhone = 'เบอร์โทรต้องเป็นตัวเลข 10 หลัก (เช่น 0812345678)'
-      if (!agentVisitDate.trim()) newErrors.agentVisitDate = 'กรุณาเลือกวันที่เข้าชม'
-      if (!agentVisitTime.trim()) newErrors.agentVisitTime = 'กรุณาเลือกเวลา'
-    }
-
-    setErrors(newErrors)
-    if (Object.keys(newErrors).length > 0) return
-
-    setIsLoading(true)
-    setErrors({})
-    try {
-      const appointmentData = activeTab === 'customer'
-        ? {
-          type: 'Customer',
-          contactName: customerName.trim(),
-          tel: customerPhone.trim(),
-          date: visitDate.trim(),
-          time: visitTime.trim(),
-          propertyId: propertyId || '',
-          propertyTitle: propertyTitle || '',
-        }
-        : {
-          type: 'Agent',
-          agentName: agentName.trim(),
-          contactName: agentCustomerName.trim(),
-          tel: agentPhone.trim(),
-          date: agentVisitDate.trim(),
-          time: agentVisitTime.trim(),
-          propertyId: propertyId || '',
-          propertyTitle: propertyTitle || '',
-        }
-
-      await createAppointment(appointmentData)
-
-      // Reset form fields
-      if (activeTab === 'customer') {
-        setCustomerName('')
-        setCustomerPhone('')
-        setVisitDate('')
-        setVisitTime('')
-      } else {
-        setAgentCustomerName('')
-        setAgentName('')
-        setAgentPhone('')
-        setAgentVisitDate('')
-        setAgentVisitTime('')
-      }
-
-      // ส่ง message ผ่าน onSuccess callback (parent แสดง Toast แทน alert)
-      onSuccess?.('ส่งคำขอนัดเยี่ยมชมสำเร็จ! เจ้าหน้าที่จะติดต่อกลับเร็วๆ นี้')
-    } catch (err) {
-      console.error(err)
-      onError?.()
-    } finally {
-      setIsLoading(false)
-    }
-  }
-
-  return (
-    <div className="space-y-4">
-      {/* Tab System - แสดงตามสถานะ login */}
-      {(!user || !isAgent()) ? (
-        // ถ้าไม่ได้ล็อกอิน: แสดงเฉพาะ tab ลูกค้า
-        <div className="flex gap-2 border-b border-slate-200">
-          <button
-            type="button"
-            className="flex-1 px-4 py-2 text-sm font-medium bg-blue-900 text-white rounded-t-lg"
-            disabled
-          >
-            สำหรับลูกค้า
-          </button>
-        </div>
-      ) : (
-        // ถ้าล็อกอินแล้ว: แสดงเฉพาะ tab Agent
-        <div className="flex gap-2 border-b border-slate-200">
-          <button
-            type="button"
-            className="flex-1 px-4 py-2 text-sm font-medium bg-blue-900 text-white rounded-t-lg"
-            disabled
-          >
-            สำหรับเอเจน
-          </button>
-        </div>
-      )}
-
-      <form onSubmit={handleSubmit} className="space-y-4">
-        {/* Header */}
-        <h4 className="text-base font-semibold text-blue-900">
-          {activeTab === 'customer' ? 'ลูกค้านัดเข้าชมโครงการ' : 'เอเจ้นท์พาลูกค้าเข้าชม'}
-        </h4>
-
-        {activeTab === 'customer' ? (
-          <>
-            {/* Customer Form Fields */}
-            <div>
-              <label htmlFor={`${baseId}-customerName`} className="block text-sm font-medium text-slate-700 mb-1">ชื่อลูกค้า *</label>
-              <input
-                id={`${baseId}-customerName`}
-                type="text"
-                value={customerName}
-                onChange={(e) => { setCustomerName(e.target.value); setErrors((prev) => ({ ...prev, customerName: '' })) }}
-                placeholder="กรอกชื่อลูกค้า"
-                className={`w-full px-4 py-2.5 rounded-lg border text-sm bg-white transition-colors ${errors.customerName ? 'border-amber-500 focus:ring-amber-200' : 'border-slate-200 focus:ring-blue-200'} focus:ring-2 focus:outline-none`}
-              />
-              {errors.customerName && <p className="mt-1 text-xs text-amber-600">{errors.customerName}</p>}
-            </div>
-            <div>
-              <label htmlFor={`${baseId}-customerPhone`} className="block text-sm font-medium text-slate-700 mb-1">เบอร์โทร *</label>
-              <input
-                id={`${baseId}-customerPhone`}
-                type="tel"
-                value={customerPhone}
-                onChange={(e) => { setCustomerPhone(e.target.value); setErrors((prev) => ({ ...prev, customerPhone: '' })) }}
-                placeholder="เช่น 0812345678"
-                className={`w-full px-4 py-2.5 rounded-lg border text-sm bg-white transition-colors ${errors.customerPhone ? 'border-amber-500 focus:ring-amber-200' : 'border-slate-200 focus:ring-blue-200'} focus:ring-2 focus:outline-none`}
-              />
-              {errors.customerPhone && <p className="mt-1 text-xs text-amber-600">{errors.customerPhone}</p>}
-            </div>
-            <div>
-              <label htmlFor={`${baseId}-visitDate`} className="block text-sm font-medium text-slate-700 mb-1">วันที่เข้าชม *</label>
-              <input
-                id={`${baseId}-visitDate`}
-                type="date"
-                value={visitDate}
-                onChange={(e) => { setVisitDate(e.target.value); setErrors((prev) => ({ ...prev, visitDate: '' })) }}
-                min={new Date().toISOString().split('T')[0]}
-                className={`w-full px-4 py-2.5 rounded-lg border text-sm bg-white transition-colors ${errors.visitDate ? 'border-amber-500 focus:ring-amber-200' : 'border-slate-200 focus:ring-blue-200'} focus:ring-2 focus:outline-none`}
-              />
-              {errors.visitDate && <p className="mt-1 text-xs text-amber-600">{errors.visitDate}</p>}
-            </div>
-            <div>
-              <label htmlFor={`${baseId}-visitTime`} className="block text-sm font-medium text-slate-700 mb-1">เวลา *</label>
-              <input
-                id={`${baseId}-visitTime`}
-                type="time"
-                value={visitTime}
-                onChange={(e) => { setVisitTime(e.target.value); setErrors((prev) => ({ ...prev, visitTime: '' })) }}
-                className={`w-full px-4 py-2.5 rounded-lg border text-sm bg-white transition-colors ${errors.visitTime ? 'border-amber-500 focus:ring-amber-200' : 'border-slate-200 focus:ring-blue-200'} focus:ring-2 focus:outline-none`}
-              />
-              {errors.visitTime && <p className="mt-1 text-xs text-amber-600">{errors.visitTime}</p>}
-            </div>
-            <div>
-              <label htmlFor={`${baseId}-propertyId`} className="block text-sm font-medium text-slate-700 mb-1">รหัสทรัพย์</label>
-              <input
-                id={`${baseId}-propertyId`}
-                type="text"
-                value={propertyId || ''}
-                readOnly
-                className="w-full px-4 py-2.5 rounded-lg border border-slate-200 text-sm bg-gray-100 text-gray-600 cursor-not-allowed"
-              />
-            </div>
-          </>
-        ) : (
-          <>
-            {/* Agent Form Fields */}
-            <div>
-              <label htmlFor={`${baseId}-agentCustomerName`} className="block text-sm font-medium text-slate-700 mb-1">ชื่อลูกค้า *</label>
-              <input
-                id={`${baseId}-agentCustomerName`}
-                type="text"
-                value={agentCustomerName}
-                onChange={(e) => { setAgentCustomerName(e.target.value); setErrors((prev) => ({ ...prev, agentCustomerName: '' })) }}
-                placeholder="กรอกชื่อลูกค้า"
-                className={`w-full px-4 py-2.5 rounded-lg border text-sm bg-white transition-colors ${errors.agentCustomerName ? 'border-amber-500 focus:ring-amber-200' : 'border-slate-200 focus:ring-blue-200'} focus:ring-2 focus:outline-none`}
-              />
-              {errors.agentCustomerName && <p className="mt-1 text-xs text-amber-600">{errors.agentCustomerName}</p>}
-            </div>
-            <div>
-              <label htmlFor={`${baseId}-agentName`} className="block text-sm font-medium text-slate-700 mb-1">ชื่อเอเจ้นท์ที่ดูแล *</label>
-              <input
-                id={`${baseId}-agentName`}
-                type="text"
-                value={agentName}
-                onChange={(e) => { setAgentName(e.target.value); setErrors((prev) => ({ ...prev, agentName: '' })) }}
-                placeholder="กรอกชื่อเอเจ้นท์"
-                className={`w-full px-4 py-2.5 rounded-lg border text-sm bg-white transition-colors ${errors.agentName ? 'border-amber-500 focus:ring-amber-200' : 'border-slate-200 focus:ring-blue-200'} focus:ring-2 focus:outline-none`}
-              />
-              {errors.agentName && <p className="mt-1 text-xs text-amber-600">{errors.agentName}</p>}
-            </div>
-            <div>
-              <label htmlFor={`${baseId}-agentPhone`} className="block text-sm font-medium text-slate-700 mb-1">เบอร์โทรเอเจ้นท์ *</label>
-              <input
-                id={`${baseId}-agentPhone`}
-                type="tel"
-                value={agentPhone}
-                onChange={(e) => { setAgentPhone(e.target.value); setErrors((prev) => ({ ...prev, agentPhone: '' })) }}
-                placeholder="เช่น 0812345678"
-                className={`w-full px-4 py-2.5 rounded-lg border text-sm bg-white transition-colors ${errors.agentPhone ? 'border-amber-500 focus:ring-amber-200' : 'border-slate-200 focus:ring-blue-200'} focus:ring-2 focus:outline-none`}
-              />
-              {errors.agentPhone && <p className="mt-1 text-xs text-amber-600">{errors.agentPhone}</p>}
-            </div>
-            <div>
-              <label htmlFor={`${baseId}-agentVisitDate`} className="block text-sm font-medium text-slate-700 mb-1">วันที่เข้าชม *</label>
-              <input
-                id={`${baseId}-agentVisitDate`}
-                type="date"
-                value={agentVisitDate}
-                onChange={(e) => { setAgentVisitDate(e.target.value); setErrors((prev) => ({ ...prev, agentVisitDate: '' })) }}
-                min={new Date().toISOString().split('T')[0]}
-                className={`w-full px-4 py-2.5 rounded-lg border text-sm bg-white transition-colors ${errors.agentVisitDate ? 'border-amber-500 focus:ring-amber-200' : 'border-slate-200 focus:ring-blue-200'} focus:ring-2 focus:outline-none`}
-              />
-              {errors.agentVisitDate && <p className="mt-1 text-xs text-amber-600">{errors.agentVisitDate}</p>}
-            </div>
-            <div>
-              <label htmlFor={`${baseId}-agentVisitTime`} className="block text-sm font-medium text-slate-700 mb-1">เวลา *</label>
-              <input
-                id={`${baseId}-agentVisitTime`}
-                type="time"
-                value={agentVisitTime}
-                onChange={(e) => { setAgentVisitTime(e.target.value); setErrors((prev) => ({ ...prev, agentVisitTime: '' })) }}
-                className={`w-full px-4 py-2.5 rounded-lg border text-sm bg-white transition-colors ${errors.agentVisitTime ? 'border-amber-500 focus:ring-amber-200' : 'border-slate-200 focus:ring-blue-200'} focus:ring-2 focus:outline-none`}
-              />
-              {errors.agentVisitTime && <p className="mt-1 text-xs text-amber-600">{errors.agentVisitTime}</p>}
-            </div>
-            <div>
-              <label htmlFor={`${baseId}-agentPropertyId`} className="block text-sm font-medium text-slate-700 mb-1">รหัสทรัพย์</label>
-              <input
-                id={`${baseId}-agentPropertyId`}
-                type="text"
-                value={propertyId || ''}
-                readOnly
-                className="w-full px-4 py-2.5 rounded-lg border border-slate-200 text-sm bg-gray-100 text-gray-600 cursor-not-allowed"
-              />
-            </div>
-          </>
-        )}
-
-        <button
-          type="submit"
-          disabled={isLoading}
-          className="w-full py-3 rounded-lg bg-blue-900 text-white text-sm font-semibold hover:bg-blue-800 hover:ring-2 hover:ring-yellow-400 hover:ring-offset-1 disabled:opacity-60 disabled:cursor-not-allowed transition-all flex items-center justify-center gap-2"
-        >
-          {isLoading ? (
-            <>
-              <span className="inline-block w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-              กำลังส่งข้อมูล…
-            </>
-          ) : (
-            'ส่งคำขอนัดเยี่ยมชม'
-          )}
-        </button>
-      </form>
-    </div>
-  )
-}
 
 export default function PropertyDetail() {
   const { slug, id } = useParams()
@@ -507,8 +58,42 @@ export default function PropertyDetail() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-slate-50 flex items-center justify-center">
-        <p className="text-slate-600">กำลังโหลด…</p>
+      <div className="min-h-screen bg-slate-50">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+            {/* Main skeleton */}
+            <div className="lg:col-span-2 space-y-6">
+              <div className="bg-white rounded-xl overflow-hidden shadow-md">
+                <div className="aspect-video bg-slate-200 animate-pulse" />
+                <div className="flex gap-2 p-2">
+                  {[1, 2, 3, 4].map((i) => (
+                    <div key={i} className="shrink-0 w-20 h-14 rounded-lg bg-slate-200 animate-pulse" />
+                  ))}
+                </div>
+              </div>
+              <div className="bg-white rounded-xl p-6 space-y-4">
+                <div className="h-5 w-24 bg-slate-200 rounded-full animate-pulse" />
+                <div className="h-8 w-3/4 bg-slate-200 rounded-lg animate-pulse" />
+                <div className="h-6 w-1/3 bg-yellow-100 rounded-lg animate-pulse" />
+                <div className="space-y-2">
+                  <div className="h-4 bg-slate-100 rounded animate-pulse" />
+                  <div className="h-4 bg-slate-100 rounded animate-pulse w-5/6" />
+                  <div className="h-4 bg-slate-100 rounded animate-pulse w-4/6" />
+                </div>
+              </div>
+            </div>
+            {/* Sidebar skeleton */}
+            <div className="lg:col-span-1">
+              <div className="bg-white rounded-xl border border-slate-200 p-6 shadow-md space-y-4">
+                <div className="h-5 w-32 bg-slate-200 rounded animate-pulse" />
+                {[1, 2, 3, 4].map((i) => (
+                  <div key={i} className="h-10 bg-slate-100 rounded-lg animate-pulse" />
+                ))}
+                <div className="h-12 bg-blue-100 rounded-lg animate-pulse" />
+              </div>
+            </div>
+          </div>
+        </div>
       </div>
     )
   }
@@ -605,7 +190,6 @@ export default function PropertyDetail() {
         console.error('Share link error:', error)
         setToastMessage('ไม่สามารถสร้างลิงก์แชร์ได้ กรุณาลองใหม่')
         setShowToast(true)
-        setTimeout(() => setShowToast(false), 2500)
       }
       return
     }
@@ -627,13 +211,11 @@ export default function PropertyDetail() {
           setToastMessage(`ลิงก์แชร์: ${shareUrl}`)
         }
         setShowToast(true)
-        setTimeout(() => setShowToast(false), 4000)
       }
     } catch (error) {
       console.error('Share link error:', error)
       setToastMessage('ไม่สามารถสร้างลิงก์แชร์ได้ กรุณาลองใหม่')
       setShowToast(true)
-      setTimeout(() => setShowToast(false), 2500)
     }
   }
 
@@ -652,15 +234,11 @@ export default function PropertyDetail() {
       }
       setShowToast(true)
       setCopied(true)
-      setTimeout(() => {
-        setCopied(false)
-        setShowToast(false)
-      }, 3000)
+      setTimeout(() => setCopied(false), 3000)
     } catch (err) {
       console.error('Copy link error:', err)
       setToastMessage('ไม่สามารถคัดลอกลิงก์ได้ กรุณาลองใหม่')
       setShowToast(true)
-      setTimeout(() => setShowToast(false), 2500)
     } finally {
       setIsCopying(false)
     }
@@ -1068,12 +646,10 @@ export default function PropertyDetail() {
                       onSuccess={(message) => {
                         setToastMessage(message || 'ส่งข้อมูลสำเร็จ เจ้าหน้าที่จะติดต่อกลับ')
                         setShowToast(true)
-                        setTimeout(() => setShowToast(false), 3000)
                       }}
                       onError={() => {
                         setToastMessage('เกิดข้อผิดพลาด กรุณาลองใหม่อีกครั้ง')
                         setShowToast(true)
-                        setTimeout(() => setShowToast(false), 3000)
                       }}
                     />
                   </div>
@@ -1091,7 +667,7 @@ export default function PropertyDetail() {
           </div>
         </div>
       </div>
-      <Toast message={toastMessage} isVisible={showToast} onClose={() => setShowToast(false)} />
+      <Toast message={toastMessage} isVisible={showToast} onClose={() => setShowToast(false)} duration={3000} />
     </PageLayout>
   )
 }

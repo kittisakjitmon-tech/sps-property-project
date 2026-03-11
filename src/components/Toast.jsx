@@ -1,15 +1,19 @@
 import { useEffect } from 'react'
 import { CheckCircle } from 'lucide-react'
 
-export default function Toast({ message, isVisible, onClose }) {
+/**
+ * Toast — notification popup
+ * @param {string}  message   - ข้อความที่ต้องการแสดง
+ * @param {boolean} isVisible - toggle แสดง/ซ่อน
+ * @param {Function} onClose  - callback เมื่อหมดเวลาหรือปิด
+ * @param {number}  duration  - ระยะเวลาแสดง (ms) — default 2500
+ */
+export default function Toast({ message, isVisible, onClose, duration = 2500 }) {
   useEffect(() => {
-    if (isVisible) {
-      const timer = setTimeout(() => {
-        onClose()
-      }, 2000)
-      return () => clearTimeout(timer)
-    }
-  }, [isVisible, onClose])
+    if (!isVisible) return
+    const timer = setTimeout(onClose, duration)
+    return () => clearTimeout(timer)
+  }, [isVisible, onClose, duration])
 
   if (!isVisible) return null
 
