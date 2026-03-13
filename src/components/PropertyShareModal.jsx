@@ -1,8 +1,12 @@
-import { X, Copy, MessageCircle, Facebook, MapPin, Bed, Bath, Maximize2 } from 'lucide-react'
+import { X, Copy, MessageCircle, Facebook, MapPin, Bed, Bath, Maximize2, Check } from 'lucide-react'
 import ProtectedImageContainer from './ProtectedImageContainer'
 import { formatPrice } from '../lib/priceFormat'
+import { createSpoomeShortUrl } from '../lib/spoo'
+import { useState } from 'react'
 
 export default function PropertyShareModal({ isOpen, onClose, property, onCopySuccess }) {
+  const [isGenerating, setIsGenerating] = useState(false)
+  const [copied, setCopied] = useState(false)
   if (!isOpen || !property) return null
 
   const loc = property.location || {}
@@ -12,32 +16,50 @@ export default function PropertyShareModal({ isOpen, onClose, property, onCopySu
 
   const currentUrl = window.location.href
 
-  const handleCopyLink = async () => {
-    try {
-      await navigator.clipboard.writeText(currentUrl)
-      onCopySuccess?.()
+  const finishCopy = () => {
+    setIsGenerating(false)
+    setCopied(true)
+    onCopySuccess?.()
+    setTimeout(() => {
+      setCopied(false)
       onClose()
+    }, 1500)
+  }
+
+  const handleCopyLink = async () => {
+    if (copied) return
+    setIsGenerating(true)
+    try {
+      const shortUrl = await createSpoomeShortUrl(currentUrl)
+      await navigator.clipboard.writeText(shortUrl)
+      finishCopy()
     } catch (err) {
       console.error('Failed to copy:', err)
       // Fallback for older browsers
+      const shortUrl = await createSpoomeShortUrl(currentUrl)
       const textArea = document.createElement('textarea')
-      textArea.value = currentUrl
+      textArea.value = shortUrl
       document.body.appendChild(textArea)
       textArea.select()
       document.execCommand('copy')
       document.body.removeChild(textArea)
-      onCopySuccess?.()
-      onClose()
+      finishCopy()
     }
   }
 
-  const handleShareLine = () => {
-    const lineUrl = `https://social-plugins.line.me/lineit/share?url=${encodeURIComponent(currentUrl)}`
+  const handleShareLine = async () => {
+    setIsGenerating(true)
+    const urlToShare = await createSpoomeShortUrl(currentUrl)
+    setIsGenerating(false)
+    const lineUrl = `https://social-plugins.line.me/lineit/share?url=${encodeURIComponent(urlToShare)}`
     window.open(lineUrl, '_blank', 'width=600,height=400')
   }
 
-  const handleShareFacebook = () => {
-    const facebookUrl = `https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(currentUrl)}`
+  const handleShareFacebook = async () => {
+    setIsGenerating(true)
+    const urlToShare = await createSpoomeShortUrl(currentUrl)
+    setIsGenerating(false)
+    const facebookUrl = `https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(urlToShare)}`
     window.open(facebookUrl, '_blank', 'width=600,height=400')
   }
 
@@ -134,34 +156,57 @@ export default function PropertyShareModal({ isOpen, onClose, property, onCopySu
               {/* Copy Link */}
               <button
                 onClick={handleCopyLink}
-                className="w-full flex items-center gap-3 px-4 py-3 rounded-lg bg-blue-50 text-blue-900 hover:bg-blue-100 transition font-medium"
+                disabled={isGenerating || copied}
+                className={`group relative w-full flex items-center gap-4 px-4 py-3 sm:p-4 rounded-xl border-2 transition-all duration-300 font-semibold overflow-hidden disabled:opacity-90 ${copied ? 'border-emerald-500 bg-emerald-50 text-emerald-900 shadow-lg shadow-emerald-500/10' : 'border-slate-100 bg-white text-slate-700 hover:border-blue-600 hover:shadow-xl hover:shadow-blue-900/10'}`}
               >
-                <div className="w-10 h-10 rounded-lg bg-blue-900 flex items-center justify-center shrink-0">
-                  <Copy className="h-5 w-5 text-white" />
+                {!copied && <div className="absolute inset-0 bg-gradient-to-r from-blue-50/50 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>}
+                <div className={`relative z-10 w-12 h-12 rounded-xl flex items-center justify-center shrink-0 transition-all duration-300 ${copied ? 'bg-emerald-500 text-white shadow-md' : 'bg-blue-50 group-hover:bg-blue-600 text-blue-600 group-hover:text-white'}`}>
+                  {isGenerating ? (
+                    <span className="inline-block w-5 h-5 border-2 border-current border-t-transparent rounded-full animate-spin" />
+                  ) : copied ? (
+                    <Check className="h-6 w-6 scale-110 transition-transform duration-300" />
+                  ) : (
+                    <Copy className="h-5 w-5 group-hover:scale-110 transition-transform duration-300" />
+                  )}
                 </div>
-                <span>คัดลอกลิงก์</span>
+                <div className="relative z-10 flex flex-col items-start">
+                  <span className="text-base sm:text-lg">{isGenerating ? 'กำลังสร้างลิงก์...' : copied ? 'คัดลอกสำเร็จแล้ว!' : 'คัดลอกลิงก์'}</span>
+                  {!copied && !isGenerating && <span className="text-xs text-slate-500 font-medium font-normal mt-0.5">กดเพื่อคัดลอกลิงก์นำไปแชร์ต่อ</span>}
+                </div>
+                {copied && (
+                   <span className="absolute right-6 z-10 flex h-3 w-3">
+                     <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                     <span className="relative inline-flex rounded-full h-3 w-3 bg-emerald-500"></span>
+                   </span>
+                )}
               </button>
 
               {/* Share to Line */}
               <button
                 onClick={handleShareLine}
-                className="w-full flex items-center gap-3 px-4 py-3 rounded-lg bg-green-50 text-green-900 hover:bg-green-100 transition font-medium"
+                className="group relative w-full flex items-center gap-4 px-4 py-3 sm:p-4 rounded-xl border-2 border-slate-100 bg-white text-slate-700 hover:border-[#00B900] hover:shadow-xl hover:shadow-[#00B900]/10 transition-all duration-300 font-semibold overflow-hidden"
               >
-                <div className="w-10 h-10 rounded-lg bg-green-500 flex items-center justify-center shrink-0">
-                  <MessageCircle className="h-5 w-5 text-white" />
+                <div className="absolute inset-0 bg-gradient-to-r from-[#00B900]/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
+                <div className="relative z-10 w-12 h-12 rounded-xl bg-[#00B900]/10 group-hover:bg-[#00B900] text-[#00B900] group-hover:text-white flex items-center justify-center shrink-0 transition-all duration-300">
+                  <MessageCircle className="h-6 w-6 group-hover:scale-110 transition-transform duration-300" />
                 </div>
-                <span>แชร์ไปยัง Line</span>
+                <div className="relative z-10 flex flex-col items-start">
+                  <span className="text-base sm:text-lg">แชร์ไปยัง Line</span>
+                </div>
               </button>
 
               {/* Share to Facebook */}
               <button
                 onClick={handleShareFacebook}
-                className="w-full flex items-center gap-3 px-4 py-3 rounded-lg bg-blue-50 text-blue-900 hover:bg-blue-100 transition font-medium"
+                className="group relative w-full flex items-center gap-4 px-4 py-3 sm:p-4 rounded-xl border-2 border-slate-100 bg-white text-slate-700 hover:border-[#1877F2] hover:shadow-xl hover:shadow-[#1877F2]/10 transition-all duration-300 font-semibold overflow-hidden"
               >
-                <div className="w-10 h-10 rounded-lg bg-blue-600 flex items-center justify-center shrink-0">
-                  <Facebook className="h-5 w-5 text-white" />
+                <div className="absolute inset-0 bg-gradient-to-r from-[#1877F2]/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
+                <div className="relative z-10 w-12 h-12 rounded-xl bg-[#1877F2]/10 group-hover:bg-[#1877F2] text-[#1877F2] group-hover:text-white flex items-center justify-center shrink-0 transition-all duration-300">
+                  <Facebook className="h-6 w-6 group-hover:scale-110 transition-transform duration-300" />
                 </div>
-                <span>แชร์ไปยัง Facebook</span>
+                <div className="relative z-10 flex flex-col items-start">
+                  <span className="text-base sm:text-lg">แชร์ไปยัง Facebook</span>
+                </div>
               </button>
             </div>
           </div>

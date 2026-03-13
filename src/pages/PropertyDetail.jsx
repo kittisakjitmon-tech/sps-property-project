@@ -1,8 +1,8 @@
 import { useState, useEffect, lazy, Suspense } from 'react'
 import { useParams, Link, useSearchParams, useNavigate } from 'react-router-dom'
 import { Helmet } from 'react-helmet-async'
-import { MapPin, Bed, Bath, Maximize2, Phone, MessageCircle, Share2, CheckCircle2, Copy } from 'lucide-react'
-import { createIsgdShortUrl } from '../lib/isgd'
+import { MapPin, Bed, Bath, Maximize2, Phone, MessageCircle, Share2, CheckCircle2, Copy, Check } from 'lucide-react'
+import { createSpoomeShortUrl } from '../lib/spoo'
 import { getPropertyByIdOnce, createOrReuseShareLink, recordPropertyView } from '../lib/firestore'
 import PageLayout from '../components/PageLayout'
 import Toast from '../components/Toast'
@@ -224,10 +224,10 @@ export default function PropertyDetail() {
     setIsCopying(true)
     try {
       const longUrl = window.location.href
-      const shortUrl = await createIsgdShortUrl(longUrl)
+      const shortUrl = await createSpoomeShortUrl(longUrl)
       await navigator.clipboard.writeText(shortUrl)
       if (shortUrl === longUrl) {
-        console.warn('is.gd shortening returned original URL; copy used long URL')
+        console.warn('spoo.me shortening returned original URL; copy used long URL')
         setToastMessage(`คัดลอกลิงก์แล้ว: ${shortUrl}`)
       } else {
         setToastMessage(`คัดลอกลิงก์แล้ว: ${shortUrl}`)
@@ -444,26 +444,28 @@ export default function PropertyDetail() {
                     <button
                       type="button"
                       onClick={handleShare}
-                      className="ml-4 flex items-center gap-2 px-4 py-2.5 min-h-[44px] min-w-[44px] rounded-lg bg-blue-600 text-white hover:bg-blue-700 transition font-medium shrink-0 [touch-action:manipulation]"
+                      className="ml-2 sm:ml-4 flex items-center justify-center gap-2 sm:gap-2.5 px-3 sm:px-5 py-2.5 min-h-[44px] min-w-[44px] sm:min-h-[48px] rounded-xl bg-blue-600 text-white shadow-sm hover:shadow-md hover:bg-blue-700 active:scale-[0.98] transition-all duration-300 font-semibold shrink-0 [touch-action:manipulation] relative overflow-hidden group"
                       aria-label="แชร์ให้ลูกค้า"
                     >
-                      <Share2 className="h-4 w-4" />
-                      <span className="hidden sm:inline">แชร์ให้ลูกค้า</span>
-                      <span className="sm:hidden">แชร์</span>
+                      <div className="absolute inset-0 bg-white/0 group-hover:bg-white/10 transition-colors duration-300"></div>
+                      <Share2 className="relative h-5 w-5 sm:h-4.5 sm:w-4.5 group-hover:-rotate-12 group-hover:scale-110 transition-all duration-300" />
+                      <span className="relative hidden sm:inline">แชร์ให้ลูกค้า</span>
                     </button>
                     <button
                       type="button"
                       onClick={handleCopyLink}
-                      className="ml-3 flex items-center gap-2 px-4 py-2.5 min-h-[44px] min-w-[44px] rounded-xl bg-gray-100 text-gray-800 hover:bg-gray-200 shadow-sm transition-transform transform hover:-translate-y-0.5 active:translate-y-0 duration-150 font-medium shrink-0 [touch-action:manipulation]"
-                      aria-label="คัดลอกลิงก์"
+                      className={`ml-2 sm:ml-3 flex items-center justify-center gap-2 sm:gap-2.5 px-3 sm:px-5 py-2.5 min-h-[44px] min-w-[44px] sm:min-h-[48px] rounded-xl font-semibold shrink-0 transition-all duration-300 shadow-sm hover:shadow-md active:scale-[0.98] [touch-action:manipulation] border relative overflow-hidden group ${copied ? 'bg-emerald-50 border-emerald-200 text-emerald-700' : 'bg-white border-slate-200 text-slate-700 hover:border-blue-300 hover:text-blue-700'}`}
+                      aria-label={copied ? "คัดลอกลิงก์สำเร็จ" : "คัดลอกลิงก์"}
                     >
+                      {!copied && <div className="absolute inset-0 bg-blue-50/0 group-hover:bg-blue-50/50 transition-colors duration-300"></div>}
                       {isCopying ? (
-                        <span className="inline-block w-4 h-4 border-2 border-gray-400 border-t-transparent rounded-full animate-spin" />
+                        <span className="relative inline-block w-5 h-5 sm:w-4.5 sm:h-4.5 border-2 border-blue-600 border-t-transparent rounded-full animate-spin" />
+                      ) : copied ? (
+                        <Check className="relative h-5 w-5 sm:h-4.5 sm:w-4.5 scale-110 transition-transform" />
                       ) : (
-                        <Copy className="h-4 w-4" />
+                        <Copy className="relative h-5 w-5 sm:h-4.5 sm:w-4.5 group-hover:scale-110 transition-transform duration-300" />
                       )}
-                      <span className="hidden sm:inline">คัดลอกลิงก์</span>
-                      <span className="sm:hidden">คัดลอก</span>
+                      <span className="relative hidden sm:inline">{copied ? 'คัดลอกสำเร็จ' : 'คัดลอกลิงก์'}</span>
                     </button>
                 </div>
 
