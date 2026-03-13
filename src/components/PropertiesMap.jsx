@@ -68,13 +68,84 @@ export default function PropertiesMap({ properties, className = '' }) {
       lat: Number(p.lat),
     }))
 
-    // เมื่อแตะ/คลิกมุด → ไปหน้ารายละเอียดทันที (รองรับมือถือ)
+    // ให้ Longdo แสดง popup เมื่อคลิกปักหมุดทั้งบน desktop และ mobile โดยไม่ redirect ทันที
+    const closePopup = () => {
+      console.log('closePopup called')
+      try {
+        if (map && map.Overlays) {
+          // ลอง lastOpenPopup ก่อน
+          if (typeof map.Overlays.lastOpenPopup === 'function') {
+            const popup = map.Overlays.lastOpenPopup()
+            console.log('lastOpenPopup:', popup)
+            // ถ้ามี marker ให้ใช้ marker.popup(false) แทน
+            if (popup && popup.marker) {
+              console.log('popup.marker:', popup.marker)
+              if (typeof popup.marker.popup === 'function') {
+                popup.marker.popup(false)
+                console.log('Called marker.popup(false)')
+                return
+              }
+            }
+          }
+        }
+      } catch (e) {
+        console.error('Error closing popup:', e)
+      }
+    }
+
     const unbindOverlayClick = map.Event?.bind?.('overlayClick', (overlay) => {
-      const entry = markersRef.current.find((e) => e.marker === overlay)
-      if (entry?.url) {
-        window.location.href = entry.url
+      try {
+        if (map && typeof map.pop === 'function') {
+          const location = overlay.location ? overlay.location() : { lon: overlay.lon, lat: overlay.lat }
+          map.pop(true, location)
+        }
+      } catch {
+        // ป้องกัน error จาก Longdo ภายใน โดยไม่ให้พังทั้งแผนที่
       }
     })
+
+    // Bind popupClose event
+    const unbindPopupClose = map.Event?.bind?.('popupClose', () => {
+      // Popup ถูกปิดแล้ว
+    })
+
+    // ฟังก์ชัน global สำหรับปิด popup (ถูกเรียกจากปุ่ม X ภายใน popup HTML)
+    const previousCloseHandler = window.spsCloseMapPopup
+    window.spsCloseMapPopup = closePopup
+
+    // Delegate click event สำหรับปุ่มปิด popup ที่อยู่ใน Longdo popup element
+    const handlePopupCloseClick = (e) => {
+      const target = e.target
+      console.log('Click detected:', target, target.dataset)
+      if (target.matches('[data-popup-close]') || target.closest('[data-popup-close]')) {
+        console.log('Close button clicked')
+        closePopup()
+      }
+    }
+    document.addEventListener('click', handlePopupCloseClick)
+
+    // MutationObserver เพื่อหา popup element ที่ Longdo สร้างขึ้นและ bind event โดยตรง
+    const observer = new MutationObserver((mutations) => {
+      mutations.forEach((mutation) => {
+        mutation.addedNodes.forEach((node) => {
+          if (node.nodeType === Node.ELEMENT_NODE) {
+            console.log('New node added:', node)
+            const closeBtn = node.querySelector ? node.querySelector('[data-popup-close]') : null
+            if (closeBtn) {
+              console.log('Found close button via observer:', closeBtn)
+              closeBtn.addEventListener('click', closePopup)
+            }
+            // หาใน child nodes ด้วย
+            if (node.querySelectorAll) {
+              node.querySelectorAll('[data-popup-close]').forEach((btn) => {
+                btn.addEventListener('click', closePopup)
+              })
+            }
+          }
+        })
+      })
+    })
+    observer.observe(mapRef.current, { childList: true, subtree: true })
 
     propertiesWithCoords.forEach((property) => {
       if (disposed) return
@@ -85,18 +156,24 @@ export default function PropertiesMap({ properties, className = '' }) {
         ? `${property.location.district || ''}, ${property.location.province || ''}`.trim()
         : ''
       const detailUrl = getShortPropertyPath(property)
+      const safeTitle = (property.title || 'ทรัพย์สิน').replace(/</g, '&lt;')
       // ปุ่มใหญ่ ง่ายต่อการแตะบนมือถือ: min-height 44px, touch-action: manipulation
       const infoContent = `
-        <div style="min-width: 200px; padding: 10px;">
-          <h3 style="margin: 0 0 8px 0; font-size: 16px; font-weight: bold; color: #1e3a8a;">
-            ${(property.title || 'ทรัพย์สิน').replace(/</g, '&lt;')}
-          </h3>
-          <p style="margin: 4px 0; font-size: 18px; font-weight: bold; color: #dc2626;">
+        <div style="min-width: 230px; max-width: 280px; padding: 12px 12px 10px; background: #ffffff; border-radius: 14px; box-shadow: 0 10px 30px rgba(15,23,42,0.35); font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;">
+          <div style="display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; margin-bottom: 6px;">
+            <h3 style="margin: 0; font-size: 15px; font-weight: 700; color: #0f172a; line-height: 1.4;">
+              ${safeTitle}
+            </h3>
+            <button type="button" data-popup-close aria-label="ปิด" style="border: none; background: transparent; color: #94a3b8; cursor: pointer; padding: 0; margin: 0; line-height: 1; font-size: 14px;">
+              ×
+            </button>
+          </div>
+          <p style="margin: 0 0 6px 0; font-size: 16px; font-weight: 700; color: #dc2626;">
             ${priceText}
           </p>
-          ${locationText ? `<p style="margin: 4px 0; font-size: 14px; color: #64748b;">📍 ${locationText}</p>` : ''}
-          ${property.bedrooms ? `<p style="margin: 4px 0; font-size: 14px; color: #64748b;">🛏️ ${property.bedrooms} ห้องนอน</p>` : ''}
-          <a href="${detailUrl}" style="display: block; margin-top: 12px; padding: 12px 16px; min-height: 44px; box-sizing: border-box; background: #fbbf24; color: #78350f; text-decoration: none; border-radius: 8px; font-weight: 600; font-size: 15px; text-align: center; touch-action: manipulation; -webkit-tap-highlight-color: transparent;">
+          ${locationText ? `<p style="margin: 0 0 4px 0; font-size: 13px; color: #64748b;">📍 ${locationText}</p>` : ''}
+          ${property.bedrooms ? `<p style="margin: 0 0 8px 0; font-size: 13px; color: #64748b;">🛏️ ${property.bedrooms} ห้องนอน</p>` : ''}
+          <a href="${detailUrl}" aria-label="ดูรายละเอียด ${(property.title || 'ทรัพย์สิน').replace(/"/g, '&quot;')}" style="display: block; margin-top: 12px; padding: 12px 16px; min-height: 44px; box-sizing: border-box; background: #fbbf24; color: #78350f; text-decoration: none; border-radius: 8px; font-weight: 600; font-size: 15px; text-align: center; touch-action: manipulation; -webkit-tap-highlight-color: transparent;">
             ดูรายละเอียด →
           </a>
         </div>
@@ -129,7 +206,20 @@ export default function PropertiesMap({ properties, className = '' }) {
 
     return () => {
       disposed = true
-      if (typeof unbindOverlayClick === 'function') unbindOverlayClick()
+      if (typeof unbindOverlayClick === 'function') {
+        unbindOverlayClick()
+      }
+      if (typeof unbindPopupClose === 'function') {
+        unbindPopupClose()
+      }
+      observer.disconnect()
+      document.removeEventListener('click', handlePopupCloseClick)
+      if (previousCloseHandler) {
+        window.spsCloseMapPopup = previousCloseHandler
+      } else {
+        // eslint-disable-next-line no-param-reassign
+        delete window.spsCloseMapPopup
+      }
       if (mapInstanceRef.current && mapInstanceRef.current.Overlays) {
         mapInstanceRef.current.Overlays.clear()
       }

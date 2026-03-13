@@ -66,7 +66,7 @@ function PropertyCard({ property, compact = false, home = false }) {
       className={`group flex flex-col h-full w-full bg-white overflow-hidden rounded-[10px] transition-all duration-300 ${
         isHome
           ? 'shadow-[0_4px_12px_rgba(0,0,0,0.05)] hover:shadow-[0_8px_20px_rgba(0,0,0,0.08)]'
-          : 'max-w-[340px] shadow-[0_6px_18px_rgba(0,0,0,0.06)] hover:-translate-y-0.5 hover:shadow-[0_12px_24px_rgba(0,0,0,0.1)]'
+          : 'max-w-[340px] sm:max-w-none shadow-[0_6px_18px_rgba(0,0,0,0.06)] hover:-translate-y-0.5 hover:shadow-[0_12px_24px_rgba(0,0,0,0.1)]'
       }`}
       style={isHome ? undefined : { maxWidth: 'min(100%, 340px)' }}
     >

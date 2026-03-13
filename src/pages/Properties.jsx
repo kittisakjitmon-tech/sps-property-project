@@ -541,7 +541,7 @@ export default function Properties() {
                 )}
               </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 justify-items-center">
                 {propertiesLoading
                   ? Array.from({ length: 12 }, (_, i) => (
                       <div key={`skeleton-${i}`} className="flex flex-col rounded-[10px] overflow-hidden bg-white border border-slate-100 shadow-sm" aria-hidden="true">
