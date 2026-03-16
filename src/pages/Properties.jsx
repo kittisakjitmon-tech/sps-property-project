@@ -452,7 +452,11 @@ export default function Properties() {
   const heroSubtitle = 'ค้นหาบ้านที่ใช่สำหรับคุณ'
 
   return (
-    <PageLayout heroTitle={heroTitle} heroSubtitle={heroSubtitle} searchComponent={null}>
+    <>
+      <Helmet>
+        <link rel="canonical" href="https://spspropertysolution.com/properties" />
+      </Helmet>
+      <PageLayout heroTitle={heroTitle} heroSubtitle={heroSubtitle} searchComponent={null}>
       <div className="min-h-screen bg-slate-50 py-8" ref={resultsTopRef} aria-busy={isPending}>
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="mb-6 flex flex-col sm:flex-row sm:items-end justify-between gap-4">
@@ -587,5 +591,6 @@ export default function Properties() {
         </div>
       </div>
     </PageLayout>
+    </>
   )
 }
