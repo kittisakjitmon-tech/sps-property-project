@@ -30,9 +30,9 @@ export default function ProtectedImageContainer({
         {children}
       </div>
 
-      {/* Protection Layer - z-[1] (middle) */}
+      {/* Protection Layer - z-[1] (middle) - pointer-events-none to allow scrolling */}
       <div
-        className="absolute inset-0 z-[1] pointer-events-auto select-none"
+        className="absolute inset-0 z-[1] pointer-events-none select-none"
         onContextMenu={handleContextMenu}
         aria-hidden
       />

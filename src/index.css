@@ -34,7 +34,28 @@ img.protected-image {
 .share-page.protected-content {
   user-select: none;
   -webkit-user-select: none;
-  -webkit-touch-callout: none;
+}
+
+/* Thumbnail gallery should allow touch scrolling */
+.share-page .thumbnail-gallery {
+  touch-action: pan-x pan-y !important;
+  -webkit-overflow-scrolling: touch !important;
+  user-select: none !important;
+  -webkit-user-select: none !important;
+  -webkit-touch-callout: default !important;
+  pointer-events: auto !important;
+  overflow-x: scroll !important;
+  overflow-y: hidden !important;
+}
+
+.share-page .thumbnail-gallery button {
+  pointer-events: auto !important;
+  touch-action: manipulation !important;
+}
+
+.share-page .thumbnail-gallery img {
+  pointer-events: none !important;
+  -webkit-user-drag: none !important;
 }
 
 .share-protected-image {

@@ -50,11 +50,20 @@ export default function PropertyDetail() {
 
   useEffect(() => {
     if (!property) return
-    const canonical = generatePropertySlug(property)
-    if (canonical && slug !== canonical) {
-      navigate(`/properties/${canonical}`, { replace: true })
+    const canonicalSlug = generatePropertySlug(property)
+    const canonicalPath = `/properties/${canonicalSlug}`
+    
+    // Redirect จาก /p/:id ไปยัง slug version
+    if (id && !slug) {
+      navigate(canonicalPath, { replace: true })
+      return
     }
-  }, [property, slug, navigate])
+    
+    // Redirect ถ้า slug ไม่ตรงกับ canonical
+    if (canonicalSlug && slug !== canonicalSlug) {
+      navigate(canonicalPath, { replace: true })
+    }
+  }, [property, slug, id, navigate])
 
   if (loading) {
     return (

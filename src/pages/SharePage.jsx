@@ -1,4 +1,4 @@
-import { useState, useEffect, lazy, Suspense } from 'react'
+import { useState, useEffect, lazy, Suspense, useRef } from 'react'
 import { useParams, Link } from 'react-router-dom'
 import { Helmet } from 'react-helmet-async'
 import {
@@ -26,6 +26,11 @@ export default function SharePage() {
   const [copied, setCopied] = useState(false)
   const [expired, setExpired] = useState(false)
   const [galleryIndex, setGalleryIndex] = useState(0)
+  
+  // Touch swipe detection for thumbnail gallery
+  const thumbnailContainerRef = useRef(null)
+  const [touchStart, setTouchStart] = useState(null)
+  const [touchEnd, setTouchEnd] = useState(null)
 
   useEffect(() => {
     let cancelled = false
@@ -143,6 +148,38 @@ export default function SharePage() {
     }
   }
 
+  // Touch handlers for thumbnail gallery swipe
+  const minSwipeDistance = 50
+
+  const onTouchStart = (e) => {
+    setTouchEnd(null)
+    setTouchStart(e.targetTouches[0].clientX)
+  }
+
+  const onTouchMove = (e) => {
+    setTouchEnd(e.targetTouches[0].clientX)
+  }
+
+  const onTouchEnd = () => {
+    if (!touchStart || !touchEnd) return
+    const distance = touchStart - touchEnd
+    const isLeftSwipe = distance > minSwipeDistance
+    const isRightSwipe = distance < -minSwipeDistance
+    
+    if (isLeftSwipe) {
+      // Swipe left - scroll to next images
+      if (thumbnailContainerRef.current) {
+        thumbnailContainerRef.current.scrollBy({ left: 200, behavior: 'smooth' })
+      }
+    }
+    if (isRightSwipe) {
+      // Swipe right - scroll to previous images
+      if (thumbnailContainerRef.current) {
+        thumbnailContainerRef.current.scrollBy({ left: -200, behavior: 'smooth' })
+      }
+    }
+  }
+
   return (
     <>
       <Helmet>
@@ -161,7 +198,7 @@ export default function SharePage() {
         <meta name="twitter:image" content={primaryImage} />
       </Helmet>
       <div
-        className="share-page protected-content min-h-screen bg-white flex flex-col items-center justify-center p-4 sm:p-6 md:p-8 relative overflow-hidden"
+        className="share-page protected-content min-h-screen bg-white flex flex-col items-center p-4 sm:p-6 md:p-8 relative overflow-y-auto"
         onContextMenu={handleContextMenu}
       >
         <div className="share-page-watermark absolute inset-0 pointer-events-none" aria-hidden />
@@ -200,14 +237,25 @@ export default function SharePage() {
               )}
             </ProtectedImageContainer>
             {imgs.length > 1 && (
-              <div className="px-4 py-3 border-b border-slate-100 bg-white" onContextMenu={handleContextMenu}>
-                <div className="flex gap-2 overflow-x-auto scrollbar-hide">
+              <div className="px-4 py-3 border-b border-slate-100 bg-white">
+                <div 
+                  ref={thumbnailContainerRef}
+                  className="thumbnail-gallery flex gap-2 overflow-x-auto snap-x snap-mandatory scroll-smooth pb-1 select-none"
+                  style={{ 
+                    touchAction: 'pan-x',
+                    WebkitOverflowScrolling: 'touch',
+                    cursor: 'grab'
+                  }}
+                  onTouchStart={onTouchStart}
+                  onTouchMove={onTouchMove}
+                  onTouchEnd={onTouchEnd}
+                >
                   {imgs.map((img, i) => (
                     <button
                       key={`${img}-${i}`}
                       type="button"
                       onClick={() => setGalleryIndex(i)}
-                      className={`shrink-0 w-20 h-14 rounded-lg overflow-hidden border-2 transition ${i === galleryIndex ? 'border-blue-900' : 'border-transparent'}`}
+                      className={`shrink-0 w-20 h-14 rounded-lg overflow-hidden border-2 transition snap-start ${i === galleryIndex ? 'border-blue-900' : 'border-transparent'}`}
                     >
                       <img src={img} alt="" width={80} height={56} loading="lazy" decoding="async" className="w-full h-full object-cover protected-image" draggable={false} />
                     </button>

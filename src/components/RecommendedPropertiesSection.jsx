@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom'
 import { Sparkles, ArrowRight, TrendingUp, Clock, Star, MapPin, Home as HomeIcon } from 'lucide-react'
 import { formatPrice } from '../lib/priceFormat'
 import { getPropertyLabel } from '../constants/propertyTypes'
-import { getShortPropertyPath } from '../lib/propertySlug'
+import { getPropertyPath } from '../lib/propertySlug'
 
 /**
  * RecommendedPropertiesSection - แสดงบ้านแนะนำแบบ horizontal scroll หรือ vertical list
@@ -159,7 +159,7 @@ function RecommendedPropertyCard({ property, compact = false }) {
   if (compact) {
     return (
       <Link
-        to={getShortPropertyPath(property)}
+        to={getPropertyPath(property)}
         className="group block"
       >
         <div className="bg-white rounded-xl overflow-hidden border border-slate-200 hover:border-blue-400 hover:shadow-md transition-all duration-300">
@@ -211,7 +211,7 @@ function RecommendedPropertyCard({ property, compact = false }) {
   // Horizontal Layout (Default)
   return (
     <Link
-      to={getShortPropertyPath(property)}
+      to={getPropertyPath(property)}
       className="group flex-none w-[280px] sm:w-[320px] snap-start"
     >
       <div className="bg-white rounded-2xl overflow-hidden border-2 border-slate-200 hover:border-blue-400 hover:shadow-lg transition-all duration-300 h-full">

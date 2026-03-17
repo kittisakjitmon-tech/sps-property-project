@@ -437,6 +437,35 @@ export default function Properties() {
     })
   }, [navigate, clearFilters])
 
+  // Wrapper function to update filters and URL params simultaneously
+  const updateFiltersWithUrl = useCallback((filterUpdates) => {
+    // Update context filters
+    updateFilters(filterUpdates)
+    
+    // Update URL params
+    startTransition(() => {
+      const params = new URLSearchParams(searchParams)
+      
+      // Update params based on filter changes
+      Object.entries(filterUpdates).forEach(([key, value]) => {
+        const paramKey = key === 'propertyType' ? 'type' : 
+                        key === 'propertySubStatus' ? 'status' : key
+        
+        if (value && value !== '' && value !== null && value !== undefined) {
+          params.set(paramKey, String(value))
+        } else {
+          params.delete(paramKey)
+        }
+      })
+      
+      // Reset to page 1 when filters change
+      params.delete('page')
+      
+      prevSearchParamsRef.current = params.toString()
+      navigate(params.toString() ? `/properties?${params.toString()}` : '/properties', { replace: true })
+    })
+  }, [searchParams, navigate, updateFilters])
+
   const getPageNumbers = () => {
     const pages = []
     const maxVisible = 5
@@ -506,15 +535,15 @@ export default function Properties() {
 
           {/* Filters Bar */}
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8 bg-white p-5 rounded-[2rem] shadow-sm border border-slate-100">
-            <FilterItem label="ประเภทอสังหาฯ" icon={HomeIcon} value={filters.propertyType || ''} onChange={(val) => updateFilters({ propertyType: val })} options={[{ value: '', label: 'ทั้งหมด' }, ...PROPERTY_TYPES.map(pt => ({ value: pt.id, label: pt.label }))]} />
-            <FilterItem label="พื้นที่ / ทำเล" icon={MapPin} value={filters.location || ''} onChange={(val) => updateFilters({ location: val })} options={[{ value: '', label: 'ทุกทำเล' }, { value: 'ชลบุรี', label: 'ชลบุรี' }, { value: 'พานทอง', label: 'พานทอง' }, { value: 'บ้านบึง', label: 'บ้านบึง' }, { value: 'ศรีราชา', label: 'ศรีราชา' }, { value: 'ฉะเชิงเทรา', label: 'ฉะเชิงเทรา' }, { value: 'ระยอง', label: 'ระยอง' }]} />
-            <FilterItem label="สภาพบ้าน" icon={Sparkles} value={filters.propertySubStatus || ''} onChange={(val) => updateFilters({ propertySubStatus: val })} options={[{ value: '', label: 'ทั้งหมด' }, { value: 'มือ 1', label: 'มือ 1 (ใหม่)' }, { value: 'มือ 2', label: 'มือ 2 (พร้อมอยู่)' }]} />
-            <FilterItem label="เงื่อนไขสัญญา" icon={ShieldCheck} value={filters.subListingType === 'installment_only' ? 'installment' : (filters.isRental ? 'rent' : (filters.isRental === false ? 'sale' : ''))} onChange={(val) => { if (val === 'installment') updateFilters({ subListingType: 'installment_only', isRental: true }); else if (val === 'rent') updateFilters({ isRental: true, subListingType: '' }); else if (val === 'sale') updateFilters({ isRental: false, subListingType: '' }); else updateFilters({ isRental: null, subListingType: '' }); }} options={[{ value: '', label: 'ทั้งหมด' }, { value: 'sale', label: 'ขายปกติ' }, { value: 'rent', label: 'เช่าปกติ' }, { value: 'installment', label: '🔥 ผ่อนตรง (เช่าซื้อ)' }]} />
+            <FilterItem label="ประเภทอสังหาฯ" icon={HomeIcon} value={filters.propertyType || ''} onChange={(val) => updateFiltersWithUrl({ propertyType: val })} options={[{ value: '', label: 'ทั้งหมด' }, ...PROPERTY_TYPES.map(pt => ({ value: pt.id, label: pt.label }))]} />
+            <FilterItem label="พื้นที่ / ทำเล" icon={MapPin} value={filters.location || ''} onChange={(val) => updateFiltersWithUrl({ location: val })} options={[{ value: '', label: 'ทุกทำเล' }, { value: 'ชลบุรี', label: 'ชลบุรี' }, { value: 'พานทอง', label: 'พานทอง' }, { value: 'บ้านบึง', label: 'บ้านบึง' }, { value: 'ศรีราชา', label: 'ศรีราชา' }, { value: 'ฉะเชิงเทรา', label: 'ฉะเชิงเทรา' }, { value: 'ระยอง', label: 'ระยอง' }]} />
+            <FilterItem label="สภาพบ้าน" icon={Sparkles} value={filters.propertySubStatus || ''} onChange={(val) => updateFiltersWithUrl({ propertySubStatus: val })} options={[{ value: '', label: 'ทั้งหมด' }, { value: 'มือ 1', label: 'มือ 1 (ใหม่)' }, { value: 'มือ 2', label: 'มือ 2 (พร้อมอยู่)' }]} />
+            <FilterItem label="เงื่อนไขสัญญา" icon={ShieldCheck} value={filters.subListingType === 'installment_only' ? 'installment' : (filters.isRental ? 'rent' : (filters.isRental === false ? 'sale' : ''))} onChange={(val) => { if (val === 'installment') updateFiltersWithUrl({ subListingType: 'installment_only', isRental: true }); else if (val === 'rent') updateFiltersWithUrl({ isRental: true, subListingType: '' }); else if (val === 'sale') updateFiltersWithUrl({ isRental: false, subListingType: '' }); else updateFiltersWithUrl({ isRental: null, subListingType: '' }); }} options={[{ value: '', label: 'ทั้งหมด' }, { value: 'sale', label: 'ขายปกติ' }, { value: 'rent', label: 'เช่าปกติ' }, { value: 'installment', label: '🔥 ผ่อนตรง (เช่าซื้อ)' }]} />
           </div>
 
           <div className="flex flex-col lg:flex-row gap-6">
             <aside className="w-full lg:w-80 shrink-0 space-y-6">
-              <AdvancedFiltersPanel filters={filters} onUpdateFilters={updateFilters} onApply={() => handlePageChange(1)} />
+              <AdvancedFiltersPanel filters={filters} onUpdateFilters={updateFiltersWithUrl} onApply={() => handlePageChange(1)} />
               <div className="hidden lg:block">
                 <RecommendedPropertiesSection allProperties={properties} currentFilters={filters} vertical={true} />
               </div>

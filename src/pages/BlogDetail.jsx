@@ -39,11 +39,20 @@ export default function BlogDetail() {
 
   useEffect(() => {
     if (!blog) return
-    const canonical = generateBlogSlug(blog)
-    if (canonical && slug !== canonical) {
-      navigate(`/blogs/${canonical}`, { replace: true })
+    const canonicalSlug = generateBlogSlug(blog)
+    const canonicalPath = `/blogs/${canonicalSlug}`
+    
+    // Redirect จาก /b/:id ไปยัง slug version
+    if (id && !slug) {
+      navigate(canonicalPath, { replace: true })
+      return
     }
-  }, [blog, slug, navigate])
+    
+    // Redirect ถ้า slug ไม่ตรงกับ canonical
+    if (canonicalSlug && slug !== canonicalSlug) {
+      navigate(canonicalPath, { replace: true })
+    }
+  }, [blog, slug, id, navigate])
 
   const formatDate = (timestamp) => {
     if (!timestamp) return ''
