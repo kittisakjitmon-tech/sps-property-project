@@ -156,34 +156,52 @@ export default function PropertyDetail() {
     if (!url) {
       if (loc.district && loc.province) {
         const locationQuery = `${loc.district}, ${loc.province}`
-        return `https://www.google.com/maps?q=${encodeURIComponent(locationQuery)}&output=embed`
+        return `https://maps.google.com/maps?q=${encodeURIComponent(locationQuery)}&output=embed`
       }
       return null
     }
-    // ลิงก์สั้น (maps.app.goo.gl, goo.gl) ไม่รองรับ iframe embed
+
+    // กรณีเอา Iframe HTML มาแปะ
+    if (url.includes('<iframe')) {
+      const match = url.match(/src="([^"]+)"/);
+      if (match) return match[1];
+    }
+
+    // ลิงก์สั้น (maps.app.goo.gl, goo.gl) ไม่รองรับ iframe embed ทั่วไป
     if (url.includes('maps.app.goo.gl') || url.includes('goo.gl/maps')) return null
+
     if (url.includes('/embed')) return url
-    if (url.includes('google.com/maps')) {
+
+    if (url.includes('google.') && url.includes('/maps')) {
+      let query = '';
+
       const coordMatch = url.match(/@(-?\d+\.?\d*),(-?\d+\.?\d*)/)
       if (coordMatch) {
-        return `https://www.google.com/maps?q=${coordMatch[1]},${coordMatch[2]}&output=embed`
+        query = `${coordMatch[1]},${coordMatch[2]}`
+      } else {
+        const placeMatch = url.match(/place\/([^/?#]+)/)
+        if (placeMatch) {
+          query = decodeURIComponent(placeMatch[1].replace(/\+/g, ' '))
+        } else {
+          const searchMatch = url.match(/[?&]q=([^&]+)/)
+          if (searchMatch) {
+            query = decodeURIComponent(searchMatch[1])
+          } else {
+            const pathSearchMatch = url.match(/\/search\/([^/?#]+)/)
+            if (pathSearchMatch) {
+              query = decodeURIComponent(pathSearchMatch[1].replace(/\+/g, ' '))
+            }
+          }
+        }
       }
-      const placeMatch = url.match(/place\/([^/?#]+)/)
-      if (placeMatch) {
-        const placeName = decodeURIComponent(placeMatch[1].replace(/\+/g, ' '))
-        return `https://www.google.com/maps?q=${encodeURIComponent(placeName)}&output=embed`
+
+      if (query) {
+        return `https://maps.google.com/maps?q=${encodeURIComponent(query)}&output=embed`
       }
-      const searchMatch = url.match(/[?&]q=([^&]+)/)
-      if (searchMatch) {
-        const query = decodeURIComponent(searchMatch[1])
-        return `https://www.google.com/maps?q=${encodeURIComponent(query)}&output=embed`
-      }
-      try {
-        const urlObj = new URL(url)
-        urlObj.searchParams.set('output', 'embed')
-        return urlObj.toString()
-      } catch {
-        return null
+
+      if (loc.district && loc.province) {
+        const locationQuery = `${loc.district}, ${loc.province}`
+        return `https://maps.google.com/maps?q=${encodeURIComponent(locationQuery)}&output=embed`
       }
     }
     return null

@@ -96,28 +96,51 @@ export default function SharePage() {
 
   const getMapEmbedUrl = (mapUrl) => {
     const hasValidCoords = property.lat != null && property.lng != null && !isNaN(Number(property.lat)) && !isNaN(Number(property.lng))
-    if (hasValidCoords) return `https://www.google.com/maps?q=${property.lat},${property.lng}&output=embed`
+    if (hasValidCoords) return `https://maps.google.com/maps?q=${property.lat},${property.lng}&output=embed`
+
     if (!mapUrl) {
       return locationText !== 'ไม่ระบุ'
-        ? `https://www.google.com/maps?q=${encodeURIComponent(locationText)}&output=embed`
+        ? `https://maps.google.com/maps?q=${encodeURIComponent(locationText)}&output=embed`
         : null
     }
+
+    if (mapUrl.includes('<iframe')) {
+      const match = mapUrl.match(/src="([^"]+)"/);
+      if (match) return match[1];
+    }
+
     if (mapUrl.includes('maps.app.goo.gl') || mapUrl.includes('goo.gl/maps')) return null
     if (mapUrl.includes('/embed')) return mapUrl
-    if (mapUrl.includes('google.com/maps')) {
+
+    if (mapUrl.includes('google.') && mapUrl.includes('/maps')) {
+      let query = '';
+      
       const coordMatch = mapUrl.match(/@(-?\d+\.?\d*),(-?\d+\.?\d*)/)
-      if (coordMatch) return `https://www.google.com/maps?q=${coordMatch[1]},${coordMatch[2]}&output=embed`
-      const searchMatch = mapUrl.match(/[?&]q=([^&]+)/)
-      if (searchMatch) {
-        const query = decodeURIComponent(searchMatch[1])
-        return `https://www.google.com/maps?q=${encodeURIComponent(query)}&output=embed`
+      if (coordMatch) {
+        query = `${coordMatch[1]},${coordMatch[2]}`
+      } else {
+        const placeMatch = mapUrl.match(/place\/([^/?#]+)/)
+        if (placeMatch) {
+          query = decodeURIComponent(placeMatch[1].replace(/\+/g, ' '))
+        } else {
+          const searchMatch = mapUrl.match(/[?&]q=([^&]+)/)
+          if (searchMatch) {
+            query = decodeURIComponent(searchMatch[1])
+          } else {
+            const pathSearchMatch = mapUrl.match(/\/search\/([^/?#]+)/)
+            if (pathSearchMatch) {
+              query = decodeURIComponent(pathSearchMatch[1].replace(/\+/g, ' '))
+            }
+          }
+        }
       }
-      try {
-        const urlObj = new URL(mapUrl)
-        urlObj.searchParams.set('output', 'embed')
-        return urlObj.toString()
-      } catch {
-        return null
+
+      if (query) {
+        return `https://maps.google.com/maps?q=${encodeURIComponent(query)}&output=embed`
+      }
+
+      if (locationText !== 'ไม่ระบุ') {
+        return `https://maps.google.com/maps?q=${encodeURIComponent(locationText)}&output=embed`
       }
     }
     return null
