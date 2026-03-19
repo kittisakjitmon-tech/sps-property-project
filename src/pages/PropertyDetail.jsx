@@ -66,8 +66,15 @@ export default function PropertyDetail() {
   }, [property, slug, id, navigate])
 
   if (loading) {
+    const canonicalPath = slug ? `/properties/${encodeURI(slug)}` : (id ? `/p/${id}` : '/properties')
+    const canonicalUrl = `https://spspropertysolution.com${canonicalPath}`
+
     return (
       <div className="min-h-screen bg-slate-50">
+        <Helmet>
+          <title>กำลังโหลด... | SPS Property Solution</title>
+          <link rel="canonical" href={canonicalUrl} />
+        </Helmet>
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
             {/* Main skeleton */}
@@ -110,6 +117,10 @@ export default function PropertyDetail() {
   if (!property) {
     return (
       <div className="min-h-screen bg-slate-50 flex items-center justify-center">
+        <Helmet>
+          <title>ไม่พบรายการนี้ | SPS Property Solution</title>
+          <meta name="robots" content="noindex" />
+        </Helmet>
         <div className="text-center">
           <p className="text-slate-600 mb-4">ไม่พบรายการนี้</p>
           <Link to="/" className="text-blue-900 font-medium hover:underline">กลับหน้าแรก</Link>
@@ -262,11 +273,11 @@ export default function PropertyDetail() {
       <Helmet>
         <title>{title}</title>
         <meta name="description" content={description} />
-        <link rel="canonical" href={`https://spspropertysolution.com${getPropertyPath(property)}`} />
+        <link rel="canonical" href={`https://spspropertysolution.com${encodeURI(getPropertyPath(property))}`} />
         {/* Open Graph for social sharing (e.g., LINE, Facebook) */}
         <meta property="og:title" content={title} />
         <meta property="og:description" content={description} />
-        <meta property="og:url" content={`https://spspropertysolution.com${getPropertyPath(property)}`} />
+        <meta property="og:url" content={`https://spspropertysolution.com${encodeURI(getPropertyPath(property))}`} />
         <meta property="og:type" content="website" />
         <meta property="og:image" content={primaryImage} />
         {/* Twitter Card (บางแพลตฟอร์มอื่นใช้งานร่วมกันได้) */}
