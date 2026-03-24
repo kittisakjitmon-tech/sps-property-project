@@ -2,8 +2,8 @@ import { useState, useEffect, lazy, Suspense } from 'react'
 import { useParams, Link, useSearchParams, useNavigate } from 'react-router-dom'
 import { Helmet } from 'react-helmet-async'
 import { MapPin, Bed, Bath, Maximize2, Phone, MessageCircle, Share2, CheckCircle2, Copy, Check } from 'lucide-react'
-import { createSpoomeShortUrl } from '../lib/spoo'
 import { getPropertyByIdOnce, createOrReuseShareLink, recordPropertyView } from '../lib/firestore'
+import { getPropertyPath } from '../lib/propertySlug'
 import PageLayout from '../components/PageLayout'
 import Toast from '../components/Toast'
 import ProtectedImageContainer from '../components/ProtectedImageContainer'
@@ -14,7 +14,7 @@ import { highlightText, highlightTags } from '../lib/textHighlight'
 import { usePublicAuth } from '../context/PublicAuthContext'
 import { getPropertyLabel } from '../constants/propertyTypes'
 import { getCloudinaryLargeUrl, getCloudinaryThumbUrl, isValidImageUrl } from '../lib/cloudinary'
-import { extractIdFromSlug, generatePropertySlug, getPropertyPath } from '../lib/propertySlug'
+import { extractIdFromSlug, generatePropertySlug } from '../lib/propertySlug'
 
 const RelatedProperties = lazy(() => import('../components/RelatedProperties'))
 const NeighborhoodData = lazy(() => import('../components/NeighborhoodData'))
@@ -315,15 +315,11 @@ export default function PropertyDetail() {
     if (!property?.id) return
     setIsCopying(true)
     try {
-      const longUrl = window.location.href
-      const shortUrl = await createSpoomeShortUrl(longUrl)
-      await navigator.clipboard.writeText(shortUrl)
-      if (shortUrl === longUrl) {
-        console.warn('spoo.me shortening returned original URL; copy used long URL')
-        setToastMessage(`คัดลอกลิงก์แล้ว: ${shortUrl}`)
-      } else {
-        setToastMessage(`คัดลอกลิงก์แล้ว: ${shortUrl}`)
-      }
+      // Generate static URL for the property
+      const propertyPath = getPropertyPath(property)
+      const staticUrl = `${window.location.origin}${propertyPath}`
+      await navigator.clipboard.writeText(staticUrl)
+      setToastMessage(`คัดลอกลิงก์แล้ว`)
       setShowToast(true)
       setCopied(true)
       setTimeout(() => setCopied(false), 3000)

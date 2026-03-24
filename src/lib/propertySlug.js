@@ -11,12 +11,14 @@ function formatPriceForSlug(price) {
   const num = Number(price)
   if (!Number.isFinite(num) || num <= 0) return ''
   if (num >= 1_000_000) {
-    const m = parseFloat((num / 1_000_000).toFixed(2))
-    return `${m}m`
+    // Always use 2 decimal places for millions
+    const m = (num / 1_000_000).toFixed(2)
+    // Remove trailing zeros
+    return `${parseFloat(m)}m`
   }
   if (num >= 1_000) {
-    const k = parseFloat((num / 1_000).toFixed(1))
-    return `${k}k`
+    const k = (num / 1_000).toFixed(1)
+    return `${parseFloat(k)}k`
   }
   return String(num)
 }

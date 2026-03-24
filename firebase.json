@@ -30,13 +30,18 @@
             "value": "public, max-age=31536000, immutable"
           }
         ]
+      },
+      {
+        "source": "/properties/**",
+        "headers": [
+          {
+            "key": "Cache-Control",
+            "value": "public, max-age=3600, stale-while-revalidate=86400"
+          }
+        ]
       }
     ],
     "rewrites": [
-      {
-        "source": "/sitemap.xml",
-        "function": "sitemap"
-      },
       {
         "source": "/share/**",
         "function": "shareMeta"
@@ -50,7 +55,7 @@
         "destination": "/index.html"
       }
     ],
-    "trailingSlash": false
+    "trailingSlash": true
   },
   "functions": [
     {
