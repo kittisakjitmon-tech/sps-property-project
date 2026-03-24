@@ -19,6 +19,58 @@ import { extractIdFromSlug, generatePropertySlug, getPropertyPath } from '../lib
 const RelatedProperties = lazy(() => import('../components/RelatedProperties'))
 const NeighborhoodData = lazy(() => import('../components/NeighborhoodData'))
 
+/**
+ * Generate metadata for PropertyDetail page
+ * Ensures consistent canonical URL for SEO - prevents duplicate content issues
+ * 
+ * @param {Object} property - Property data object
+ * @param {string} fallbackSlug - Current slug from URL (for validation)
+ * @returns {Object} - { title, description, canonicalUrl, ogImage }
+ */
+export function generateMetadata(property, fallbackSlug = '') {
+  if (!property) {
+    return {
+      title: 'กำลังโหลด... | SPS Property Solution',
+      description: '',
+      canonicalUrl: 'https://spspropertysolution.com/properties',
+      ogImage: '',
+    }
+  }
+
+  const baseUrl = 'https://spspropertysolution.com'
+  
+  // Generate canonical URL using official slug format
+  // This ensures only ONE URL is considered "canonical" by search engines
+  const canonicalPath = getPropertyPath(property)
+  const canonicalUrl = `${baseUrl}${canonicalPath}`
+  
+  // Title: {property title} | SPS Property Solution
+  const title = `${property.title} | SPS Property Solution`
+  
+  // Description: first 160 chars of description
+  const description = (property.description || '').slice(0, 160) + 
+    ((property.description || '').length > 160 ? '...' : '')
+  
+  // OG Image: first valid property image
+  const rawImgs = property.images && Array.isArray(property.images) 
+    ? property.images.filter(isValidImageUrl) 
+    : []
+  const primaryImage = rawImgs.length > 0 
+    ? rawImgs[0] 
+    : (property.coverImageUrl || 'https://spspropertysolution.com/icon.png')
+  
+  return {
+    title,
+    description,
+    canonicalUrl,
+    ogImage: primaryImage,
+    // For preventing duplicate content:
+    // - Always use canonical URL (no variations)
+    // - No index if property not available
+    robots: property.status === 'available' ? 'index, follow' : 'noindex, follow',
+  }
+}
+
 export default function PropertyDetail() {
   const { slug, id } = useParams()
   const navigate = useNavigate()
@@ -66,14 +118,15 @@ export default function PropertyDetail() {
   }, [property, slug, id, navigate])
 
   if (loading) {
-    const canonicalPath = slug ? `/properties/${encodeURI(slug)}` : (id ? `/p/${id}` : '/properties')
-    const canonicalUrl = `https://spspropertysolution.com${canonicalPath}`
-
+    // During loading, use a temporary canonical pointing to base properties page
+    // Real canonical will be set once property data loads
+    const loadingMetadata = generateMetadata(null)
+    
     return (
       <div className="min-h-screen bg-slate-50">
         <Helmet>
-          <title>กำลังโหลด... | SPS Property Solution</title>
-          <link rel="canonical" href={canonicalUrl} />
+          <title>{loadingMetadata.title}</title>
+          <link rel="canonical" href={loadingMetadata.canonicalUrl} />
         </Helmet>
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
@@ -119,7 +172,8 @@ export default function PropertyDetail() {
       <div className="min-h-screen bg-slate-50 flex items-center justify-center">
         <Helmet>
           <title>ไม่พบรายการนี้ | SPS Property Solution</title>
-          <meta name="robots" content="noindex" />
+          <meta name="robots" content="noindex, nofollow" />
+          <link rel="canonical" href="https://spspropertysolution.com/properties" />
         </Helmet>
         <div className="text-center">
           <p className="text-slate-600 mb-4">ไม่พบรายการนี้</p>
@@ -146,10 +200,10 @@ export default function PropertyDetail() {
   const imgs = finalImgs.length > 0 ? finalImgs : [defaultImg]
   // ---------------------------------------------------------
 
-  const title = `${property.title} | SPS Property Solution`
-  const description = (property.description || '').slice(0, 160) + ((property.description || '').length > 160 ? '...' : '')
-  const primaryImageRaw = rawImgs.length > 0 ? rawImgs[0] : 'https://spspropertysolution.com/icon.png'
-  const primaryImage = primaryImageRaw && primaryImageRaw.startsWith('http') ? primaryImageRaw : `https://spspropertysolution.com${primaryImageRaw || ''}`
+  // Use generateMetadata for consistent SEO data
+  const metadata = generateMetadata(property)
+  const { title, description, canonicalUrl, ogImage, robots } = metadata
+  const primaryImage = ogImage
 
   // Convert Google Maps URL to embed URL if needed
   const getMapEmbedUrl = (url) => {
@@ -291,11 +345,14 @@ export default function PropertyDetail() {
       <Helmet>
         <title>{title}</title>
         <meta name="description" content={description} />
-        <link rel="canonical" href={`https://spspropertysolution.com${encodeURI(getPropertyPath(property))}`} />
+        <meta name="robots" content={robots} />
+        {/* Canonical URL - This is the KEY fix for duplicate content */}
+        {/* Only ONE URL is canonical: https://spspropertysolution.com/properties/{slug} */}
+        <link rel="canonical" href={canonicalUrl} />
         {/* Open Graph for social sharing (e.g., LINE, Facebook) */}
         <meta property="og:title" content={title} />
         <meta property="og:description" content={description} />
-        <meta property="og:url" content={`https://spspropertysolution.com${encodeURI(getPropertyPath(property))}`} />
+        <meta property="og:url" content={canonicalUrl} />
         <meta property="og:type" content="website" />
         <meta property="og:image" content={primaryImage} />
         {/* Twitter Card (บางแพลตฟอร์มอื่นใช้งานร่วมกันได้) */}
@@ -310,14 +367,15 @@ export default function PropertyDetail() {
             name: property.title,
             description: property.description || '',
             image: property.images && property.images.length > 0 ? property.images : [],
-            url: window.location.href,
+            // Use canonicalUrl for structured data to match canonical meta tag
+            url: canonicalUrl,
             datePosted: property.createdAt ? new Date(property.createdAt.seconds * 1000).toISOString() : new Date().toISOString(),
             offers: {
               '@type': 'Offer',
               price: property.price || 0,
               priceCurrency: 'THB',
               availability: property.status === 'available' ? 'https://schema.org/InStock' : 'https://schema.org/SoldOut',
-              url: window.location.href
+              url: canonicalUrl
             },
             address: {
               '@type': 'PostalAddress',
