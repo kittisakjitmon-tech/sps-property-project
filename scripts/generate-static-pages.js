@@ -256,10 +256,10 @@ function generatePropertyHTML(property) {
     </footer>
   </div>
   
-  <!-- React for full interactivity -->
+  <!-- React for full interactivity (optional - will hydrate if loaded) -->
   <script type="module" crossorigin src="/assets/index-DbsBoOGT.js"></script>
   <script>
-    window.__PROPERTY_DATA__ = ${JSON.stringify(property)};
+    window.__PROPERTY_DATA__ = \${JSON.stringify(property)};
     window.__PROPERTY_SLUG__ = '${slug}';
     window.__CANONICAL_URL__ = '${canonicalUrl}';
   </script>
