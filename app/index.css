@@ -1,0 +1,141 @@
+/* Font import for SSR compatibility */
+@import url('https://fonts.googleapis.com/css2?family=Prompt:wght@300;400;500;600;700&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  html {
+    font-family: 'Prompt', system-ui, sans-serif;
+  }
+  body {
+    @apply bg-slate-50 text-slate-800 antialiased;
+  }
+  #root {
+    min-height: 100vh;
+  }
+}
+
+/* Global protected image behavior */
+.protected-image-container img,
+img.protected-image {
+  user-select: none;
+  -webkit-user-select: none;
+  -moz-user-select: none;
+  -ms-user-select: none;
+  -webkit-touch-callout: none;
+  -webkit-user-drag: none;
+  -khtml-user-drag: none;
+  -moz-user-drag: none;
+  -o-user-drag: none;
+  user-drag: none;
+}
+
+/* Share page protection + watermark */
+.share-page.protected-content {
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+/* Thumbnail gallery should allow touch scrolling */
+.share-page .thumbnail-gallery {
+  touch-action: pan-x pan-y !important;
+  -webkit-overflow-scrolling: touch !important;
+  user-select: none !important;
+  -webkit-user-select: none !important;
+  -webkit-touch-callout: default !important;
+  pointer-events: auto !important;
+  overflow-x: scroll !important;
+  overflow-y: hidden !important;
+}
+
+.share-page .thumbnail-gallery button {
+  pointer-events: auto !important;
+  touch-action: manipulation !important;
+}
+
+.share-page .thumbnail-gallery img {
+  pointer-events: none !important;
+  -webkit-user-drag: none !important;
+}
+
+.share-protected-image {
+  -webkit-user-drag: none;
+  user-drag: none;
+}
+
+.share-page-watermark {
+  background-image: repeating-linear-gradient(
+    -20deg,
+    rgba(30, 58, 138, 0.04),
+    rgba(30, 58, 138, 0.04) 24px,
+    rgba(245, 158, 11, 0.05) 24px,
+    rgba(245, 158, 11, 0.05) 25px
+  );
+}
+
+.share-image-watermark::before {
+  content: "SPS Property";
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  color: rgba(255, 255, 255, 0.35);
+  font-size: clamp(20px, 4vw, 42px);
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.35);
+}
+
+/* Scrollbar Hide Utility */
+.scrollbar-hide {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+.scrollbar-hide::-webkit-scrollbar {
+  display: none;
+}
+
+/* ── Admin Sidebar — Modern Slim Scrollbar ────────────────────────────── */
+.admin-scrollbar {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(148, 163, 184, 0.35) transparent;
+}
+.admin-scrollbar::-webkit-scrollbar {
+  width: 4px;
+}
+.admin-scrollbar::-webkit-scrollbar-track {
+  background: transparent;
+}
+.admin-scrollbar::-webkit-scrollbar-thumb {
+  background: rgba(148, 163, 184, 0.30);
+  border-radius: 999px;
+}
+.admin-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: rgba(250, 204, 21, 0.65);
+}
+
+@media print {
+  .share-page {
+    position: relative;
+  }
+
+  .share-page::before {
+    content: "SPS Property Solution - Confidential";
+    position: fixed;
+    inset: 0;
+    display: grid;
+    place-items: center;
+    font-size: 42px;
+    font-weight: 800;
+    color: rgba(30, 58, 138, 0.2);
+    transform: rotate(-28deg);
+    pointer-events: none;
+    z-index: 9999;
+  }
+
+  .share-page a {
+    display: none !important;
+  }
+}
