@@ -1,7 +1,7 @@
 import { X, Copy, MessageCircle, Facebook, MapPin, Bed, Bath, Maximize2, Check } from 'lucide-react'
 import ProtectedImageContainer from './ProtectedImageContainer'
 import { formatPrice } from '../lib/priceFormat'
-import { createSpoomeShortUrl } from '../lib/spoo'
+import { getPropertyPath } from '../lib/propertySlug'
 import { useState } from 'react'
 
 export default function PropertyShareModal({ isOpen, onClose, property, onCopySuccess }) {
@@ -14,7 +14,9 @@ export default function PropertyShareModal({ isOpen, onClose, property, onCopySu
   const mainImage = imgs[0] || 'https://images.unsplash.com/photo-1564013799919-ab600027ffc6?w=800'
   const priceText = formatPrice(property.price, property.isRental, property.showPrice)
 
-  const currentUrl = window.location.href
+  // Generate static URL for the property
+  const propertyPath = getPropertyPath(property)
+  const staticUrl = `${window.location.origin}${propertyPath}`
 
   const finishCopy = () => {
     setIsGenerating(false)
@@ -30,15 +32,13 @@ export default function PropertyShareModal({ isOpen, onClose, property, onCopySu
     if (copied) return
     setIsGenerating(true)
     try {
-      const shortUrl = await createSpoomeShortUrl(currentUrl)
-      await navigator.clipboard.writeText(shortUrl)
+      await navigator.clipboard.writeText(staticUrl)
       finishCopy()
     } catch (err) {
       console.error('Failed to copy:', err)
       // Fallback for older browsers
-      const shortUrl = await createSpoomeShortUrl(currentUrl)
       const textArea = document.createElement('textarea')
-      textArea.value = shortUrl
+      textArea.value = staticUrl
       document.body.appendChild(textArea)
       textArea.select()
       document.execCommand('copy')
@@ -48,18 +48,12 @@ export default function PropertyShareModal({ isOpen, onClose, property, onCopySu
   }
 
   const handleShareLine = async () => {
-    setIsGenerating(true)
-    const urlToShare = await createSpoomeShortUrl(currentUrl)
-    setIsGenerating(false)
-    const lineUrl = `https://social-plugins.line.me/lineit/share?url=${encodeURIComponent(urlToShare)}`
+    const lineUrl = `https://social-plugins.line.me/lineit/share?url=${encodeURIComponent(staticUrl)}`
     window.open(lineUrl, '_blank', 'width=600,height=400')
   }
 
   const handleShareFacebook = async () => {
-    setIsGenerating(true)
-    const urlToShare = await createSpoomeShortUrl(currentUrl)
-    setIsGenerating(false)
-    const facebookUrl = `https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(urlToShare)}`
+    const facebookUrl = `https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(staticUrl)}`
     window.open(facebookUrl, '_blank', 'width=600,height=400')
   }
 
