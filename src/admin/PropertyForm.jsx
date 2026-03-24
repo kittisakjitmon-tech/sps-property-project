@@ -465,7 +465,7 @@ export default function PropertyForm() {
     if (!confirmed) return
     setDeleting(true)
     try {
-      await deletePropertyById(id)
+      await deletePropertyById(id, adminDb)
       try {
         await logActivity({
           action: 'property_delete',
