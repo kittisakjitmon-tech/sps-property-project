@@ -1,0 +1,9 @@
+User-agent: *
+Allow: /
+Disallow: /admin/
+Disallow: /admin
+Disallow: /profile/
+Disallow: /profile-settings/
+Disallow: /post/
+
+Sitemap: https://spspropertysolution.com/sitemap-new.xml

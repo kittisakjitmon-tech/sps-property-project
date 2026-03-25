@@ -70,19 +70,19 @@ export default function PropertiesMap({ properties, className = '' }) {
 
     // ให้ Longdo แสดง popup เมื่อคลิกปักหมุดทั้งบน desktop และ mobile โดยไม่ redirect ทันที
     const closePopup = () => {
-      console.log('closePopup called')
+      // console.log('closePopup called')
       try {
         if (map && map.Overlays) {
           // ลอง lastOpenPopup ก่อน
           if (typeof map.Overlays.lastOpenPopup === 'function') {
             const popup = map.Overlays.lastOpenPopup()
-            console.log('lastOpenPopup:', popup)
+            // console.log('lastOpenPopup:', popup)
             // ถ้ามี marker ให้ใช้ marker.popup(false) แทน
             if (popup && popup.marker) {
-              console.log('popup.marker:', popup.marker)
+              // console.log('popup.marker:', popup.marker)
               if (typeof popup.marker.popup === 'function') {
                 popup.marker.popup(false)
-                console.log('Called marker.popup(false)')
+                // console.log('Called marker.popup(false)')
                 return
               }
             }
@@ -116,9 +116,9 @@ export default function PropertiesMap({ properties, className = '' }) {
     // Delegate click event สำหรับปุ่มปิด popup ที่อยู่ใน Longdo popup element
     const handlePopupCloseClick = (e) => {
       const target = e.target
-      console.log('Click detected:', target, target.dataset)
+      // console.log('Click detected:', target, target.dataset)
       if (target.matches('[data-popup-close]') || target.closest('[data-popup-close]')) {
-        console.log('Close button clicked')
+        // console.log('Close button clicked')
         closePopup()
       }
     }
@@ -129,10 +129,10 @@ export default function PropertiesMap({ properties, className = '' }) {
       mutations.forEach((mutation) => {
         mutation.addedNodes.forEach((node) => {
           if (node.nodeType === Node.ELEMENT_NODE) {
-            console.log('New node added:', node)
+            // console.log('New node added:', node)
             const closeBtn = node.querySelector ? node.querySelector('[data-popup-close]') : null
             if (closeBtn) {
-              console.log('Found close button via observer:', closeBtn)
+              // console.log('Found close button via observer:', closeBtn)
               closeBtn.addEventListener('click', closePopup)
             }
             // หาใน child nodes ด้วย

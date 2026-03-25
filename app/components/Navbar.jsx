@@ -1,5 +1,7 @@
-import { useEffect, useRef, useState } from 'react'
 import { Link } from 'react-router'
+import {
+  useEffect, useRef, useState
+} from 'react'
 import {
   Menu,
   X,
@@ -21,6 +23,7 @@ import {
 import { usePublicAuth } from '../context/PublicAuthContext'
 import { useNavigate } from 'react-router'
 import { useHoverMenu } from '../hooks/useHoverMenu'
+import { Button } from './ui'
 import logo from '../assets/logo.png' // นำเข้าไฟล์โลโก้
 
 const buyHomeLinks = [
@@ -198,10 +201,10 @@ export default function Navbar() {
             {!user ? (
               <Link
                 to="/login"
-                className="inline-flex items-center gap-1.5 py-1.5 px-3.5 rounded-lg bg-[#1e3a8a] text-white text-sm font-medium hover:bg-blue-900 transition-colors duration-200 whitespace-nowrap no-underline"
+                className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl text-sm font-medium text-slate-600 hover:bg-slate-100 transition-colors"
               >
                 <LogIn className="h-4 w-4" />
-                เข้าสู่ระบบ
+                <span className="whitespace-nowrap">เข้าสู่ระบบ</span>
               </Link>
             ) : (
               (isAgent() || userRole) ? (
@@ -270,7 +273,7 @@ export default function Navbar() {
             )}
             <Link
               to="/post"
-              className="inline-flex items-center py-1.5 px-3.5 rounded-lg bg-blue-600 text-white text-sm font-semibold whitespace-nowrap hover:bg-blue-700 transition-colors duration-200 no-underline"
+              className="inline-flex items-center px-4 py-2 rounded-xl bg-amber-500 text-white text-sm font-semibold whitespace-nowrap hover:bg-amber-600 transition-colors"
             >
               ลงประกาศฟรี
             </Link>

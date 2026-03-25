@@ -117,12 +117,6 @@ export default function RelatedProperties({ currentPropertyId, district, type })
 
     if (related.length === 0) return null
 
-    console.debug('RelatedProperties - Rendering items:', related.map(p => ({ 
-        id: p.id, 
-        title: p.title,
-        path: getPropertyPath(p) 
-    })))
-
     return (
         <div className="mt-12 mb-8">
             <h3 className="text-xl font-bold text-slate-900 mb-6 border-b pb-4">บ้านที่คุณอาจสนใจ</h3>
@@ -141,7 +135,7 @@ export default function RelatedProperties({ currentPropertyId, district, type })
                     }
 
                     const handleLinkClick = (e) => {
-                        console.debug('RelatedProperties link clicked:', prop.id, 'path:', propertyPath)
+                        // console.debug('RelatedProperties link clicked:', prop.id, 'path:', propertyPath)
                         // Let browser handle navigation naturally
                     }
 

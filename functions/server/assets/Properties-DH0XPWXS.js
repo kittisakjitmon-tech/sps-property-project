@@ -1,0 +1,14 @@
+import "react/jsx-runtime";
+import { lazy } from "react";
+import "./server-build-C8MEOO73.js";
+import "firebase/firestore";
+import "firebase/storage";
+import "react-dom/server";
+import "react-router";
+import "isbot";
+import "firebase/auth";
+import "firebase/app";
+import "lucide-react";
+import "react-helmet-async";
+import "firebase/functions";
+lazy(() => import("./PropertiesMap-BUBZPvL2.js"));

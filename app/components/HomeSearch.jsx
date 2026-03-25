@@ -1,8 +1,9 @@
 import { useState, useRef, useEffect } from 'react'
 import { useNavigate } from 'react-router'
-import { Search, Home, Building2, KeyRound, MapPin, ChevronDown, Sparkles, CircleDollarSign } from 'lucide-react'
+import { Search, Home, Building2, KeyRound, ChevronDown, Sparkles, CircleDollarSign } from 'lucide-react'
 import LocationAutocomplete from './LocationAutocomplete'
 import { PROPERTY_TYPES } from '../constants/propertyTypes'
+import { Button } from './ui'
 
 const PRICE_RANGES = [
   { label: 'ทุกราคา', min: '', max: '' },
@@ -50,13 +51,9 @@ export default function HomeSearch() {
     }
 
     if (searchQuery.trim()) {
-      // If we have a selected location and the search query matches its display name,
-      // use the more specific 'location' parameter.
       if (selectedLocation && searchQuery === selectedLocation.displayName) {
-        // Use district if available, otherwise province
         params.set('location', selectedLocation.district || selectedLocation.province)
       } else {
-        // Otherwise use general keyword search
         params.set('q', searchQuery.trim())
       }
     }
@@ -89,7 +86,7 @@ export default function HomeSearch() {
             onClick={() => setActiveTab(tab.id)}
             className={`flex items-center gap-2 px-6 py-3 rounded-t-2xl font-bold transition-all duration-200 ${
               activeTab === tab.id
-                ? 'bg-white text-blue-900 shadow-[0_-4px_10px_rgba(0,0,0,0.05)]'
+                ? 'bg-white text-blue-900 shadow-card'
                 : 'bg-blue-900/40 text-white/80 hover:bg-blue-900/60 backdrop-blur-sm'
             }`}
           >
@@ -116,7 +113,7 @@ export default function HomeSearch() {
               }}
               onSelect={setSelectedLocation}
               placeholder="ค้นหาทำเล, จังหวัด, อำเภอ หรือชื่อโครงการ..."
-              inputClassName="!bg-slate-50 !rounded-2xl !py-4 border-2 border-transparent focus:!border-blue-100"
+              inputClassName="!bg-slate-50 !rounded-2xl !py-4 border-2 border-transparent focus:!border-blue-200"
               enableTypingAnimation={true}
             />
           </div>
@@ -145,7 +142,7 @@ export default function HomeSearch() {
             </button>
 
             {isTypeOpen && (
-              <div className="absolute top-[calc(100%+10px)] left-0 w-full min-w-[220px] bg-white rounded-2xl shadow-2xl border border-slate-100 py-2 z-50 animate-in fade-in slide-in-from-top-2 duration-200">
+              <div className="absolute top-[calc(100%+10px)] left-0 w-full min-w-[220px] bg-white rounded-2xl shadow-dropdown border border-slate-100 py-2 z-50">
                 <button
                   onClick={() => {
                     setPropertyType('')
@@ -195,7 +192,7 @@ export default function HomeSearch() {
             </button>
 
             {isPriceOpen && (
-              <div className="absolute top-[calc(100%+10px)] left-0 w-full min-w-[200px] bg-white rounded-2xl shadow-2xl border border-slate-100 py-2 z-50 animate-in fade-in slide-in-from-top-2 duration-200">
+              <div className="absolute top-[calc(100%+10px)] left-0 w-full min-w-[200px] bg-white rounded-2xl shadow-dropdown border border-slate-100 py-2 z-50">
                 {PRICE_RANGES.map((range, idx) => (
                   <button
                     key={idx}
@@ -213,13 +210,15 @@ export default function HomeSearch() {
           </div>
 
           {/* Search Button */}
-          <button
+          <Button
+            variant="primary"
+            size="lg"
+            icon={<Search className="h-5 w-5" />}
             onClick={handleSearch}
-            className="lg:ml-2 bg-blue-600 hover:bg-blue-700 text-white rounded-[1.25rem] py-4 px-8 flex items-center justify-center gap-2 font-bold shadow-lg shadow-blue-200 hover:shadow-blue-300 transition-all duration-300 group"
+            className="lg:ml-2 shadow-lg shadow-blue-200 hover:shadow-blue-300"
           >
-            <Search className="h-5 w-5 group-hover:scale-110 transition-transform" />
-            <span>ค้นหา</span>
-          </button>
+            ค้นหา
+          </Button>
         </div>
       </div>
     </div>

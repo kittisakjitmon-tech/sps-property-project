@@ -1,11 +1,33 @@
 /**
  * Cloudinary CDN helpers — สร้าง URL สำหรับแสดงรูปด้วย resize/format ฝั่ง CDN
  * ใช้กับรูปที่อัปโหลดผ่าน Cloudinary (res.cloudinary.com)
+ * 
+ * SSR-safe: All functions work on both server and client
  */
 
-const CLOUD_NAME = import.meta.env.VITE_CLOUDINARY_CLOUD_NAME || ''
-const CDN_BASE = CLOUD_NAME ? `https://res.cloudinary.com/${CLOUD_NAME}/image/upload` : ''
-const FETCH_BASE = CLOUD_NAME ? `https://res.cloudinary.com/${CLOUD_NAME}/image/fetch/` : ''
+// Get cloud name from window.ENV (client) or import.meta.env (build time)
+function getCloudName() {
+  // Client-side: use window.ENV injected by root.jsx
+  if (typeof window !== 'undefined' && window.ENV?.VITE_CLOUDINARY_CLOUD_NAME) {
+    return window.ENV.VITE_CLOUDINARY_CLOUD_NAME
+  }
+  // SSR/Build: use import.meta.env
+  try {
+    return import.meta.env.VITE_CLOUDINARY_CLOUD_NAME || ''
+  } catch {
+    return ''
+  }
+}
+
+function getCdnBase() {
+  const name = getCloudName()
+  return name ? `https://res.cloudinary.com/${name}/image/upload` : ''
+}
+
+function getFetchBase() {
+  const name = getCloudName()
+  return name ? `https://res.cloudinary.com/${name}/image/fetch/` : ''
+}
 
 /**
  * ตรวจว่าเป็น URL ของ Cloudinary หรือไม่
@@ -13,6 +35,16 @@ const FETCH_BASE = CLOUD_NAME ? `https://res.cloudinary.com/${CLOUD_NAME}/image/
 export function isCloudinaryUrl(url) {
   if (!url || typeof url !== 'string') return false
   return url.includes('res.cloudinary.com') && url.includes('/image/upload')
+}
+
+/**
+ * ตรวจว่าเป็น URL ของ Firebase Storage หรือไม่
+ */
+export function isFirebaseStorageUrl(url) {
+  if (!url || typeof url !== 'string') return false
+  return url.includes('firebasestorage.googleapis.com') || 
+         url.includes('firebasestorage.app') ||
+         url.includes('appspot.com')
 }
 
 /**
@@ -70,6 +102,8 @@ function parseCloudinaryPath(fullUrl) {
 export function getCloudinaryImageUrl(url, options = {}) {
   if (!url || typeof url !== 'string') return url
   if (!isCloudinaryUrl(url)) return url
+
+  const CDN_BASE = getCdnBase()
   if (!CDN_BASE) return url
 
   const parsed = parseCloudinaryPath(url)
@@ -91,19 +125,30 @@ export function getCloudinaryImageUrl(url, options = {}) {
 
 /**
  * รูปที่เก็บใน Cloudinary จะได้ resize + WebP
- * รูปที่เก็บที่อื่น (เช่น Firebase Storage) จะถูกดึงผ่าน Cloudinary fetch → WebP + resize
+ * รูปที่เก็บใน Firebase Storage จะใช้ URL เดิม (มี CDN ของ Google)
+ * รูปที่เก็บที่อื่น จะถูกดึงผ่าน Cloudinary fetch → WebP + resize
  * @param {string} url - URL รูป (Cloudinary หรือ external)
  * @param {object} options - { width, height, crop, quality } (format เป็น webp เสมอ)
  */
 export function getOptimizedImageUrl(url, options = {}) {
   if (!url || typeof url !== 'string') return url
-  const opts = { ...options, format: 'webp', quality: options.quality ?? 'auto' }
+  
+  // Cloudinary: ใช้ transformations
   if (isCloudinaryUrl(url)) {
-    return getCloudinaryImageUrl(url, opts)
+    return getCloudinaryImageUrl(url, { ...options, format: 'webp', quality: options.quality ?? 'auto' })
   }
+
+  // Firebase Storage: คืน URL เดิม (มี CDN ของ Google อยู่แล้ว และ Cloudinary fetch ไม่รองรับ)
+  if (isFirebaseStorageUrl(url)) {
+    return url
+  }
+
+  // URL อื่นๆ: พยายามใช้ Cloudinary fetch
+  const FETCH_BASE = getFetchBase()
   if (!FETCH_BASE) return url
-  const { width, height, crop = 'fill' } = opts
-  const parts = ['f_webp', 'q_auto']
+
+  const { width, height, crop = 'fill', quality = 'auto' } = options
+  const parts = ['f_webp', `q_${quality}`]
   if (width) parts.push(`w_${width}`)
   if (height) parts.push(`h_${height}`)
   if ((width || height) && crop) parts.push(`c_${crop}`)
