@@ -48,3 +48,8 @@ functions/.env
 .continueignore
 .env
 .vercel
+
+# Local Netlify folder
+.netlify
+._*
+.DS_Store

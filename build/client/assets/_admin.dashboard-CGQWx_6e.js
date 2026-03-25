@@ -1,0 +1,1 @@
+import{_ as r}from"./preload-helper-CVfkMyKi.js";import{a,w as s,p as o}from"./chunk-JZWAC4HX-B9fMojxo.js";const t=a.lazy(()=>r(()=>import("./Dashboard-Cv8LlWnm.js"),[])),p=s(function(){return o.jsx(a.Suspense,{fallback:null,children:o.jsx(t,{})})});export{p as default};
