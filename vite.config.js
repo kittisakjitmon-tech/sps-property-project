@@ -1,4 +1,5 @@
 import { reactRouter } from "@react-router/dev/vite";
+import { cloudflareDevProxy } from "@react-router/dev/vite/cloudflare";
 import { defineConfig } from 'vite'
 import compression from 'vite-plugin-compression'
 import { ViteImageOptimizer } from 'vite-plugin-image-optimizer'
@@ -6,6 +7,8 @@ import { ViteImageOptimizer } from 'vite-plugin-image-optimizer'
 // https://vite.dev/config/
 export default defineConfig({
   plugins: [
+    // Cloudflare Workers dev proxy - MUST come BEFORE reactRouter()
+    cloudflareDevProxy(),
     // React Router Framework Mode plugin (แทน @vitejs/plugin-react)
     reactRouter(),
     // Optimize images in public/ and imported assets
@@ -16,18 +19,6 @@ export default defineConfig({
       png: { quality: 85 },
       jpeg: { quality: 85 },
       webp: { quality: 85 },
-    }),
-    // Gzip compression
-    compression({
-      algorithm: 'gzip',
-      ext: '.gz',
-      threshold: 10240,
-    }),
-    // Brotli compression
-    compression({
-      algorithm: 'brotliCompress',
-      ext: '.br',
-      threshold: 10240,
     }),
   ],
   build: {

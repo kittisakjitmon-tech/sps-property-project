@@ -15,10 +15,18 @@
   "dependencies": {
     "@google-cloud/vertexai": "^1.10.0",
     "@google/generative-ai": "^0.24.1",
+    "@react-router/express": "^7.13.2",
     "axios": "^1.6.0",
     "cloudinary": "^2.0.0",
+    "firebase": "^12.11.0",
     "firebase-admin": "^12.7.0",
-    "firebase-functions": "^4.9.0"
+    "firebase-functions": "^4.9.0",
+    "isbot": "^5.1.36",
+    "lucide-react": "^1.6.0",
+    "react": "^19.2.4",
+    "react-dom": "^19.2.4",
+    "react-helmet-async": "^3.0.0",
+    "react-router": "^7.13.2"
   },
   "devDependencies": {
     "firebase-functions-test": "^3.4.1",
