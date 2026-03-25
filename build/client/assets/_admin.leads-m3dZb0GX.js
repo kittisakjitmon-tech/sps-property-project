@@ -1,1 +1,0 @@
-import{_ as t}from"./preload-helper-CVfkMyKi.js";import{a as s,w as a,p as o}from"./chunk-JZWAC4HX-B9fMojxo.js";const e=s.lazy(()=>t(()=>import("./LeadsInbox-B8wELqIA.js"),[])),p=a(function(){return o.jsx(s.Suspense,{fallback:null,children:o.jsx(e,{})})});export{p as default};

@@ -1,1 +1,0 @@
-import{_ as r}from"./preload-helper-CVfkMyKi.js";import{a as e,w as s,p as o}from"./chunk-JZWAC4HX-B9fMojxo.js";const t=e.lazy(()=>r(()=>import("./HeroSlidesAdmin-BuZAwqdH.js"),[])),l=s(function(){return o.jsx(e.Suspense,{fallback:null,children:o.jsx(t,{})})});export{l as default};

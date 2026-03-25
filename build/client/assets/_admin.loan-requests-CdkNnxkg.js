@@ -1,1 +1,0 @@
-import{_ as o}from"./preload-helper-CVfkMyKi.js";import{a as t,w as e,p as s}from"./chunk-JZWAC4HX-B9fMojxo.js";const a=t.lazy(()=>o(()=>import("./AdminLoanRequests-Q-spspLs.js"),[])),u=e(function(){return s.jsx(t.Suspense,{fallback:null,children:s.jsx(a,{})})});export{u as default};

@@ -1,1 +1,0 @@
-import{_ as o}from"./preload-helper-CVfkMyKi.js";import{a as r,w as e,p as t}from"./chunk-JZWAC4HX-B9fMojxo.js";const s=r.lazy(()=>o(()=>import("./PropertyForm-DS-YqudM.js"),[])),n=e(function(){return t.jsx(r.Suspense,{fallback:null,children:t.jsx(s,{})})});export{n as default};

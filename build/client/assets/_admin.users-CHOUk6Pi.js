@@ -1,1 +1,0 @@
-import{_ as e}from"./preload-helper-CVfkMyKi.js";import{a as t,w as r,p as s}from"./chunk-JZWAC4HX-B9fMojxo.js";const o=t.lazy(()=>e(()=>import("./UserManagement-Bcm3-Cvp.js"),[])),p=r(function(){return s.jsx(t.Suspense,{fallback:null,children:s.jsx(o,{})})});export{p as default};

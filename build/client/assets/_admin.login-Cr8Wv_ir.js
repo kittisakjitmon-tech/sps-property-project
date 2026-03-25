@@ -1,1 +1,0 @@
-import{_ as t}from"./preload-helper-CVfkMyKi.js";import{a as r,w as i,p as o}from"./chunk-JZWAC4HX-B9fMojxo.js";import{A as n}from"./AdminAuthContext-DoNAx6_P.js";import"./firebase-D-u4jYmS.js";const s=r.lazy(()=>t(()=>import("./Login-DUZEEC77.js"),[])),_=i(function(){return o.jsx(n,{children:o.jsx(r.Suspense,{fallback:null,children:o.jsx(s,{})})})});export{_ as default};

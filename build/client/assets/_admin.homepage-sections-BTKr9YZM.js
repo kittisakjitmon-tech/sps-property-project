@@ -1,1 +1,0 @@
-import{_ as t}from"./preload-helper-CVfkMyKi.js";import{a as e,w as s,p as o}from"./chunk-JZWAC4HX-B9fMojxo.js";const a=e.lazy(()=>t(()=>import("./HomepageSectionsAdmin-jVo8pMED.js"),[])),p=s(function(){return o.jsx(e.Suspense,{fallback:null,children:o.jsx(a,{})})});export{p as default};

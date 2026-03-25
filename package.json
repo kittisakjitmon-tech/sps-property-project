@@ -23,6 +23,7 @@
     "@react-router/node": "^7.6.1",
     "@react-router/serve": "^7.6.1",
     "@vercel/node": "^5.6.20",
+    "@vercel/react-router": "^1.2.6",
     "express": "^5.2.1",
     "file-saver": "^2.0.5",
     "firebase": "^11.6.0",
