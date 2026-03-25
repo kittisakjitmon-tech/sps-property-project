@@ -47,7 +47,6 @@ export function Layout({ children, loaderData }) {
     <html lang="th">
       <head>
         <meta charSet="UTF-8" />
-        <meta httpEquiv="Content-Security-Policy" content="upgrade-insecure-requests" />
         <link rel="icon" type="image/x-icon" href="/icon.png" />
         <meta name="viewport" content="width=device-width, initial-scale=1.0" />
         {/* Preconnect to LCP, font and image CDN origins */}
@@ -96,11 +95,6 @@ export default function Root() {
   return (
     <SearchProvider>
       <Outlet />
-      <script
-        dangerouslySetInnerHTML={{
-          __html: `window.ENV = ${JSON.stringify(ENV)}`,
-        }}
-      />
     </SearchProvider>
   );
 }

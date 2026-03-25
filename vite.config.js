@@ -1,13 +1,10 @@
 import { defineConfig } from 'vite'
 import { reactRouter } from "@react-router/dev/vite"
-import { vercelPreset } from '@vercel/react-router/vite'
 import { ViteImageOptimizer } from 'vite-plugin-image-optimizer'
 
 // https://vite.dev/config/
 export default defineConfig({
   plugins: [
-    // Vercel preset MUST come first
-    vercelPreset(),
     // React Router Framework Mode plugin
     reactRouter(),
     // Optimize images
@@ -25,5 +22,6 @@ export default defineConfig({
     cssCodeSplit: true,
     sourcemap: false,
     chunkSizeWarningLimit: 1000,
+    modulePreload: false,
   },
 })
