@@ -1,111 +1,142 @@
 #!/usr/bin/env node
 /**
- * Dynamic Sitemap Generator
+ * Generate Sitemap for all properties
  * 
  * Usage:
- * 1. Set Firebase environment variables:
- *    export VITE_FIREBASE_PROJECT_ID=your-project-id
- *    export GOOGLE_APPLICATION_CREDENTIALS=path/to/service-account.json
- * 
- * 2. Run: npm run generate-sitemap
- * 
- * Note: Requires Firebase Admin SDK setup. For now, manually add URLs below.
+ *   npm run generate:sitemap
  */
 
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import { createRequire } from 'module';
 
+const require = createRequire(import.meta.url);
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
+const admin = require('firebase-admin');
+
+// Configuration
 const BASE_URL = 'https://spspropertysolution.com';
-const TODAY = new Date().toISOString().split('T')[0];
+const SERVICE_ACCOUNT_PATH = path.join(__dirname, '..', 'firebase-service-account.json');
 
-// Static URLs - หน้าหลัก
-const staticUrls = [
-  { loc: '/', changefreq: 'daily', priority: '1.0' },
-  { loc: '/properties', changefreq: 'daily', priority: '0.9' },
-  { loc: '/blogs', changefreq: 'weekly', priority: '0.8' },
-  { loc: '/contact', changefreq: 'monthly', priority: '0.5' },
-  { loc: '/loan-service', changefreq: 'monthly', priority: '0.6' },
-];
+function initFirebase() {
+  try {
+    if (fs.existsSync(SERVICE_ACCOUNT_PATH)) {
+      const serviceAccount = JSON.parse(fs.readFileSync(SERVICE_ACCOUNT_PATH, 'utf8'));
+      admin.initializeApp({
+        credential: admin.credential.cert(serviceAccount)
+      });
+      console.log('✅ Firebase Admin initialized');
+    }
+  } catch (error) {
+    console.error('❌ Firebase init error:', error.message);
+  }
+}
 
-// Dynamic URLs - Properties (เพิ่มจาก Firebase หรือ manual)
-// Format: { loc: '/properties/สัตหีบ-ชลบุรี-ทาวน์โฮม-1-ชั้น-ขาย-1.6m--EmNoXkv9iCIHbiSs0TA3', lastmod: '2025-03-16', priority: '0.8' }
-const propertyUrls = [
-  // ตัวอย่าง: เพิ่ม URL ของ properties ที่สำคัญ
-  // { loc: '/properties/สัตหีบ-ชลบุรี-ทาวน์โฮม-1-ชั้น-ขาย-1.6m--EmNoXkv9iCIHbiSs0TA3', lastmod: TODAY, changefreq: 'weekly', priority: '0.8' },
-];
+function sanitizeSlug(str) {
+  return String(str || '').trim().replace(/\s+/g, '-').replace(/[^\u0E00-\u0E7Fa-zA-Z0-9\-.]/g, '');
+}
 
-// Dynamic URLs - Blogs (เพิ่มจาก Firebase หรือ manual)
-const blogUrls = [
-  // ตัวอย่าง: เพิ่ม URL ของ blogs ที่สำคัญ
-  // { loc: '/blogs/ชื่อบทความ--id', lastmod: TODAY, changefreq: 'weekly', priority: '0.7' },
-];
+function formatPriceForSlug(price) {
+  const num = Number(price);
+  if (!Number.isFinite(num) || num <= 0) return '';
+  if (num >= 1_000_000) return `${(num / 1_000_000).toFixed(2)}m`;
+  if (num >= 1_000) return `${(num / 1_000).toFixed(1)}k`;
+  return String(num);
+}
 
-function generateSitemap() {
-  const allUrls = [...staticUrls, ...propertyUrls, ...blogUrls];
+function generatePropertySlug(property) {
+  if (!property?.id) return '';
+  const parts = [];
+  const loc = property.location || {};
+  if (loc.district) parts.push(sanitizeSlug(loc.district));
+  if (loc.province) parts.push(sanitizeSlug(loc.province));
+  if (property.type) parts.push(sanitizeSlug(property.type));
+  parts.push(property.isRental ? 'เช่า' : 'ขาย');
+  const priceSlug = formatPriceForSlug(property.price);
+  if (priceSlug) parts.push(priceSlug);
+  const body = parts.filter(Boolean).join('-').replace(/-{2,}/g, '-').replace(/^-+|-+$/g, '');
+  return body ? `${body}--${property.id}` : `property--${property.id}`;
+}
+
+async function fetchProperties() {
+  const db = admin.firestore();
+  const snapshot = await db.collection('properties').get();
+  const properties = [];
+  snapshot.forEach(doc => properties.push({ id: doc.id, ...doc.data() }));
+  console.log(`✅ Found ${properties.length} properties`);
+  return properties;
+}
+
+function generateSitemap(properties) {
+  const today = new Date().toISOString().split('T')[0];
   
   let sitemap = `<?xml version="1.0" encoding="UTF-8"?>\n`;
   sitemap += `<!-- Generated: ${new Date().toISOString()} -->\n`;
-  sitemap += `<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n\n`;
+  sitemap += `<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n`;
   
   // Static pages
-  sitemap += `  <!-- Static Pages -->\n`;
-  for (const url of staticUrls) {
+  const staticPages = [
+    { loc: '/', changefreq: 'daily', priority: '1.0' },
+    { loc: '/properties', changefreq: 'daily', priority: '0.9' },
+    { loc: '/blogs', changefreq: 'weekly', priority: '0.8' },
+    { loc: '/contact', changefreq: 'monthly', priority: '0.5' },
+    { loc: '/loan-service', changefreq: 'monthly', priority: '0.6' },
+  ];
+  
+  sitemap += `\n  <!-- Static Pages -->\n`;
+  for (const page of staticPages) {
     sitemap += `  <url>\n`;
-    sitemap += `    <loc>${BASE_URL}${url.loc}</loc>\n`;
-    sitemap += `    <lastmod>${TODAY}</lastmod>\n`;
-    sitemap += `    <changefreq>${url.changefreq}</changefreq>\n`;
-    sitemap += `    <priority>${url.priority}</priority>\n`;
+    sitemap += `    <loc>${BASE_URL}${page.loc}</loc>\n`;
+    sitemap += `    <lastmod>${today}</lastmod>\n`;
+    sitemap += `    <changefreq>${page.changefreq}</changefreq>\n`;
+    sitemap += `    <priority>${page.priority}</priority>\n`;
     sitemap += `  </url>\n`;
   }
   
-  // Properties
-  if (propertyUrls.length > 0) {
-    sitemap += `\n  <!-- Properties -->\n`;
-    for (const url of propertyUrls) {
-      sitemap += `  <url>\n`;
-      sitemap += `    <loc>${BASE_URL}${url.loc}</loc>\n`;
-      sitemap += `    <lastmod>${url.lastmod}</lastmod>\n`;
-      sitemap += `    <changefreq>${url.changefreq}</changefreq>\n`;
-      sitemap += `    <priority>${url.priority}</priority>\n`;
-      sitemap += `  </url>\n`;
-    }
-  }
-  
-  // Blogs
-  if (blogUrls.length > 0) {
-    sitemap += `\n  <!-- Blogs -->\n`;
-    for (const url of blogUrls) {
-      sitemap += `  <url>\n`;
-      sitemap += `    <loc>${BASE_URL}${url.loc}</loc>\n`;
-      sitemap += `    <lastmod>${url.lastmod}</lastmod>\n`;
-      sitemap += `    <changefreq>${url.changefreq}</changefreq>\n`;
-      sitemap += `    <priority>${url.priority}</priority>\n`;
-      sitemap += `  </url>\n`;
-    }
+  // Property pages
+  sitemap += `\n  <!-- Property Pages -->\n`;
+  for (const property of properties) {
+    const slug = generatePropertySlug(property);
+    const propertyUrl = `${BASE_URL}/properties/${encodeURIComponent(slug)}`;
+    const lastmod = property.updatedAt?.seconds 
+      ? new Date(property.updatedAt.seconds * 1000).toISOString().split('T')[0] 
+      : today;
+    
+    sitemap += `  <url>\n`;
+    sitemap += `    <loc>${propertyUrl}</loc>\n`;
+    sitemap += `    <lastmod>${lastmod}</lastmod>\n`;
+    sitemap += `    <changefreq>weekly</changefreq>\n`;
+    sitemap += `    <priority>${property.status === 'available' ? '0.8' : '0.3'}</priority>\n`;
+    sitemap += `  </url>\n`;
   }
   
   sitemap += `\n</urlset>\n`;
   
-  // Write file
-  const publicDir = path.join(__dirname, '..', 'public');
-  const sitemapPath = path.join(publicDir, 'sitemap.xml');
-  
-  fs.writeFileSync(sitemapPath, sitemap);
-  
-  console.log('✅ Sitemap generated successfully!');
-  console.log(`📊 Total URLs: ${allUrls.length}`);
-  console.log(`   - Static: ${staticUrls.length}`);
-  console.log(`   - Properties: ${propertyUrls.length}`);
-  console.log(`   - Blogs: ${blogUrls.length}`);
-  console.log(`📄 Saved to: ${sitemapPath}`);
-  console.log('\n💡 To add dynamic URLs:');
-  console.log('   1. Edit scripts/generate-sitemap.js');
-  console.log('   2. Add URLs to propertyUrls or blogUrls arrays');
-  console.log('   3. Run: npm run generate-sitemap');
+  return sitemap;
 }
 
-generateSitemap();
+async function main() {
+  console.log('📋 Generating Sitemap...');
+  console.log('========================\n');
+  
+  initFirebase();
+  const properties = await fetchProperties();
+  
+  const sitemap = generateSitemap(properties);
+  
+  // Write to public/sitemap.xml
+  const publicDir = path.join(__dirname, '..', 'public');
+  const sitemapPath = path.join(publicDir, 'sitemap.xml');
+  fs.writeFileSync(sitemapPath, sitemap);
+  
+  console.log(`\n✅ Sitemap generated!`);
+  console.log(`📊 Total URLs: ${properties.length + 5}`);
+  console.log(`   - Static: 5`);
+  console.log(`   - Properties: ${properties.length}`);
+  console.log(`📄 Saved to: ${sitemapPath}`);
+}
+
+main().catch(console.error);

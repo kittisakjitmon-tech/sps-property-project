@@ -1,0 +1,294 @@
+/* ─────────────────────────────────────────────────────────────
+   SPS Property Solution - Design System & Global Styles
+   ───────────────────────────────────────────────────────────── */
+
+/* Font import for SSR compatibility */
+@import url('https://fonts.googleapis.com/css2?family=Prompt:wght@300;400;500;600;700&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ── Base Styles ─────────────────────────────────────────────── */
+@layer base {
+  html {
+    font-family: 'Prompt', system-ui, sans-serif;
+  }
+  body {
+    @apply bg-slate-50 text-slate-800 antialiased;
+  }
+  #root {
+    min-height: 100vh;
+  }
+
+  /* Typography Hierarchy */
+  h1 {
+    @apply text-4xl md:text-5xl font-bold tracking-tight text-slate-900;
+  }
+  h2 {
+    @apply text-3xl md:text-4xl font-semibold text-slate-900;
+  }
+  h3 {
+    @apply text-2xl font-semibold text-slate-800;
+  }
+  h4 {
+    @apply text-xl font-medium text-slate-800;
+  }
+  h5 {
+    @apply text-lg font-medium text-slate-700;
+  }
+  h6 {
+    @apply text-base font-medium text-slate-700;
+  }
+
+  /* Form Elements */
+  input, textarea, select {
+    @apply text-slate-800 placeholder:text-slate-400;
+  }
+
+  /* Focus visible */
+  :focus-visible {
+    @apply outline-none ring-2 ring-blue-500 ring-offset-2;
+  }
+}
+
+/* ── Component Styles ────────────────────────────────────────── */
+@layer components {
+  /* Buttons */
+  .btn {
+    @apply inline-flex items-center justify-center gap-2 font-medium
+           rounded-xl transition-all duration-200
+           focus:outline-none focus:ring-2 focus:ring-offset-2
+           disabled:opacity-50 disabled:cursor-not-allowed;
+  }
+  .btn-primary {
+    @apply bg-blue-900 text-white hover:bg-blue-800
+           focus:ring-blue-500 active:bg-blue-950;
+  }
+  .btn-secondary {
+    @apply bg-amber-500 text-white hover:bg-amber-600
+           focus:ring-amber-400 active:bg-amber-700;
+  }
+  .btn-outline {
+    @apply border-2 border-blue-900 text-blue-900 bg-transparent
+           hover:bg-blue-50 focus:ring-blue-500;
+  }
+  .btn-ghost {
+    @apply text-slate-600 bg-transparent hover:bg-slate-100
+           focus:ring-slate-400;
+  }
+  .btn-danger {
+    @apply bg-red-600 text-white hover:bg-red-700
+           focus:ring-red-500 active:bg-red-800;
+  }
+  .btn-sm { @apply px-3 py-1.5 text-sm; }
+  .btn-md { @apply px-4 py-2.5 text-sm; }
+  .btn-lg { @apply px-6 py-3 text-base; }
+
+  /* Inputs */
+  .input {
+    @apply w-full px-4 py-3 rounded-xl border-2 border-slate-200
+           text-slate-800 placeholder:text-slate-400
+           focus:border-blue-500 focus:ring-2 focus:ring-blue-200
+           focus:outline-none transition-colors duration-200
+           disabled:bg-slate-50 disabled:cursor-not-allowed;
+  }
+  .input-error {
+    @apply border-red-300 focus:border-red-500 focus:ring-red-200;
+  }
+  .input-with-icon {
+    @apply pl-10;
+  }
+
+  /* Cards */
+  .card {
+    @apply bg-white rounded-2xl shadow-card
+           transition-all duration-300;
+  }
+  .card-hover {
+    @apply hover:shadow-card-hover hover:-translate-y-0.5;
+  }
+  .card-padding-sm { @apply p-3; }
+  .card-padding-md { @apply p-4; }
+  .card-padding-lg { @apply p-6; }
+
+  /* Badges */
+  .badge {
+    @apply inline-flex items-center gap-1 rounded-full
+           font-medium text-xs px-2.5 py-1;
+  }
+  .badge-primary { @apply bg-blue-100 text-blue-800; }
+  .badge-secondary { @apply bg-amber-100 text-amber-800; }
+  .badge-success { @apply bg-emerald-100 text-emerald-700; }
+  .badge-warning { @apply bg-amber-100 text-amber-700; }
+  .badge-danger { @apply bg-red-100 text-red-700; }
+  .badge-neutral { @apply bg-slate-100 text-slate-700; }
+
+  /* Navigation */
+  .nav-link {
+    @apply text-[15px] font-medium text-slate-600
+           hover:text-blue-600 transition-colors duration-200
+           whitespace-nowrap no-underline py-2;
+  }
+  .nav-link-active {
+    @apply text-blue-600 font-semibold;
+  }
+
+  /* Dropdowns */
+  .dropdown {
+    @apply absolute top-full mt-2 w-72 bg-white rounded-xl
+           shadow-dropdown border border-slate-100 py-2 z-50
+           transition-all duration-200;
+  }
+  .dropdown-item {
+    @apply flex items-center gap-2 px-4 py-2.5 text-sm
+           text-slate-700 hover:bg-slate-50 transition;
+  }
+}
+
+/* ── Utility Classes ──────────────────────────────────────────── */
+@layer utilities {
+  /* Text Colors */
+  .text-muted { @apply text-slate-500; }
+  .text-brand { @apply text-emerald-600; }
+  .text-accent { @apply text-orange-600; }
+
+  /* Backgrounds */
+  .bg-brand { @apply bg-emerald-600; }
+  .bg-accent { @apply bg-orange-600; }
+
+  /* Gradients */
+  .gradient-brand {
+    @apply bg-gradient-to-r from-emerald-600 to-emerald-500;
+  }
+  .gradient-accent {
+    @apply bg-gradient-to-r from-orange-600 to-orange-500;
+  }
+
+  /* Scrollbar Hide */
+  .scrollbar-hide {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+  .scrollbar-hide::-webkit-scrollbar {
+    display: none;
+  }
+
+  /* Safe Area */
+  .safe-bottom { padding-bottom: env(safe-area-inset-bottom); }
+  .safe-top { padding-top: env(safe-area-inset-top); }
+}
+
+/* ── Protected Image Behavior ─────────────────────────────────── */
+.protected-image-container img,
+img.protected-image {
+  user-select: none;
+  -webkit-user-select: none;
+  -moz-user-select: none;
+  -ms-user-select: none;
+  -webkit-touch-callout: none;
+  -webkit-user-drag: none;
+  -khtml-user-drag: none;
+  -moz-user-drag: none;
+  -o-user-drag: none;
+  user-drag: none;
+}
+
+/* ── Share Page Styles ────────────────────────────────────────── */
+.share-page.protected-content {
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.share-page .thumbnail-gallery {
+  touch-action: pan-x pan-y !important;
+  -webkit-overflow-scrolling: touch !important;
+  user-select: none !important;
+  -webkit-user-select: none !important;
+  -webkit-touch-callout: default !important;
+  pointer-events: auto !important;
+  overflow-x: scroll !important;
+  overflow-y: hidden !important;
+}
+
+.share-page .thumbnail-gallery button {
+  pointer-events: auto !important;
+  touch-action: manipulation !important;
+}
+
+.share-page .thumbnail-gallery img {
+  pointer-events: none !important;
+  -webkit-user-drag: none !important;
+}
+
+.share-protected-image {
+  -webkit-user-drag: none;
+  user-drag: none;
+}
+
+.share-page-watermark {
+  background-image: repeating-linear-gradient(
+    -20deg,
+    rgba(0, 94, 83, 0.04),
+    rgba(0, 94, 83, 0.04) 24px,
+    rgba(234, 109, 45, 0.05) 24px,
+    rgba(234, 109, 45, 0.05) 25px
+  );
+}
+
+.share-image-watermark::before {
+  content: "SPS Property";
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  color: rgba(255, 255, 255, 0.35);
+  font-size: clamp(20px, 4vw, 42px);
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.35);
+}
+
+/* ── Admin Sidebar Scrollbar ──────────────────────────────────── */
+.admin-scrollbar {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(148, 163, 184, 0.35) transparent;
+}
+.admin-scrollbar::-webkit-scrollbar {
+  width: 4px;
+}
+.admin-scrollbar::-webkit-scrollbar-track {
+  background: transparent;
+}
+.admin-scrollbar::-webkit-scrollbar-thumb {
+  background: rgba(148, 163, 184, 0.30);
+  border-radius: 999px;
+}
+.admin-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: rgba(234, 109, 45, 0.65);
+}
+
+/* ── Print Styles ─────────────────────────────────────────────── */
+@media print {
+  .share-page {
+    position: relative;
+  }
+
+  .share-page::before {
+    content: "SPS Property Solution - Confidential";
+    position: fixed;
+    inset: 0;
+    display: grid;
+    place-items: center;
+    font-size: 42px;
+    font-weight: 800;
+    color: rgba(0, 94, 83, 0.2);
+    transform: rotate(-28deg);
+    pointer-events: none;
+    z-index: 9999;
+  }
+
+  .share-page a {
+    display: none !important;
+  }
+}

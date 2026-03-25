@@ -6,7 +6,7 @@
     "rules": "storage.rules"
   },
   "hosting": {
-    "public": "dist",
+    "public": "build/client",
     "ignore": [
       "firebase.json",
       "**/.*",
@@ -38,20 +38,8 @@
         "function": "sitemap"
       },
       {
-        "source": "/properties/**",
-        "function": "dynamicMeta"
-      },
-      {
-        "source": "/share/**",
-        "function": "shareMeta"
-      },
-      {
-        "source": "/blogs/**",
-        "function": "blogMeta"
-      },
-      {
         "source": "**",
-        "destination": "/index.html"
+        "function": "ssrHandler"
       }
     ]
   },

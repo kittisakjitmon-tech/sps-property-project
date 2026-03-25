@@ -1,0 +1,7 @@
+import{c as i}from"./createLucideIcon-B0_-mzvl.js";import{p as e}from"./chunk-JZWAC4HX-B9fMojxo.js";const x=i("Copy",[["rect",{width:"14",height:"14",x:"8",y:"8",rx:"2",ry:"2",key:"17jyea"}],["path",{d:"M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2",key:"zix9uf"}]]);function p({children:a,propertyId:c=null,className:r="",showWatermark:s=!0}){const n=t=>{t.preventDefault()},o=t=>{t.preventDefault()};return e.jsxs("div",{className:`protected-image-container relative overflow-hidden ${r}`,onContextMenu:n,children:[e.jsx("div",{className:"absolute inset-0 z-0 [&_img]:select-none [&_img]:[touch-action:none]",onDragStart:o,children:a}),e.jsx("div",{className:"absolute inset-0 z-[1] pointer-events-none select-none",onContextMenu:n,"aria-hidden":!0}),s&&e.jsxs("div",{className:"absolute inset-0 z-[2] pointer-events-none","aria-hidden":!0,children:[e.jsx("div",{className:"absolute inset-0 opacity-[0.14]",style:{backgroundImage:`repeating-linear-gradient(
+                -18deg,
+                transparent,
+                transparent 52px,
+                rgba(255,255,255,0.22) 52px,
+                rgba(255,255,255,0.22) 54px
+              )`}}),e.jsx("div",{className:"absolute right-2 bottom-2 left-2 text-right",style:{textShadow:"0 1px 2px rgba(0,0,0,0.9), 0 0 4px rgba(0,0,0,0.8)"},children:e.jsx("span",{className:"text-[10px] sm:text-xs text-white font-semibold",children:"SPS Property Solution"})})]})]})}export{x as C,p as P};

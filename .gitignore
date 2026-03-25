@@ -11,6 +11,7 @@ hosting.*
 # Node / dependencies
 node_modules/
 functions/node_modules/
+firebase-service-account.json
 
 # Build output
 dist/
@@ -46,3 +47,9 @@ functions/.env
 *.sw?
 .continueignore
 .env
+.vercel
+
+# Local Netlify folder
+.netlify
+._*
+.DS_Store
