@@ -788,7 +788,7 @@ export default function PropertyListPage() {
                               </td>
                               <td className="px-6 py-4 text-center">
                                 <Link
-                                  to={`/sps-internal-admin/properties/edit/${property.id}`}
+                                  to={`/sps-internal-admin/properties/${property.id}/edit`}
                                   className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg bg-blue-50 text-blue-900 font-medium hover:bg-blue-100 transition"
                                   aria-label={`แก้ไข ${property.title}`}
                                 >

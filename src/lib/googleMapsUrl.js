@@ -58,35 +58,39 @@ export function toEmbedUrl(url) {
     if (s.includes('/embed')) return s
 
     if (s.includes('google.com/maps') || s.includes('maps.google')) {
-      // รูปแบบ @lat,lng
+      let query = '';
+      
       const coordMatch = s.match(/@(-?\d+\.?\d*),(-?\d+\.?\d*)/)
       if (coordMatch) {
-        const lat = coordMatch[1]
-        const lng = coordMatch[2]
-        return `https://www.google.com/maps?q=${lat},${lng}&output=embed`
+        query = `${coordMatch[1]},${coordMatch[2]}`
+      } else {
+        const placeMatch = s.match(/place\/([^/?#]+)/)
+        if (placeMatch) {
+          query = decodeURIComponent(placeMatch[1].replace(/\+/g, ' '))
+        } else {
+          const searchMatch = s.match(/[?&]q=([^&]+)/)
+          if (searchMatch) {
+            query = decodeURIComponent(searchMatch[1])
+          } else {
+            const pathSearchMatch = s.match(/\/search\/([^/?#]+)/)
+            if (pathSearchMatch) {
+              query = decodeURIComponent(pathSearchMatch[1].replace(/\+/g, ' '))
+            }
+          }
+        }
       }
-      // รูปแบบ /place/...
-      const placeMatch = s.match(/place\/([^/?#]+)/)
-      if (placeMatch) {
-        const placeName = decodeURIComponent(placeMatch[1].replace(/\+/g, ' '))
-        return `https://www.google.com/maps?q=${encodeURIComponent(placeName)}&output=embed`
+
+      if (query) {
+        return `https://maps.google.com/maps?q=${encodeURIComponent(query)}&output=embed`
       }
-      // รูปแบบ ?q=...
-      const searchMatch = s.match(/[?&]q=([^&]+)/)
-      if (searchMatch) {
-        const query = decodeURIComponent(searchMatch[1])
-        return `https://www.google.com/maps?q=${encodeURIComponent(query)}&output=embed`
-      }
-      // Fallback: เพิ่ม output=embed
-      const urlObj = new URL(s)
-      urlObj.searchParams.set('output', 'embed')
-      return urlObj.toString()
+
+      // Fallback: ถ้าไม่สามารถสกัดข้อมูล query ออกมาได้ ให้ร่วงตกไปเป็น null (เพื่อป้องกัน SAMEORIGIN)
+      return null;
     }
 
     // ลิงก์สั้น goo.gl/maps หรือ maps.app.goo.gl
     if (s.includes('goo.gl/maps') || s.includes('maps.app.goo.gl')) {
-      const sep = s.includes('?') ? '&' : '?'
-      return `${s}${sep}output=embed`
+      return null
     }
 
     return null

@@ -106,7 +106,7 @@ export default function MyProperties() {
             <div key={property.id} className="relative">
               <PropertyCard property={property} />
               <Link
-                to={`/sps-internal-admin/properties/edit/${property.id}`}
+                to={`/sps-internal-admin/properties/${property.id}/edit`}
                 className="absolute inset-0"
                 aria-label={`แก้ไข ${property.title}`}
               />

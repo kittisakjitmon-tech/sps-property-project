@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { NavLink, Outlet, useNavigate } from 'react-router-dom'
 import { useAdminAuth } from '../context/AdminAuthContext'
 import {
@@ -91,13 +91,20 @@ function SidebarContent({ navItems, userRole, getRoleDisplayName, handleLogout, 
 }
 
 export default function AdminLayout() {
-  const { logout, userRole, hasRole } = useAdminAuth()
+  const { user, loading, logout, userRole, hasRole } = useAdminAuth()
   const navigate = useNavigate()
   const [drawerOpen, setDrawerOpen] = useState(false)
 
+  // Redirect to login if not authenticated
+  useEffect(() => {
+    if (!loading && !user) {
+      navigate('/login', { replace: true })
+    }
+  }, [loading, user, navigate])
+
   const handleLogout = async () => {
     await logout()
-    navigate('/sps-internal-admin/login', { replace: true })
+    navigate('/login', { replace: true })
   }
 
   const navItems = allNavItems.filter((item) => {
@@ -112,6 +119,23 @@ export default function AdminLayout() {
       case 'member': return 'สมาชิก'
       default: return 'ผู้ใช้'
     }
+  }
+
+  // Show loading while checking auth
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-slate-50 flex items-center justify-center">
+        <div className="text-center">
+          <div className="w-12 h-12 border-4 border-blue-600 border-t-transparent rounded-full animate-spin mx-auto mb-4" />
+          <p className="text-slate-500">กำลังโหลด...</p>
+        </div>
+      </div>
+    )
+  }
+
+  // If not logged in, don't render anything (will redirect)
+  if (!user) {
+    return null
   }
 
   return (

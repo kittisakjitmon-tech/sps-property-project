@@ -431,8 +431,8 @@ export default function Dashboard() {
               ))}
             </div>
           </div>
-          <div className="p-4 h-[340px]">
-            <ResponsiveContainer width="100%" height="100%">
+          <div className="p-4" style={{ height: 340 }}>
+            <ResponsiveContainer width="100%" height={340}>
               <AreaChart data={viewsChartData}>
                 <defs>
                   <linearGradient id="colorViews" x1="0" y1="0" x2="0" y2="1">
@@ -472,7 +472,7 @@ export default function Dashboard() {
                         <td className="py-2 pr-2 font-medium text-slate-500">{i + 1}</td>
                         <td className="py-2 pr-2">
                           <Link
-                            to={`/sps-internal-admin/properties/${row.propertyId}`}
+                            to={`/sps-internal-admin/properties/${row.propertyId}/edit`}
                             className="font-medium text-blue-700 hover:underline truncate block max-w-[200px]"
                             title={row.title}
                           >
@@ -505,8 +505,8 @@ export default function Dashboard() {
           <div className="p-4 flex-1 min-h-0 flex flex-col gap-4">
             {propertyTypeDataWithViews.length > 0 ? (
               <>
-                <div className="h-[200px] shrink-0">
-                  <ResponsiveContainer width="100%" height="100%">
+                <div className="h-[200px] shrink-0" style={{ minHeight: 0 }}>
+                  <ResponsiveContainer width="100%" height={200}>
                     <BarChart data={propertyTypeDataWithViews} layout="vertical" margin={{ left: 0, right: 12 }}>
                       <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" horizontal={false} />
                       <XAxis type="number" stroke="#64748b" fontSize={11} tickLine={false} allowDecimals={false} />
