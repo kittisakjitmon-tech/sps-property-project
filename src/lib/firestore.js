@@ -17,7 +17,7 @@ import {
 } from 'firebase/firestore'
 import { ref, uploadBytes, getDownloadURL, deleteObject } from 'firebase/storage'
 import { writeBatch } from 'firebase/firestore'
-import { db, storage } from './firebase'
+import { db, adminDb, storage } from './firebase'
 
 export { db, writeBatch }
 
@@ -746,7 +746,7 @@ const ACTIVITIES = 'activities'
 
 /** Activities - Realtime snapshot สำหรับบันทึกกิจกรรม */
 export function getActivitiesSnapshot(callback, limitCount = 20, firestore) {
-  const d = firestoreDb(firestore)
+  const d = firestore || adminDb
   const q = query(
     collection(d, ACTIVITIES),
     orderBy('timestamp', 'desc'),

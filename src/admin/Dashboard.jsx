@@ -166,6 +166,36 @@ export default function Dashboard() {
   const [migrationDone, setMigrationDone] = useState(false)
   const [tagsRegenerating, setTagsRegenerating] = useState(false)
   const [tagsDone, setTagsDone] = useState(false)
+  const [commissionUpdating, setCommissionUpdating] = useState(false)
+  const [commissionDone, setCommissionDone] = useState(false)
+
+  const handleUpdateCommission = async () => {
+    if (!window.confirm('ต้องการตั้งค่าคอมมิชชั่น = 3% สำหรับทุกทรัพย์?')) return
+    setCommissionUpdating(true)
+    try {
+      const allProps = await getPropertiesOnce()
+      if (!allProps || allProps.length === 0) {
+        alert('ไม่มีข้อมูลทรัพย์')
+        return
+      }
+      const batch = writeBatch(adminDb)
+      allProps.forEach((property) => {
+        const docRef = doc(adminDb, 'properties', property.id)
+        batch.update(docRef, {
+          commissionRate: 3,
+          updatedAt: serverTimestamp(),
+        })
+      })
+      await batch.commit()
+      setCommissionDone(true)
+      alert(`อัปเดตสำเร็จ ${allProps.length} รายการ`)
+    } catch (err) {
+      console.error(err)
+      alert('เกิดข้อผิดพลาด: ' + err.message)
+    } finally {
+      setCommissionUpdating(false)
+    }
+  }
 
   const handleMigration = async () => {
     if (!window.confirm('คุณต้องการรันสคริปต์ปรับปรุงระบบ ID (PropertyTypes & DisplayId) หรือไม่?')) return
@@ -207,7 +237,7 @@ export default function Dashboard() {
         }
       })
 
-      allProps.forEach((property, index) => {
+      allProps.forEach((property) => {
         const docRef = doc(adminDb, 'properties', property.id)
         let needsUpdate = false
         const updateData = {}
@@ -318,7 +348,7 @@ export default function Dashboard() {
           แดชบอร์ด
         </h1>
         <div className="flex flex-wrap items-center gap-2">
-          {!migrationDone && (
+          {/* {!migrationDone && (
             <button
               onClick={handleMigration}
               disabled={migrating}
@@ -328,8 +358,8 @@ export default function Dashboard() {
               <span className="hidden sm:inline">ปรับปรุงระบบ ID</span>
               <span className="sm:hidden">Migration</span>
             </button>
-          )}
-          {!tagsDone ? (
+          )} */}
+          {/* {!tagsDone ? (
             <button
               onClick={handleRegenerateTags}
               disabled={tagsRegenerating}
@@ -341,7 +371,20 @@ export default function Dashboard() {
             </button>
           ) : (
             <span className="text-sm text-emerald-600 font-medium">✓ Tags อัปเดตแล้ว</span>
-          )}
+          )} */}
+          {/* {!commissionDone ? (
+            <button
+              onClick={handleUpdateCommission}
+              disabled={commissionUpdating}
+              className="inline-flex items-center gap-2 px-3 sm:px-4 py-2 rounded-xl bg-emerald-600 text-white text-sm font-semibold hover:bg-emerald-700 transition-colors shadow-sm disabled:opacity-50"
+            >
+              {commissionUpdating ? <Loader2 className="h-4 w-4 animate-spin" /> : <DatabaseZap className="h-4 w-4" />}
+              <span className="hidden sm:inline">ตั้งค่าคอม 3% ทั้งหมด</span>
+              <span className="sm:hidden">คอม 3%</span>
+            </button>
+          ) : (
+            <span className="text-sm text-emerald-600 font-medium">✓ ค่าคอมอัปเดตแล้ว</span>
+          )} */}
           <Link
             to="/sps-internal-admin/properties/new"
             className="inline-flex items-center gap-2 px-3 sm:px-5 py-2 rounded-xl bg-yellow-400 text-yellow-900 text-sm font-semibold hover:bg-yellow-500 transition-colors shadow-sm"
@@ -420,11 +463,10 @@ export default function Dashboard() {
                   key={key}
                   type="button"
                   onClick={() => setViewRange(key)}
-                  className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
-                    viewRange === key
-                      ? 'bg-blue-900 text-white'
-                      : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
-                  }`}
+                  className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${viewRange === key
+                    ? 'bg-blue-900 text-white'
+                    : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                    }`}
                 >
                   {label}
                 </button>

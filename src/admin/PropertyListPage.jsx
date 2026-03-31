@@ -100,6 +100,7 @@ export default function PropertyListPage() {
   const authContext = useAdminAuth()
   const user = authContext?.user || null
   const isAdmin = authContext?.isAdmin || (() => false)
+  const userRole = authContext?.userRole || null
 
   const [properties, setProperties] = useState([])
   const [loading, setLoading] = useState(true)
@@ -119,7 +120,7 @@ export default function PropertyListPage() {
     category: '', // หมวดหมู่ (ซื้อ, เช่า) - สำหรับข้อมูลเก่า
   })
   const [currentPage, setCurrentPage] = useState(1)
-  const [itemsPerPage, setItemsPerPage] = useState(10)
+  const [itemsPerPage] = useState(10)
 
   useEffect(() => {
     let isMounted = true
@@ -742,7 +743,7 @@ export default function PropertyListPage() {
                         </td>
                       </tr>
                     ) : (
-                      paginatedProperties.map((property, index) => {
+                      paginatedProperties.map((property) => {
                         if (!property || !property.id) {
                           return null
                         }
@@ -787,14 +788,25 @@ export default function PropertyListPage() {
                                 {formatPrice(property.price, property.isRental, true)}
                               </td>
                               <td className="px-6 py-4 text-center">
-                                <Link
-                                  to={`/sps-internal-admin/properties/${property.id}/edit`}
-                                  className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg bg-blue-50 text-blue-900 font-medium hover:bg-blue-100 transition"
-                                  aria-label={`แก้ไข ${property.title}`}
-                                >
-                                  <Pencil className="h-4 w-4" />
-                                  แก้ไข
-                                </Link>
+                                {userRole === 'agent' && property.createdBy !== user?.uid ? (
+                                  <button
+                                    disabled
+                                    className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg bg-slate-100 text-slate-400 font-medium cursor-not-allowed"
+                                    title="คุณไม่มีสิทธิ์แก้ไขทรัพย์นี้"
+                                  >
+                                    <Pencil className="h-4 w-4" />
+                                    แก้ไข
+                                  </button>
+                                ) : (
+                                  <Link
+                                    to={`/sps-internal-admin/properties/${property.id}/edit`}
+                                    className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg bg-blue-50 text-blue-900 font-medium hover:bg-blue-100 transition"
+                                    aria-label={`แก้ไข ${property.title}`}
+                                  >
+                                    <Pencil className="h-4 w-4" />
+                                    แก้ไข
+                                  </Link>
+                                )}
                               </td>
                             </tr>
                           )

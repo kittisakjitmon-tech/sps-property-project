@@ -94,6 +94,8 @@ const defaultForm = {
   status: 'available', // เก็บไว้เพื่อ backward compatibility
   propertySubStatus: '', // เก็บไว้เพื่อ backward compatibility
   showPrice: true,
+  commissionRate: '', // ค่าคอมมิชชั่น (%)
+  bankPrice: '', // ราคาหน้าสัญญา / ราคาประเมิน
   customTags: [],
   project: '', // ระบบโครงการ (ชื่อโครงการที่บ้านหลังนี้อยู่)
   mapUrl: '',
@@ -109,10 +111,11 @@ export default function PropertyForm() {
   const isEdit = Boolean(id)
   const [form, setForm] = useState(defaultForm)
   const [loading, setLoading] = useState(isEdit)
+  const [permissionDenied, setPermissionDenied] = useState(false)
   const [saving, setSaving] = useState(false)
   const [refreshingNearby, setRefreshingNearby] = useState(false)
   const [nearbyStatusMessage, setNearbyStatusMessage] = useState('')
-  const [uploadingFiles, setUploadingFiles] = useState([])
+  const [, setUploadingFiles] = useState([])
   const [newFiles, setNewFiles] = useState([])
   const [compressing, setCompressing] = useState(false)
   const [allProperties, setAllProperties] = useState([])
@@ -158,6 +161,14 @@ export default function PropertyForm() {
     let cancelled = false
     getPropertyByIdOnce(id).then((p) => {
       if (cancelled || !p) return
+
+      // Agent can only edit their own properties
+      if (userRole === 'agent' && p.createdBy !== user?.uid) {
+        setPermissionDenied(true)
+        setLoading(false)
+        return
+      }
+
       const loc = p.location || {}
 
       // Determine listingType from existing data
@@ -236,6 +247,8 @@ export default function PropertyForm() {
         status: p.status ?? 'available', // Keep for backward compatibility
         propertySubStatus: p.propertySubStatus ?? '', // Keep for backward compatibility
         showPrice: p.showPrice !== false,
+        commissionRate: p.commissionRate ?? '',
+        bankPrice: p.bankPrice ?? '',
         customTags: Array.isArray(p.customTags) ? p.customTags : [],
         project: p.project ?? '',
         mapUrl: p.mapUrl ?? '',
@@ -488,6 +501,12 @@ export default function PropertyForm() {
   const handleSubmit = async (e) => {
     e.preventDefault()
 
+    // Agent can only edit their own properties
+    if (userRole === 'agent' && isEdit) {
+      alert('คุณไม่มีสิทธิ์แก้ไขทรัพย์นี้')
+      return
+    }
+
     // ตรวจสอบว่าเลือกพื้นที่แล้วหรือยัง
     if (!form.locationDisplay.trim() || !form.location.province) {
       alert('กรุณาเลือกพื้นที่ (จังหวัด/อำเภอ/ตำบล) ก่อนบันทึก')
@@ -556,6 +575,8 @@ export default function PropertyForm() {
       status: form.status || 'available', // Keep for backward compatibility
       propertySubStatus: form.propertySubStatus || form.propertyCondition || null, // Keep for backward compatibility
       showPrice: form.showPrice !== false,
+      commissionRate: form.commissionRate ? Number(form.commissionRate) : null,
+      bankPrice: form.bankPrice ? Number(form.bankPrice.replace(/,/g, '')) : null,
       customTags: mergedTags, // Use merged tags (custom + auto-generated)
       project: (form.project || '').trim() || null,
       coverImageUrl: form.coverImageUrl || null, // บันทึก coverImageUrl
@@ -702,6 +723,27 @@ export default function PropertyForm() {
     )
   }
 
+  if (permissionDenied) {
+    return (
+      <div className="flex flex-col items-center justify-center py-16 text-center">
+        <div className="w-16 h-16 rounded-full bg-red-100 flex items-center justify-center mb-4">
+          <svg className="w-8 h-8 text-red-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m0 0v2m0-2h2m-2 0H10m4-6V9a4 4 0 10-8 0v2m-2 0h12a2 2 0 012 2v6a2 2 0 01-2 2H6a2 2 0 01-2-2v-6a2 2 0 012-2z" />
+          </svg>
+        </div>
+        <h2 className="text-xl font-bold text-slate-800 mb-2">คุณไม่มีสิทธิ์แก้ไขทรัพย์นี้</h2>
+        <p className="text-slate-500 mb-6">ทรัพย์นี้ไม่ได้สร้างโดยคุณ คุณสามารถดูได้อย่างเดียว</p>
+        <Link
+          to="/sps-internal-admin/properties"
+          className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-blue-900 text-white font-semibold hover:bg-blue-800 transition-colors"
+        >
+          <ArrowLeft className="h-4 w-4" />
+          กลับไปรายการทรัพย์
+        </Link>
+      </div>
+    )
+  }
+
   return (
     <>
       {progressLoader.isActive && (
@@ -768,21 +810,55 @@ export default function PropertyForm() {
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">ประเภท *</label>
-                <select
-                  value={form.type}
-                  onChange={(e) => handleTypeChange(e.target.value)}
+                <label className="block text-sm font-medium text-slate-700 mb-1">ค่าคอมมิชชั่น (%)</label>
+                <input
+                  type="text"
+                  value={form.commissionRate}
+                  onChange={(e) => {
+                    const rawValue = e.target.value.replace(/,/g, '')
+                    if (rawValue === '' || /^\d*\.?\d*$/.test(rawValue)) {
+                      update({ commissionRate: rawValue })
+                    }
+                  }}
+                  placeholder="เช่น 3"
                   className="w-full px-4 py-3 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-900/20"
-                >
-                  {/* Fallback option for legacy types that are not in PROPERTY_TYPES */}
-                  {!PROPERTY_TYPES.some(pt => pt.id === form.type) && form.type && (
-                    <option value={form.type}>{getPropertyLabel(form.type)}</option>
-                  )}
-                  {PROPERTY_TYPES.map((c) => (
-                    <option key={c.id} value={c.id}>{c.label}</option>
-                  ))}
-                </select>
+                />
               </div>
+            </div>
+
+            {/* ราคาหน้าสัญญา */}
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-1">ราคาหน้าสัญญา / ราคาประเมิน (บาท)</label>
+              <input
+                type="text"
+                value={form.bankPrice ? Number(form.bankPrice).toLocaleString('th-TH') : ''}
+                onChange={(e) => {
+                  const rawValue = e.target.value.replace(/,/g, '')
+                  if (rawValue === '' || /^\d+$/.test(rawValue)) {
+                    update({ bankPrice: rawValue })
+                  }
+                }}
+                placeholder="ราคาที่ธนาคารประเมิน"
+                className="w-full px-4 py-3 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-900/20"
+              />
+            </div>
+
+            {/* ประเภท */}
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-1">ประเภท *</label>
+              <select
+                value={form.type}
+                onChange={(e) => handleTypeChange(e.target.value)}
+                className="w-full px-4 py-3 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-900/20"
+              >
+                {/* Fallback option for legacy types that are not in PROPERTY_TYPES */}
+                {!PROPERTY_TYPES.some(pt => pt.id === form.type) && form.type && (
+                  <option value={form.type}>{getPropertyLabel(form.type)}</option>
+                )}
+                {PROPERTY_TYPES.map((c) => (
+                  <option key={c.id} value={c.id}>{c.label}</option>
+                ))}
+              </select>
             </div>
 
             {/* Listing Type (ประเภทการดีล) */}

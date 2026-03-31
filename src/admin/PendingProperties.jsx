@@ -11,8 +11,6 @@ export default function PendingProperties() {
   const [pendingProperties, setPendingProperties] = useState([])
   const [processingId, setProcessingId] = useState(null)
   const [viewingProperty, setViewingProperty] = useState(null)
-  const [rejectingId, setRejectingId] = useState(null)
-  const [rejectionReason, setRejectionReason] = useState('')
 
   useEffect(() => {
     const unsub = getPendingPropertiesSnapshot(setPendingProperties, adminDb)

@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useCallback } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { X, Plus, Trash2, GripVertical, Check, AlertCircle, LayoutList, Search } from 'lucide-react'
 import {
   DndContext,
@@ -228,7 +228,7 @@ export default function HomepageSectionsAdmin() {
   const [deletingId, setDeletingId] = useState(null)
   const [showForm, setShowForm] = useState(false)
   const [editingSection, setEditingSection] = useState(null)
-  const [isDragging, setIsDragging] = useState(false)
+  const [, setIsDragging] = useState(false)
 
   const [form, setForm] = useState({
     title: '',

@@ -55,13 +55,6 @@ export function AdminAuthProvider({ children }) {
     const unsub = onAuthStateChanged(adminAuth, async (u) => {
       if (u) {
         const role = await resolveUserRole(u)
-        if (role === 'agent') {
-          await signOut(adminAuth)
-          setUser(null)
-          setUserRole(null)
-          setLoading(false)
-          return
-        }
         setUserRole(role)
       } else {
         setUserRole(null)
@@ -76,13 +69,6 @@ export function AdminAuthProvider({ children }) {
     const cred = await signInWithEmailAndPassword(adminAuth, email, password)
 
     const role = await resolveUserRole(cred.user)
-    if (role === 'agent') {
-      await signOut(adminAuth)
-      const error = new Error('บัญชี Agent ไม่สามารถเข้าสู่ระบบหลังบ้านได้ กรุณาใช้หน้า Login ปกติ')
-      error.code = 'auth/agent-not-allowed'
-      throw error
-    }
-
     setUser(cred.user)
     setUserRole(role)
     setLoading(false)

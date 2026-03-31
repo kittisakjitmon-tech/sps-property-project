@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect } from 'react'
 import { X, Plus, Trash2, GripVertical, Check, AlertCircle, MapPin } from 'lucide-react'
 import {
   DndContext,
@@ -27,7 +27,7 @@ import {
   batchUpdatePopularLocationOrders,
 } from '../lib/firestore'
 import { adminDb, adminStorage } from '../lib/firebase'
-import { compressImage } from '../lib/imageCompressor'
+
 
 // Sortable Location Card Component
 function SortableLocationCard({ location, index, onEdit, onDelete, onToggleStatus, isDeleting }) {
@@ -168,7 +168,7 @@ export default function PopularLocationsAdmin() {
   })
   const [uploading, setUploading] = useState(false)
   const [deletingId, setDeletingId] = useState(null)
-  const [isDragging, setIsDragging] = useState(false)
+  const [, setIsDragging] = useState(false)
   const [successMessage, setSuccessMessage] = useState(null)
   const [errorMessage, setErrorMessage] = useState(null)
 
@@ -349,7 +349,6 @@ export default function PopularLocationsAdmin() {
   }
 
   const activeLocations = locations.filter((loc) => loc.isActive)
-  const inactiveLocations = locations.filter((loc) => !loc.isActive)
 
   return (
     <div className="max-w-6xl mx-auto">

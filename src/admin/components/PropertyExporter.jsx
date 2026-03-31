@@ -46,7 +46,7 @@ export default function PropertyExporter({ property }) {
             // Nearby Places
             if (property.nearbyPlace && property.nearbyPlace.length > 0) {
                 propertyText += `\nสถานที่ใกล้เคียง:\n`
-                property.nearbyPlace.forEach((place, i) => {
+                property.nearbyPlace.forEach((place) => {
                     propertyText += `- ${place.name} (${place.distance} กม.)\n`
                 })
             }
