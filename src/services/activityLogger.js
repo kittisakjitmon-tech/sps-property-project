@@ -3,7 +3,7 @@
  * Collection: activities
  */
 import { addDoc, collection, serverTimestamp } from 'firebase/firestore'
-import { db } from '../lib/firebase'
+import { adminDb } from '../lib/firebase'
 
 const ACTIVITIES_COLLECTION = 'activities'
 
@@ -41,7 +41,7 @@ export async function logActivity({ action, target, details, currentUser, status
   }
 
   try {
-    const docRef = await addDoc(collection(db, ACTIVITIES_COLLECTION), payload)
+    const docRef = await addDoc(collection(adminDb, ACTIVITIES_COLLECTION), payload)
     return docRef.id
   } catch (err) {
     console.error('[ActivityLogger] Failed to log activity:', err)

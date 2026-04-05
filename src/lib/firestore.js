@@ -105,12 +105,30 @@ function generateShareToken(length = 20) {
   return token
 }
 
-/** Properties - real-time list. Sorts by createdAt if present. */
-export function getPropertiesSnapshot(callback, firestore) {
+/** Properties - real-time list. Sorts by createdAt if present.
+ * @param {Function} callback - callback function to receive properties list
+ * @param {Firestore} firestore - firestore instance (optional)
+ * @param {Object} options - options for filtering
+ * @param {string} options.userId - user ID to filter by (for agents)
+ * @param {string} options.role - user role ('super_admin', 'admin', 'agent', 'member')
+ */
+export function getPropertiesSnapshot(callback, firestore, options = {}) {
   const d = firestoreDb(firestore)
+  const { userId, role } = options
+  
+  // If user is agent, filter by createdBy === userId
+  // If user is super_admin or admin, show all
+  // Otherwise, default to showing all (for backward compatibility)
   const q = collection(d, PROPERTIES)
+  
   return onSnapshot(q, (snap) => {
-    const list = snap.docs.map((d) => ({ id: d.id, ...d.data() }))
+    let list = snap.docs.map((d) => ({ id: d.id, ...d.data() }))
+    
+    // Filter by createdBy if user is agent
+    if (role === 'agent' && userId) {
+      list = list.filter((p) => p.createdBy === userId)
+    }
+    
     list.sort((a, b) => {
       const ta = a.createdAt?.toMillis?.() ?? 0
       const tb = b.createdAt?.toMillis?.() ?? 0

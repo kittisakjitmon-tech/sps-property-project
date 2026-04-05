@@ -11,7 +11,7 @@ hosting.*
 # Node / dependencies
 node_modules/
 functions/node_modules/
-
+้hosting.*
 # Build output
 dist/
 dist-ssr/

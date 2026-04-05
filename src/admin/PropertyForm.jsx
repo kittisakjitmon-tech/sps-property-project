@@ -162,12 +162,8 @@ export default function PropertyForm() {
     getPropertyByIdOnce(id).then((p) => {
       if (cancelled || !p) return
 
-      // Agent can only edit their own properties
-      if (userRole === 'agent' && p.createdBy !== user?.uid) {
-        setPermissionDenied(true)
-        setLoading(false)
-        return
-      }
+      // Anyone can edit/view properties ( Admins see all, Agents see only their own in list)
+      // No permission check needed here anymore
 
       const loc = p.location || {}
 
@@ -472,13 +468,17 @@ export default function PropertyForm() {
 
   const handleDelete = async () => {
     if (!isEdit || !id) return
+    
+    // Anyone can delete properties ( Admins see all, Agents see only their own in list)
+    // No need to check permissions here anymore
+    
     const confirmed = window.confirm(
       `คุณต้องการลบบ้าน/ทรัพย์นี้ใช่หรือไม่?\n\n"${form.title || '(ไม่มีชื่อ)'}"\n\nการดำเนินการนี้ไม่สามารถย้อนกลับได้ และรายการจะหายจากเว็บไซต์ทันที`
     )
     if (!confirmed) return
     setDeleting(true)
     try {
-      await deletePropertyById(id)
+      await deletePropertyById(id, adminDb)
       try {
         await logActivity({
           action: 'property_delete',
@@ -501,11 +501,8 @@ export default function PropertyForm() {
   const handleSubmit = async (e) => {
     e.preventDefault()
 
-    // Agent can only edit their own properties
-    if (userRole === 'agent' && isEdit) {
-      alert('คุณไม่มีสิทธิ์แก้ไขทรัพย์นี้')
-      return
-    }
+    // Anyone can edit properties ( Admins see all, Agents see only their own in list)
+    // No need to check permissions here anymore
 
     // ตรวจสอบว่าเลือกพื้นที่แล้วหรือยัง
     if (!form.locationDisplay.trim() || !form.location.province) {
@@ -576,7 +573,7 @@ export default function PropertyForm() {
       propertySubStatus: form.propertySubStatus || form.propertyCondition || null, // Keep for backward compatibility
       showPrice: form.showPrice !== false,
       commissionRate: form.commissionRate ? Number(form.commissionRate) : null,
-      bankPrice: form.bankPrice ? Number(form.bankPrice.replace(/,/g, '')) : null,
+      bankPrice: form.bankPrice ? Number(String(form.bankPrice).replace(/,/g, '')) : null,
       customTags: mergedTags, // Use merged tags (custom + auto-generated)
       project: (form.project || '').trim() || null,
       coverImageUrl: form.coverImageUrl || null, // บันทึก coverImageUrl

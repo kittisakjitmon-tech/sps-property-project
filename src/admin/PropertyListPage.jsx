@@ -131,37 +131,54 @@ export default function PropertyListPage() {
         return
       }
 
-      let adminCheck = false
+      let hasAccess = false
+      let userIdValue = null
+      let userRoleValue = null
+
       try {
-        adminCheck = isAdmin && typeof isAdmin === 'function' ? isAdmin() : false
+        // Admin or Super Admin have full access
+        // Agent also has access but will see only their own properties
+        if (isAdmin && typeof isAdmin === 'function' ? isAdmin() : false) {
+          hasAccess = true
+          userRoleValue = 'admin'
+          userIdValue = user?.uid || null
+        } else if (userRole === 'agent') {
+          hasAccess = true
+          userRoleValue = 'agent'
+          userIdValue = user?.uid || null
+        }
       } catch (error) {
-        console.error('PropertyListPage: isAdmin check error in useEffect:', error)
-        adminCheck = false
+        console.error('PropertyListPage: access check error in useEffect:', error)
+        hasAccess = false
       }
 
-      if (!adminCheck) {
+      if (!hasAccess) {
         setLoading(false)
         return
       }
 
-      const unsub = getPropertiesSnapshot((allProperties) => {
-        if (!isMounted) return
+      const unsub = getPropertiesSnapshot(
+        (allProperties) => {
+          if (!isMounted) return
 
-        try {
-          if (Array.isArray(allProperties)) {
-            setProperties(allProperties)
-          } else {
+          try {
+            if (Array.isArray(allProperties)) {
+              setProperties(allProperties)
+            } else {
+              setProperties([])
+            }
+          } catch (error) {
+            console.error('PropertyListPage: Error setting properties:', error)
             setProperties([])
+          } finally {
+            if (isMounted) {
+              setLoading(false)
+            }
           }
-        } catch (error) {
-          console.error('PropertyListPage: Error setting properties:', error)
-          setProperties([])
-        } finally {
-          if (isMounted) {
-            setLoading(false)
-          }
-        }
-      })
+        },
+        null, // firestore instance
+        { userId: userIdValue, role: userRoleValue } // options for filtering
+      )
 
       return () => {
         isMounted = false
@@ -180,7 +197,7 @@ export default function PropertyListPage() {
         setLoading(false)
       }
     }
-  }, [user, isAdmin])
+  }, [user, isAdmin, userRole])
 
   // Advanced Filtering Logic: กรองข้อมูลตาม searchTerm และ filters (AND Logic)
   const filteredProperties = useMemo(() => {
@@ -475,24 +492,19 @@ export default function PropertyListPage() {
 
   // Debug logging removed for production
 
-  // Check admin access safely (after all hooks)
+  // Check admin or agent access safely (after all hooks)
   let hasAdminAccess = false
   try {
-    hasAdminAccess = isAdmin && typeof isAdmin === 'function' ? isAdmin() : false
+    // Admin or Super Admin have full access
+    const adminCheck = isAdmin && typeof isAdmin === 'function' ? isAdmin() : false
+    // Agent also has access to view and manage their own properties
+    const agentCheck = userRole === 'agent'
+    hasAdminAccess = adminCheck || agentCheck
   } catch (error) {
-    console.error('PropertyListPage: isAdmin check error:', error)
+    console.error('PropertyListPage: access check error:', error)
     hasAdminAccess = false
   }
 
-  if (!hasAdminAccess) {
-    return (
-      <div className="max-w-4xl mx-auto p-6">
-        <div className="bg-red-50 border border-red-200 rounded-lg p-6 text-center">
-          <p className="text-red-700">เฉพาะผู้ดูแลระบบเท่านั้นที่สามารถเข้าถึงหน้านี้ได้</p>
-        </div>
-      </div>
-    )
-  }
 
   if (loading) {
     return (
