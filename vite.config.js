@@ -3,6 +3,8 @@ import react from '@vitejs/plugin-react'
 import compression from 'vite-plugin-compression'
 import { ViteImageOptimizer } from 'vite-plugin-image-optimizer'
 
+import { cloudflare } from "@cloudflare/vite-plugin";
+
 // https://vite.dev/config/
 export default defineConfig({
   plugins: [
@@ -28,6 +30,7 @@ export default defineConfig({
       ext: '.br',
       threshold: 10240,
     }),
+    cloudflare()
   ],
   build: {
     target: 'es2020',

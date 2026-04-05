@@ -46,3 +46,9 @@ functions/.env
 *.sw?
 .continueignore
 .env
+
+# wrangler files
+.wrangler
+.dev.vars*
+!.dev.vars.example
+!.env.example
