@@ -1,45 +1,18 @@
 /**
  * SPS Property Solution - Cloud Functions
- * 1. AI Image Enhancement Pipeline: เมื่อมีรูปใหม่ใน Storage -> ส่งไป Cloudinary ปรับภาพ -> อัปเดต URL ใน Firestore
- * 2. LINE Notifications: เมื่อมี appointment ใหม่ -> ส่งข้อความแจ้งเตือนไป LINE
+ * รูปทรัพย์ปรับแต่งผ่าน Cloudinary ฝั่งหน้าเว็บ (ดู src/lib/firestore.js) จึงไม่มี Storage trigger แล้ว
+ * - LINE Notifications: เมื่อมี appointment ใหม่ -> ส่งข้อความแจ้งเตือนไป LINE
  */
 
 const functions = require('firebase-functions')
 const admin = require('firebase-admin')
-const cloudinary = require('cloudinary').v2
 const axios = require('axios')
 
 admin.initializeApp()
 
-// โฟลเดอร์ใน Storage ที่ต้องการให้ trigger (รูปทรัพย์สิน)
-const PROPERTY_IMAGES_PREFIX = 'properties/'
-const ALLOWED_MIME = ['image/jpeg', 'image/png', 'image/jpg']
 const FIRESTORE_PROPERTIES = 'properties'
 const FIRESTORE_BLOGS = 'blogs'
 const SHARE_LINKS = 'share_links'
-
-/**
- * ตั้งค่า Cloudinary จาก Environment Config (ไม่ hardcode)
- * ใช้คำสั่ง: firebase functions:config:set cloudinary.cloud_name="xxx" cloudinary.api_key="xxx" cloudinary.api_secret="xxx"
- */
-function getCloudinaryConfig() {
-  const config = functions.config().cloudinary
-  if (!config || !config.cloud_name || !config.api_key || !config.api_secret) {
-    throw new Error(
-      'Cloudinary config ไม่ครบ กรุณารัน: firebase functions:config:set cloudinary.cloud_name="..." cloudinary.api_key="..." cloudinary.api_secret="..."'
-    )
-  }
-  return config
-}
-
-/**
- * สร้าง URL ของรูปที่ผ่านการปรับแต่งจาก Cloudinary
- * ใช้: e_improve:outdoor, a_auto, q_auto, f_auto
- */
-function buildEnhancedImageUrl(cloudName, publicId, format) {
-  const trans = 'e_improve:outdoor,a_auto,q_auto,f_auto'
-  return `https://res.cloudinary.com/${cloudName}/image/upload/${trans}/${publicId}.${format}`
-}
 
 /**
  * Extract ID from slug format: {content}--{id}
@@ -51,90 +24,6 @@ function extractIdFromSlug(slugParam) {
   const sep = slugParam.lastIndexOf('--')
   return sep !== -1 ? slugParam.substring(sep + 2) : slugParam
 }
-
-/**
- * Storage Trigger: เมื่อมีไฟล์รูปใหม่ใน properties/{propertyId}/...
- * 1) กรองเฉพาะรูปภาพในโฟลเดอร์ properties/
- * 2) ดาวน์โหลดไฟล์ -> อัปโหลดไป Cloudinary พร้อม AI enhancement
- * 3) อัปเดต Firestore property document: แทนที่ URL เดิมด้วย URL ที่แต่งแล้ว
- */
-exports.onPropertyImageFinalized = functions
-  .runWith({
-    timeoutSeconds: 120,
-    memory: '512MB',
-  })
-  .storage
-  .object()
-  .onFinalize(async (object) => {
-    const filePath = object.name
-    const contentType = object.contentType || ''
-
-    // กรองเฉพาะโฟลเดอร์ properties/ และเป็นรูปภาพ
-    if (!filePath.startsWith(PROPERTY_IMAGES_PREFIX)) {
-      return null
-    }
-    if (!ALLOWED_MIME.includes(contentType)) {
-      functions.logger.info(`ข้ามไฟล์ที่ไม่ใช่รูปภาพ: ${filePath} (${contentType})`)
-      return null
-    }
-
-    const pathParts = filePath.split('/')
-    if (pathParts.length < 3) {
-      return null
-    }
-    const propertyId = pathParts[1]
-
-    try {
-      const cloudConfig = getCloudinaryConfig()
-      cloudinary.config({
-        cloud_name: cloudConfig.cloud_name,
-        api_key: cloudConfig.api_key,
-        api_secret: cloudConfig.api_secret,
-      })
-
-      const bucket = admin.storage().bucket(object.bucket)
-      const file = bucket.file(filePath)
-      const [buffer] = await file.download()
-      const mime = contentType.includes('png') ? 'png' : 'jpeg'
-      const dataUri = `data:image/${mime};base64,${buffer.toString('base64')}`
-
-      // อัปโหลดไป Cloudinary (ได้ public_id กลับมา)
-      const uploadResult = await cloudinary.uploader.upload(dataUri, {
-        folder: 'sps-property',
-        resource_type: 'image',
-      })
-
-      const publicId = uploadResult.public_id
-      const format = uploadResult.format || 'jpg'
-      const enhancedUrl = buildEnhancedImageUrl(cloudConfig.cloud_name, publicId, format)
-
-      // ค้นหาและแทนที่ URL ใน Firestore โดย match ตามชื่อไฟล์ (path ส่วนท้าย) หรือ append ถ้าไม่เจอ
-      const fileName = pathParts[pathParts.length - 1]
-      const db = admin.firestore()
-      const propRef = db.collection(FIRESTORE_PROPERTIES).doc(propertyId)
-      const doc = await propRef.get()
-      if (!doc.exists) {
-        functions.logger.warn(`ไม่พบ property document: ${propertyId}`)
-        return null
-      }
-
-      const data = doc.data()
-      const images = Array.isArray(data.images) ? [...data.images] : []
-      const idx = images.findIndex((url) => typeof url === 'string' && url.includes(fileName))
-      if (idx >= 0) {
-        images[idx] = enhancedUrl
-      } else {
-        images.push(enhancedUrl)
-        functions.logger.info(`เพิ่ม URL ใหม่ใน property ${propertyId} (ไม่พบ URL เดิมใน document)`)
-      }
-      await propRef.update({ images, updatedAt: admin.firestore.FieldValue.serverTimestamp() })
-      functions.logger.info(`อัปเดตรูป property ${propertyId} เป็น URL ที่แต่งแล้ว`)
-      return null
-    } catch (err) {
-      functions.logger.error('AI Image Enhancement ล้มเหลว', { filePath, error: err.message })
-      throw err
-    }
-  })
 
 /**
  * LINE Messaging API Configuration
@@ -352,41 +241,8 @@ exports.lineWebhook = functions
           functions.logger.info(`🚨 USER ID FOUND: ${userId}`)
           console.log(`🚨 USER ID FOUND: ${userId}`)
 
-          // (Optional) Reply กลับไปบอก User ID
-          try {
-            const { channelAccessToken } = getLineConfig()
-            const replyToken = event.replyToken
-
-            if (replyToken && channelAccessToken) {
-              const LINE_REPLY_URL = 'https://api.line.me/v2/bot/message/reply'
-
-              await axios.post(
-                LINE_REPLY_URL,
-                {
-                  replyToken: replyToken,
-                  messages: [
-                    {
-                      type: 'text',
-                      text: `Your User ID is: ${userId}\n\nคัดลอก ID นี้ไปใส่ใน LINE_ADMIN_IDS เพื่อรับการแจ้งเตือน`,
-                    },
-                  ],
-                },
-                {
-                  headers: {
-                    'Content-Type': 'application/json',
-                    Authorization: `Bearer ${channelAccessToken}`,
-                  },
-                }
-              )
-              functions.logger.info(`ส่ง reply สำเร็จไปยัง User ID: ${userId}`)
-            }
-          } catch (replyError) {
-            // ถ้า reply ไม่สำเร็จ ไม่เป็นไร แค่ log error
-            functions.logger.warn('Reply failed (ไม่เป็นไร - แค่ log User ID)', {
-              error: replyError.message,
-              userId,
-            })
-          }
+          // ไม่ตอบกลับอัตโนมัติ: webhook นี้ไม่ได้ตรวจลายเซ็นจาก LINE
+          // จึงไม่ควรส่งข้อความออกไปตามคำขอที่ใครก็ปลอมได้ — ดู User ID จาก log แทน
         } else if (event.type === 'follow') {
           // กรณีที่ user เพิ่มเพื่อน (Follow)
           if (event.source && event.source.userId) {
@@ -842,74 +698,8 @@ exports.blogMeta = functions
     }
   })
 
-/**
- * ==================== AI BLOG AUTOMATION ====================
- * ระบบสร้างบทความอัตโนมัติด้วย Google Vertex AI
- * ทำงานทุกวัน เวลา 08:00 น. (เวลาไทย)
- */
-const { VertexAI } = require('@google-cloud/vertexai')
-
-// หัวข้อที่ต้องการให้ AI สุ่มเขียน
-const BLOG_TOPICS = [
-  'ข่าวสารการกู้เงินซื้อบ้านในไทย อัปเดตดอกเบี้ยและนโยบายรัฐ',
-  'เทคนิคการเลือกซื้อบ้านและคอนโดสำหรับมือใหม่',
-  'สิ่งที่ควรรู้ก่อนกู้ซื้อบ้าน การเตรียมเอกสารและการเดินบัญชี',
-  'ไอเดียการแต่งบ้านสไตล์มินิมอลและโมเดิร์นที่ประหยัดงบ',
-  'เทรนด์อสังหาริมทรัพย์ไทยในปีนี้ พื้นที่ไหนน่าลงทุน',
-  'ความรู้เรื่องกฎหมายบ้านและที่ดินที่เจ้าของบ้านควรรู้'
-]
-
-exports.scheduledDailyBlog = functions
-  .runWith({
-    timeoutSeconds: 300,
-    memory: '512MB',
-  })
-  .pubsub.schedule('0 8 * * *')
-  .timeZone('Asia/Bangkok')
-  .onRun(async (context) => {
-    try {
-      // 1. Initialize Vertex AI (Using us-central1 for maximum model availability)
-      const projectId = process.env.GCP_PROJECT || process.env.GCLOUD_PROJECT || admin.app().options.projectId
-      functions.logger.info(`Scheduled Blog: ใช้ Project ID: ${projectId} ใน us-central1`)
-      const vertex_ai = new VertexAI({ project: projectId, location: 'us-central1' })
-      const model = vertex_ai.getGenerativeModel({ model: 'gemini-1.5-flash-002' })
-
-      const topic = BLOG_TOPICS[Math.floor(Math.random() * BLOG_TOPICS.length)]
-      const prompt = `คุณเป็นนักเขียนบล็อกอสังหาริมทรัพย์มืออาชีพในประเทศไทย เขียนบทความคุณภาพสูงเกี่ยวกับ: ${topic} 
-        ต้องส่งกลับมาเป็นรูปแบบ JSON เท่านั้น: { "title": "...", "content": "...", "summary": "..." } 
-        ห้ามมีข้อความอื่นปนเด็ดขาด`
-
-      const resp = await model.generateContent({
-        contents: [{ role: 'user', parts: [{ text: prompt }] }],
-      })
-
-      const resultText = resp.response.candidates[0].content.parts[0].text
-      const jsonMatch = resultText.match(/\{[\s\S]*\}/)
-      if (!jsonMatch) {
-        throw new Error(`AI ไม่ได้ส่งรูปแบบ JSON กลับมา: ${resultText}`)
-      }
-      const blogData = JSON.parse(jsonMatch[0])
-
-      const db = admin.firestore()
-      const newBlog = {
-        ...blogData,
-        published: true,
-        isFeatured: false,
-        images: [],
-        createdAt: admin.firestore.FieldValue.serverTimestamp(),
-        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-        author: 'AI Assistant (Vertex)',
-        topic: topic
-      }
-
-      const docRef = await db.collection('blogs').add(newBlog)
-      functions.logger.info(`สร้างบทความ AI สำเร็จ: ${docRef.id}`)
-      return null
-    } catch (error) {
-      functions.logger.error('การสร้างบทความ AI ล้มเหลว (Vertex)', error)
-      return null
-    }
-  })
+// AI blog drafts every morning (OpenRouter free models; saved unpublished for review).
+exports.scheduledDailyBlog = require('./daily-blog').scheduledDailyBlog
 
 /**
  * ฟังก์ชันสำหรับทดสอบสร้าง Blog ทันที (รันผ่าน HTTP) - Vertex AI version
