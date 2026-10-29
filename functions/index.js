@@ -955,3 +955,6 @@ exports.checkPropertyLimit = functions
     return { allowed: count < limit, count, limit }
   })
 
+
+// Authenticated AI property intake; secrets and provider calls stay server-side.
+exports.aiPropertyAssistant = require('./ai-property').aiPropertyAssistant

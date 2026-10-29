@@ -6,6 +6,8 @@ import { AdminAuthProvider } from './context/AdminAuthContext'
 const AdminLayout = lazy(() => import('./admin/AdminLayout'))
 const Dashboard = lazy(() => import('./admin/Dashboard'))
 const PropertyListPage = lazy(() => import('./admin/PropertyListPage'))
+const AgentPropertiesPage = lazy(() => import('./features/agent/AgentPropertiesPage'))
+const AIPropertyPage = lazy(() => import('./features/ai-property/AIPropertyPage'))
 const PropertyForm = lazy(() => import('./admin/PropertyForm'))
 const LeadsInbox = lazy(() => import('./admin/LeadsInbox'))
 const HeroSlidesAdmin = lazy(() => import('./admin/HeroSlidesAdmin'))
@@ -19,6 +21,7 @@ const Settings = lazy(() => import('./admin/Settings'))
 const ActivityLogsPage = lazy(() => import('./admin/ActivityLogsPage'))
 const Login = lazy(() => import('./admin/Login'))
 const AdminBlogs = lazy(() => import('./admin/AdminBlogs'))
+const AdminPortfolio = lazy(() => import('./admin/AdminPortfolio'))
 
 // ─── Route Loading Fallback ───────────────────────────────────────────────────
 function RouteLoading() {
@@ -41,10 +44,14 @@ function App() {
         {/* Login */}
         <Route path="/login" element={<Login />} />
 
+        {/* Public agent catalogue: browsing and local PDF generation only. */}
+        <Route path="/agent" element={<AgentPropertiesPage />} />
+
         {/* Admin Routes */}
         <Route path="/sps-internal-admin" element={<AdminLayout />}>
           <Route index element={<Dashboard />} />
           <Route path="properties" element={<PropertyListPage />} />
+          <Route path="ai-property" element={<AIPropertyPage />} />
           <Route path="properties/new" element={<PropertyForm />} />
           <Route path="properties/:id/edit" element={<PropertyForm />} />
           <Route path="property-form" element={<PropertyForm />} />
@@ -59,6 +66,7 @@ function App() {
           <Route path="blogs" element={<AdminBlogs />} />
           <Route path="settings" element={<Settings />} />
           <Route path="activities" element={<ActivityLogsPage />} />
+          <Route path="portfolio" element={<AdminPortfolio />} />
         </Route>
 
         {/* Fallback → Dashboard */}

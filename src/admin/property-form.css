@@ -1,0 +1,31 @@
+/* Scope input styling to the property form; other admin pages keep their styling. */
+.property-form :is(input:not([type='checkbox']):not([type='file']), select, textarea) {
+  min-height: 48px;
+  border-radius: 12px;
+  border-color: #cbd5e1;
+  background-color: #fff;
+  font-size: 16px;
+  color: #0f172a;
+  box-shadow: 0 1px 2px rgb(15 23 42 / 0.03);
+  transition: border-color 150ms, box-shadow 150ms;
+}
+.property-form :is(input:not([type='checkbox']):not([type='file']), select, textarea):hover { border-color: #94a3b8; }
+.property-form :is(input, select, textarea):focus {
+  outline: none;
+  border-color: #2563eb;
+  box-shadow: 0 0 0 4px #dbeafe;
+}
+.property-form :is(input, textarea)::placeholder { color: #94a3b8; font-weight: 400; }
+.property-form textarea { resize: vertical; line-height: 1.8; }
+.property-form input[type='number'] { font-variant-numeric: tabular-nums; }
+.property-form input[type='checkbox'] { width: 20px; height: 20px; accent-color: #1e3a8a; }
+.property-form button { touch-action: manipulation; }
+.property-form button:focus-visible, .property-form summary:focus-visible {
+  outline: 3px solid #3b82f6;
+  outline-offset: 3px;
+}
+.property-form label { line-height: 1.6; }
+.property-form .form-section-title { font-size: 1.125rem; font-weight: 600; color: #1e3a8a; }
+@media (prefers-reduced-motion: reduce) {
+  .property-form :is(input, select, textarea) { transition: none; }
+}

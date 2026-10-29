@@ -74,3 +74,17 @@ export function formatPrice(price, isRentalOrListingType, showPrice = true) {
   
   return isRental ? `${displayNumber} บาท/เดือน` : `${displayNumber} บาท`
 }
+
+/** A model can have several plots with different prices. Keep numeric endpoints. */
+export function formatPropertyPrice(property, masked = false) {
+  const lower = Number(property.price)
+  const upper = Number(property.priceMax)
+  const rental = property.listingType || property.isRental
+  if (!Number.isFinite(lower) || property.price == null || property.price === '') return 'ยังไม่ระบุราคา'
+  if (!Number.isFinite(upper) || upper <= lower) return formatPrice(lower, rental, !masked)
+  if (masked && lower >= 1000000 && upper >= 1000000) {
+    const million = value => (Math.floor(value / 100000) / 10).toFixed(1) + 'x'
+    return `${million(lower)}–${million(upper)} ล้านบาท${rental === 'rent' || rental === true ? '/เดือน' : ''}`
+  }
+  return `${lower.toLocaleString('th-TH')}–${upper.toLocaleString('th-TH')} บาท${rental === 'rent' || rental === true ? '/เดือน' : ''}`
+}

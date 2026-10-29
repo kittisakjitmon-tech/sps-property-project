@@ -1,5 +1,5 @@
-import { useState, useEffect, useMemo } from 'react'
-import { useNavigate, useParams } from 'react-router-dom'
+import { useState, useEffect, useMemo, useRef } from 'react'
+import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { useAdminAuth } from '../context/AdminAuthContext'
 import LocationAutocomplete from '../components/LocationAutocomplete'
 import MapPicker from '../components/MapPicker'
@@ -14,15 +14,24 @@ import {
   uploadPropertyImageWithProgress,
 } from '../lib/firestore'
 import { adminDb } from '../lib/firebase'
+import { propertyStatus } from '../lib/propertyManagement'
+import MoneyInput from '../components/ui/MoneyInput'
+import { formatPropertyPrice } from '../lib/priceFormat'
+import { normalizeListingTitle, listingContentIssues } from '../lib/propertyContentRules'
+import './property-form.css'
+import { readDraft } from '../features/ai-property/draftStore'
+import { renderCoverImage } from '../features/ai-property/coverImage'
+import { fileToDataUrl, attachmentToFile, draftToForm, validateDraft } from '../features/ai-property/propertyDraft'
 import { generatePropertyID, checkPropertyIdDuplicate } from '../lib/propertyId'
 import { logActivity } from '../services/activityLogger'
 import { fetchAndCacheNearbyPlaces } from '../services/nearbyPlacesService'
-import { compressImages } from '../lib/imageCompressor'
+import { compressUploadFiles } from '../features/ai-property/photoUpload'
 import { generateAutoTags, mergeTags } from '../lib/autoTags'
 import { ImagePlus, X, ArrowLeft, RefreshCw, Plus, Star, Trash2 } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import GoogleMapsInputWithPreview from '../components/GoogleMapsInputWithPreview'
 import PropertyExporter from './components/PropertyExporter'
+import PropertyQuotation from '../features/quotation/PropertyQuotation'
 import { PROPERTY_TYPES, getPropertyLabel } from '../constants/propertyTypes'
 
 // CATEGORIES removed, using PROPERTY_TYPES from constants
@@ -65,12 +74,14 @@ const PROPERTY_CONDITION_OPTIONS = [
 // Sale Availability Options (สถานะการขาย - สำหรับซื้อเท่านั้น)
 const SALE_AVAILABILITY_OPTIONS = [
   { value: 'available', label: 'ว่าง', color: 'bg-green-100 text-green-800' },
+  { value: 'reserved', label: 'ติดจอง', color: 'bg-yellow-100 text-yellow-900' },
   { value: 'sold', label: 'ขายแล้ว', color: 'bg-red-100 text-red-800' },
 ]
 
 const defaultForm = {
   title: '',
   price: '',
+  priceMax: '',
   propertyId: '',
   displayId: '',
   type: 'SPS-CD-ID',
@@ -79,6 +90,7 @@ const defaultForm = {
   bedrooms: 2,
   bathrooms: 1,
   area: '',
+  usableAreaSqm: '',
   description: '',
   images: [],
   coverImageUrl: '', // URL ของภาพหน้าปก
@@ -94,7 +106,7 @@ const defaultForm = {
   status: 'available', // เก็บไว้เพื่อ backward compatibility
   propertySubStatus: '', // เก็บไว้เพื่อ backward compatibility
   showPrice: true,
-  commissionRate: '', // ค่าคอมมิชชั่น (%)
+  commissionRate: 3, // ค่าคอมมิชชั่น (%)
   bankPrice: '', // ราคาหน้าสัญญา / ราคาประเมิน
   customTags: [],
   project: '', // ระบบโครงการ (ชื่อโครงการที่บ้านหลังนี้อยู่)
@@ -107,16 +119,24 @@ const defaultForm = {
 export default function PropertyForm() {
   const { id } = useParams()
   const navigate = useNavigate()
+  const [searchParams] = useSearchParams()
+  const aiDraftId = searchParams.get('aiDraft')
+  const [aiReview, setAiReview] = useState(null)
+  const [aiImportError, setAiImportError] = useState('')
+  const [aiReviewed, setAiReviewed] = useState(false)
   const { user, userRole } = useAdminAuth()
   const isEdit = Boolean(id)
   const [form, setForm] = useState(defaultForm)
-  const [loading, setLoading] = useState(isEdit)
+  const originalPrice = useRef(null)
+  const [loading, setLoading] = useState(isEdit || Boolean(aiDraftId))
   const [permissionDenied, setPermissionDenied] = useState(false)
   const [saving, setSaving] = useState(false)
   const [refreshingNearby, setRefreshingNearby] = useState(false)
   const [nearbyStatusMessage, setNearbyStatusMessage] = useState('')
   const [, setUploadingFiles] = useState([])
   const [newFiles, setNewFiles] = useState([])
+  const [manualCoverSource, setManualCoverSource] = useState(null)
+  const [manualCoverReady, setManualCoverReady] = useState(false)
   const [compressing, setCompressing] = useState(false)
   const [allProperties, setAllProperties] = useState([])
   const [displayIdManuallyEdited, setDisplayIdManuallyEdited] = useState(false)
@@ -128,6 +148,23 @@ export default function PropertyForm() {
   useEffect(() => {
     getPropertiesOnce().then(setAllProperties)
   }, [])
+
+  // Only explicit AI draft links can populate a NEW form. Never overwrite an edit.
+  useEffect(() => {
+    if (isEdit || !aiDraftId || !user?.uid) return
+    let cancelled = false
+    readDraft(`transfer:${user.uid}:${aiDraftId}`).then(draft => {
+      if (cancelled) return
+      if (!draft || Date.now() - draft.createdAt > 7 * 86400000) throw new Error('ไม่พบร่าง AI หรือร่างหมดอายุ กรุณากลับไปเปิดจากหน้าผู้ช่วยอีกครั้ง')
+      const files = draft.files.map(attachmentToFile)
+      setForm({ ...defaultForm, ...draft.form })
+      setNewFiles(files)
+      setCommittedLocationDisplay(draft.form.locationDisplay || '')
+      setAiReview(draft)
+    }).catch(err => { if (!cancelled) setAiImportError(err.message) })
+      .finally(() => { if (!cancelled) setLoading(false) })
+    return () => { cancelled = true }
+  }, [aiDraftId, isEdit, user?.uid])
 
   // ดึงรายชื่อโครงการที่ unique จากทรัพย์ทั้งหมด
   const existingProjects = useMemo(() => {
@@ -165,6 +202,7 @@ export default function PropertyForm() {
       // Anyone can edit/view properties ( Admins see all, Agents see only their own in list)
       // No permission check needed here anymore
 
+      originalPrice.current = Number(p.price) || 0
       const loc = p.location || {}
 
       // Determine listingType from existing data
@@ -195,23 +233,13 @@ export default function PropertyForm() {
         propertyCondition = p.propertySubStatus
       }
 
-      // Determine availability from existing data
-      let availability = 'available'
-      if (p.availability) {
-        availability = p.availability
-      } else if (p.status && listingType === 'sale') {
-        // Map old status to new availability for sale
-        if (p.status === 'sold') {
-          availability = 'sold'
-        } else {
-          availability = 'available'
-        }
-      }
+      const availability = propertyStatus(p)
 
       const initialLocationDisplay = p.locationDisplay ?? `${loc.district || ''} ${loc.province || ''}`.trim()
       setForm({
         title: p.title ?? '',
         price: p.price ?? '',
+        priceMax: p.priceMax ?? '',
         propertyId: p.propertyId ?? '',
         displayId: p.displayId ?? p.propertyId ?? '',
         type: p.type ?? 'SPS-CD-ID',
@@ -224,6 +252,7 @@ export default function PropertyForm() {
         bedrooms: p.bedrooms ?? 2,
         bathrooms: p.bathrooms ?? 1,
         area: p.area ?? '',
+        usableAreaSqm: p.usableAreaSqm ?? '',
         description: p.description ?? '',
         images: Array.isArray(p.images) ? p.images : [],
         coverImageUrl: p.coverImageUrl || '',
@@ -243,7 +272,7 @@ export default function PropertyForm() {
         status: p.status ?? 'available', // Keep for backward compatibility
         propertySubStatus: p.propertySubStatus ?? '', // Keep for backward compatibility
         showPrice: p.showPrice !== false,
-        commissionRate: p.commissionRate ?? '',
+        commissionRate: p.commissionRate ?? 3,
         bankPrice: p.bankPrice ?? '',
         customTags: Array.isArray(p.customTags) ? p.customTags : [],
         project: p.project ?? '',
@@ -391,12 +420,7 @@ export default function PropertyForm() {
     setCompressing(true)
     try {
       // Compress images before adding to state
-      const compressedFiles = await compressImages(files, {
-        maxWidth: 1920,
-        maxHeight: 1920,
-        quality: 0.85,
-        maxSizeMB: 2,
-      })
+      const compressedFiles = await compressUploadFiles(files, form.images.length + newFiles.length)
       setNewFiles((prev) => [...prev, ...compressedFiles])
       // ถ้ายังไม่มี coverImageUrl และยังไม่มีรูปภาพ ให้ตั้งรูปแรกเป็น coverImageUrl โดยอัตโนมัติ
       if (!form.coverImageUrl && form.images.length === 0) {
@@ -406,8 +430,7 @@ export default function PropertyForm() {
     } catch (err) {
       console.error('Error compressing images:', err)
       alert('เกิดข้อผิดพลาดในการบีบอัดรูปภาพ: ' + err.message)
-      // Fallback: use original files if compression fails
-      setNewFiles((prev) => [...prev, ...files])
+      // Keep the current gallery unchanged when compression fails.
     } finally {
       setCompressing(false)
     }
@@ -416,7 +439,50 @@ export default function PropertyForm() {
     e.target.value = ''
   }
 
+  const importPreparedDraft = async (event) => {
+    const file = event.target.files?.[0]
+    event.target.value = ''
+    if (!file) return
+    setCompressing(true)
+    try {
+      if (file.size > 30 * 1024 * 1024) throw new Error('ไฟล์ร่างต้องไม่เกิน 30 MB')
+      const data = JSON.parse(await file.text())
+      if (data.schema !== 'sps-property-intake-v1' || !data.property || !Array.isArray(data.photos)) throw new Error('ไฟล์ร่างไม่ตรงรูปแบบที่รองรับ')
+      validateDraft(data.property)
+      if (data.photos.length > 15) throw new Error('นำเข้ารูปได้สูงสุด 15 รูป')
+      const fields = draftToForm(data.property)
+      let files = data.photos.map(attachmentToFile)
+      if (data.makeCover && files.length) {
+        const cover = await renderCoverImage({ ...data.property, ...fields, landAreaSqw: data.property.landAreaSqw }, data.photos[0])
+        files[0] = attachmentToFile(cover)
+      }
+      files = await compressUploadFiles(files)
+      setForm({ ...defaultForm, ...fields })
+      setNewFiles(files)
+      setCommittedLocationDisplay(fields.locationDisplay)
+      setAiReview({ questions: data.questions || [], coverGenerated: Boolean(data.makeCover && files.length), originalPhotoCount: files.length - (data.makeCover && files.length ? 1 : 0) })
+      setAiReviewed(false)
+      setAiImportError('')
+    } catch (err) { alert('นำเข้าร่างไม่สำเร็จ: ' + err.message) }
+    finally { setCompressing(false) }
+  }
+
+  const makeAnnouncementCover = async () => {
+    if (!newFiles.length) return
+    setCompressing(true)
+    try {
+      const source = manualCoverSource || newFiles[0]
+      const cover = await renderCoverImage({ ...form, landAreaSqw: form.area === '' ? null : Number(form.area) / 4 }, { type: source.type, dataUrl: await fileToDataUrl(source) })
+      const [file] = await compressUploadFiles([attachmentToFile(cover)])
+      setManualCoverSource(source)
+      setNewFiles(prev => [file, ...prev.slice(1)])
+      update({ coverImageUrl: '' })
+      setManualCoverReady(true)
+    } catch (err) { alert(err.message) } finally { setCompressing(false) }
+  }
+
   const removeNewFile = (index) => {
+    if (index === 0) { setManualCoverSource(null); setManualCoverReady(false) }
     setNewFiles((prev) => prev.filter((_, i) => i !== index))
   }
 
@@ -504,13 +570,35 @@ export default function PropertyForm() {
     // Anyone can edit properties ( Admins see all, Agents see only their own in list)
     // No need to check permissions here anymore
 
+    if (aiReview && (!aiReviewed || !form.type || !form.listingType ||
+      (form.type !== 'SPS-LD-ID' && (form.bedrooms === '' || form.bathrooms === '')))) {
+      alert('กรุณาตรวจข้อมูลจาก AI เลือกประเภทการดีล เติมจำนวนห้องที่ยังว่าง และยืนยันการตรวจข้อมูลก่อนบันทึก')
+      return
+    }
+
+    if (form.images.length + newFiles.length > 15) {
+      alert('รูปในประกาศรวมภาพหน้าปกต้องไม่เกิน 15 รูป')
+      return
+    }
+
+    const contentIssues = listingContentIssues(form)
+    if (contentIssues.length) {
+      alert(contentIssues.join('\n'))
+      return
+    }
+
     // ตรวจสอบว่าเลือกพื้นที่แล้วหรือยัง
     if (!form.locationDisplay.trim() || !form.location.province) {
       alert('กรุณาเลือกพื้นที่ (จังหวัด/อำเภอ/ตำบล) ก่อนบันทึก')
       return
     }
 
-    let propertyIdTrimmed = String(form.propertyId || '').trim()
+    if (form.priceMax !== '' && Number(form.priceMax) < Number(form.price)) {
+      alert('ราคาสูงสุดต้องไม่น้อยกว่าราคาเริ่มต้น')
+      return
+    }
+
+    let propertyIdTrimmed = String(form.displayId || form.propertyId || '').trim().toUpperCase()
     if (!propertyIdTrimmed && !isEdit) {
       propertyIdTrimmed = generatePropertyID(form.type, allProperties)
     }
@@ -552,13 +640,16 @@ export default function PropertyForm() {
     const payload = {
       title: form.title.trim(),
       price,
+      priceMax: form.priceMax === '' ? null : Number(form.priceMax),
       propertyId: propertyIdTrimmed || null,
+      displayId: propertyIdTrimmed || null,
       type: form.type,
       location: form.location,
       locationDisplay: form.locationDisplay.trim(),
       bedrooms: Number(form.bedrooms) || 0,
       bathrooms: Number(form.bathrooms) || 0,
-      area,
+      area: aiReview && form.area === '' ? null : area,
+      usableAreaSqm: form.usableAreaSqm === '' ? null : Number(form.usableAreaSqm),
       description: form.description.trim(),
       agentContact: form.agentContact,
       featured: form.featured,
@@ -569,7 +660,7 @@ export default function PropertyForm() {
       subListingType: form.subListingType || null, // บันทึก subListingType
       propertyCondition: form.propertyCondition || null,
       availability: form.availability || 'available',
-      status: form.status || 'available', // Keep for backward compatibility
+      status: form.availability || form.status || 'available', // Keep legacy readers in sync
       propertySubStatus: form.propertySubStatus || form.propertyCondition || null, // Keep for backward compatibility
       showPrice: form.showPrice !== false,
       commissionRate: form.commissionRate ? Number(form.commissionRate) : null,
@@ -614,7 +705,7 @@ export default function PropertyForm() {
         }
         await updatePropertyById(id, payload, adminDb)
         // Activity Log: แก้ไขทรัพย์ (รวมเปรียบเทียบราคา)
-        const oldPrice = Number(form.price) || 0
+        const oldPrice = originalPrice.current ?? 0
         const newPrice = payload.price
         const priceDetails =
           oldPrice !== newPrice && (oldPrice > 0 || newPrice > 0)
@@ -750,7 +841,7 @@ export default function PropertyForm() {
           subStatus={progressLoader.subStatus}
         />
       )}
-      <div className="max-w-3xl">
+      <div className="mx-auto max-w-5xl">
         {/* Back Button / Breadcrumb */}
         <Link
           to="/sps-internal-admin/properties"
@@ -759,14 +850,31 @@ export default function PropertyForm() {
           <ArrowLeft className="h-5 w-5" />
           <span>ย้อนกลับรายการทรัพย์สิน</span>
         </Link>
+        {!isEdit && <div className="mb-4 flex flex-wrap items-center gap-3">
+          <label htmlFor="property-prepared-draft" className="inline-flex min-h-11 cursor-pointer items-center rounded-xl border border-blue-200 bg-white px-4 py-2 text-sm font-semibold text-blue-900">นำเข้าข้อมูลที่เตรียมไว้พร้อมรูป</label>
+          <input id="property-prepared-draft" type="file" accept="application/json,.json" className="sr-only" disabled={compressing} onChange={importPreparedDraft} />
+          <span className="text-xs text-slate-500">จับคู่ข้อมูลกับชื่อช่อง ราคา หน่วยพื้นที่ และรูปภาพให้ในครั้งเดียว</span>
+        </div>}
         <h1 className="text-2xl font-bold text-blue-900 mb-6">
           {isEdit ? 'แก้ไขทรัพย์' : 'เพิ่มทรัพย์'}
         </h1>
-        <form onSubmit={handleSubmit} className="space-y-6">
-          <div className="bg-white rounded-xl border border-slate-200 p-6 space-y-4">
+        {isEdit && <PropertyQuotation property={form} newFiles={newFiles} />}
+        {aiImportError && <div role="alert" className="mb-5 rounded-xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-800">{aiImportError} <Link to="/sps-internal-admin/ai-property" className="underline">กลับไปหน้าผู้ช่วย AI</Link></div>}
+        {aiReview && <div className="mb-5 space-y-3 rounded-xl border border-blue-200 bg-blue-50 p-4 text-sm text-blue-900">
+          <p><strong>นำเข้าจาก AI แล้ว · ยังไม่ได้บันทึกทรัพย์</strong></p>
+          {aiReview.coverGenerated && <p className="font-medium">เตรียมภาพหน้าปกพร้อมข้อความประกาศไว้เป็นรูปแรกแล้ว พร้อมรูปต้นฉบับ {aiReview.originalPhotoCount} รูป</p>}
+          <p>ตรวจข้อมูล ทำเล และสถานะอีกครั้ง ช่องที่ AI ไม่ทราบจะเว้นว่างไว้ สถานะเริ่มต้นเป็นรออนุมัติ</p>
+          {aiReview.questions?.length > 0 && <ul className="list-disc pl-5">{aiReview.questions.map((q, i) => <li key={i}>{q}</li>)}</ul>}
+          <label className="flex min-h-11 items-center gap-2"><input type="checkbox" checked={aiReviewed} onChange={e => setAiReviewed(e.target.checked)} />ฉันตรวจราคา จำนวนห้อง พื้นที่ รูปภาพ และสถานะทรัพย์แล้ว</label>
+          <Link to="/sps-internal-admin/ai-property" className="inline-block underline">กลับไปคุยกับ AI / เตรียมแบบบ้านถัดไป</Link>
+        </div>}
+        <form onSubmit={handleSubmit} className="property-form space-y-6">
+          <p className="text-sm text-slate-500">กรอกข้อมูลบ้าน ทำเล และรูปภาพ · ช่องที่มี * จำเป็นต้องระบุ</p>
+          <div className="grid gap-5 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:p-6 md:grid-cols-2">
+            <h2 className="form-section-title md:col-span-2">ข้อมูลทรัพย์</h2>
             <div>
-              <label className="block text-sm font-medium text-slate-700 mb-1">รหัสทรัพย์</label>
-              <input
+              <label htmlFor="property-code" className="block text-sm font-medium text-slate-700 mb-1">รหัสทรัพย์</label>
+              <input id="property-code"
                 type="text"
                 value={form.displayId}
                 onChange={(e) => {
@@ -776,11 +884,11 @@ export default function PropertyForm() {
                 className="w-full px-4 py-3 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-900/20"
                 placeholder="เช่น SPS-TH-1CLASS-001 (เว้นว่างเพื่อสร้างอัตโนมัติ)"
               />
-              <p className="text-xs text-slate-500 mt-1">แก้ไขได้เองเมื่อจำเป็น (Manual Override)</p>
+              <p className="text-xs text-slate-500 mt-1">ระบบสร้างรหัสให้อัตโนมัติ เปลี่ยนได้เมื่อจำเป็น</p>
             </div>
             <div>
-              <label className="block text-sm font-medium text-slate-700 mb-1">ชื่อประกาศ *</label>
-              <input
+              <label htmlFor="property-title" className="block text-sm font-medium text-slate-700 mb-1">ชื่อประกาศ *</label>
+              <input id="property-title"
                 type="text"
                 value={form.title}
                 onChange={(e) => update({ title: e.target.value })}
@@ -789,61 +897,26 @@ export default function PropertyForm() {
                 placeholder="เช่น คอนโดหรู ใกล้ BTS อารีย์"
               />
             </div>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">ราคา (บาท) *</label>
-                <input
-                  type="text"
-                  value={form.price ? Number(form.price).toLocaleString('th-TH') : ''}
-                  onChange={(e) => {
-                    const rawValue = e.target.value.replace(/,/g, '')
-                    if (rawValue === '' || /^\d+$/.test(rawValue)) {
-                      update({ price: rawValue })
-                    }
-                  }}
-                  required
-                  placeholder="เช่น 3,000,000"
-                  className="w-full px-4 py-3 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-900/20"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">ค่าคอมมิชชั่น (%)</label>
-                <input
-                  type="text"
-                  value={form.commissionRate}
-                  onChange={(e) => {
-                    const rawValue = e.target.value.replace(/,/g, '')
-                    if (rawValue === '' || /^\d*\.?\d*$/.test(rawValue)) {
-                      update({ commissionRate: rawValue })
-                    }
-                  }}
-                  placeholder="เช่น 3"
-                  className="w-full px-4 py-3 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-900/20"
-                />
-              </div>
+            <div className="md:col-span-2 rounded-xl bg-slate-50 p-3 text-xs text-slate-600">
+              <p>ชื่อประกาศต้องไม่มีชื่อโครงการ และลงท้ายด้วยทำเล โดยเก็บชื่อโครงการในช่องแยก</p>
+              <button type="button" className="mt-2 min-h-11 font-semibold text-blue-800 underline" onClick={() => update({ title: normalizeListingTitle(form.title, form.project, form.locationDisplay, form.location) })}>ปรับชื่อประกาศตามทำเลที่กรอก</button>
             </div>
-
-            {/* ราคาหน้าสัญญา */}
-            <div>
-              <label className="block text-sm font-medium text-slate-700 mb-1">ราคาหน้าสัญญา / ราคาประเมิน (บาท)</label>
-              <input
-                type="text"
-                value={form.bankPrice ? Number(form.bankPrice).toLocaleString('th-TH') : ''}
-                onChange={(e) => {
-                  const rawValue = e.target.value.replace(/,/g, '')
-                  if (rawValue === '' || /^\d+$/.test(rawValue)) {
-                    update({ bankPrice: rawValue })
-                  }
-                }}
-                placeholder="ราคาที่ธนาคารประเมิน"
-                className="w-full px-4 py-3 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-900/20"
-              />
+            <div className="min-w-0">
+              <div>
+                <label htmlFor="property-price" className="block text-sm font-medium text-slate-700 mb-1">ราคาหลังส่วนลด (บาท) *</label>
+                <MoneyInput id="property-price" value={form.price} onValueChange={value => update({ price: value })} placeholder="เช่น 2,390,000" required />
+                <div className="mt-3">
+                  <label htmlFor="property-price-max" className="mb-1 block text-sm font-medium text-slate-700">ราคาหลังส่วนลดสูงสุดของแบบบ้าน (ถ้ามีหลายแปลง)</label>
+                  <MoneyInput id="property-price-max" value={form.priceMax} onValueChange={value => update({ priceMax: value })} placeholder="เว้นว่างสำหรับบ้านราคาเดียว" error={form.priceMax !== '' && Number(form.priceMax) < Number(form.price) ? 'ต้องไม่น้อยกว่าราคาเริ่มต้น' : undefined} />
+                </div>
+                {form.priceMax !== '' && <p className="mt-2 rounded-lg bg-blue-50 p-3 text-sm text-blue-900">ช่วงราคาแสดง: <strong>{formatPropertyPrice(form, form.showPrice === false)}</strong></p>}
+              </div>
             </div>
 
             {/* ประเภท */}
             <div>
-              <label className="block text-sm font-medium text-slate-700 mb-1">ประเภท *</label>
-              <select
+              <label htmlFor="property-type" className="block text-sm font-medium text-slate-700 mb-1">ประเภท *</label>
+              <select id="property-type"
                 value={form.type}
                 onChange={(e) => handleTypeChange(e.target.value)}
                 className="w-full px-4 py-3 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-900/20"
@@ -867,7 +940,8 @@ export default function PropertyForm() {
                     key={opt.value}
                     type="button"
                     onClick={() => handleListingTypeChange(opt.value)}
-                    className={`px-4 py-2.5 rounded-lg border-2 transition ${form.listingType === opt.value
+                    aria-pressed={form.listingType === opt.value}
+                        className={`min-h-12 px-4 py-2.5 rounded-xl border-2 transition ${form.listingType === opt.value
                       ? 'bg-blue-900 text-white border-blue-900 font-semibold'
                       : 'bg-white border-slate-200 text-slate-700 hover:border-blue-300'
                       }`}
@@ -890,7 +964,8 @@ export default function PropertyForm() {
                         key={opt.value}
                         type="button"
                         onClick={() => update({ propertyCondition: opt.value, propertySubStatus: opt.value })}
-                        className={`px-4 py-2.5 rounded-lg border-2 transition ${form.propertyCondition === opt.value
+                        aria-pressed={form.propertyCondition === opt.value}
+                        className={`min-h-12 px-4 py-2.5 rounded-xl border-2 transition ${form.propertyCondition === opt.value
                           ? `${opt.color} border-blue-900 font-semibold`
                           : 'bg-white border-slate-200 text-slate-700 hover:border-blue-300'
                           }`}
@@ -909,8 +984,9 @@ export default function PropertyForm() {
                       <button
                         key={opt.value}
                         type="button"
-                        onClick={() => update({ availability: opt.value, status: opt.value === 'sold' ? 'sold' : 'available' })}
-                        className={`px-4 py-2.5 rounded-lg border-2 transition ${form.availability === opt.value
+                        onClick={() => update({ availability: opt.value, status: opt.value })}
+                        aria-pressed={form.availability === opt.value}
+                        className={`min-h-12 px-4 py-2.5 rounded-xl border-2 transition ${form.availability === opt.value
                           ? `${opt.color} border-blue-900 font-semibold`
                           : 'bg-white border-slate-200 text-slate-700 hover:border-blue-300'
                           }`}
@@ -932,7 +1008,8 @@ export default function PropertyForm() {
                         key={opt.value}
                         type="button"
                         onClick={() => handleSubListingTypeChange(opt.value)}
-                        className={`px-4 py-2.5 rounded-lg border-2 transition ${form.subListingType === opt.value
+                        aria-pressed={form.subListingType === opt.value}
+                        className={`min-h-12 px-4 py-2.5 rounded-xl border-2 transition ${form.subListingType === opt.value
                           ? 'bg-blue-900 text-white border-blue-900 font-semibold'
                           : 'bg-white border-slate-200 text-slate-700 hover:border-blue-300'
                           }`}
@@ -951,8 +1028,9 @@ export default function PropertyForm() {
                       <button
                         key={opt.value}
                         type="button"
-                        onClick={() => update({ availability: opt.value })}
-                        className={`px-4 py-2.5 rounded-lg border-2 transition ${form.availability === opt.value
+                        onClick={() => update({ availability: opt.value, status: opt.value })}
+                        aria-pressed={form.availability === opt.value}
+                        className={`min-h-12 px-4 py-2.5 rounded-xl border-2 transition ${form.availability === opt.value
                           ? `${opt.color} border-blue-900 font-semibold`
                           : 'bg-white border-slate-200 text-slate-700 hover:border-blue-300'
                           }`}
@@ -965,7 +1043,7 @@ export default function PropertyForm() {
               </>
             )}
 
-            <div className="flex flex-wrap gap-6">
+            <div className="flex flex-wrap gap-5 rounded-xl bg-slate-50 p-4 md:col-span-2">
               <label className="flex items-center gap-2 cursor-pointer">
                 <input
                   type="checkbox"
@@ -987,14 +1065,16 @@ export default function PropertyForm() {
             </div>
 
             {/* Custom Tags Input */}
-            <div>
-              <label className="block text-sm font-medium text-slate-700 mb-2">Custom Tags</label>
+            <details className="rounded-xl border border-slate-200 p-4 md:col-span-2">
+              <summary className="cursor-pointer text-sm font-medium text-blue-900">แท็กประกาศ · ช่วยค้นหาทรัพย์</summary>
+              <label htmlFor="property-tags" className="block text-sm font-medium text-slate-700 mb-2">เพิ่มแท็ก</label>
               <div className="space-y-3">
                 {/* Input for adding new tag */}
                 <div className="flex gap-2">
                   <input
                     type="text"
-                    placeholder="พิมพ์ Tag แล้วกด Enter เพื่อเพิ่ม"
+                    id="property-tags"
+                    placeholder="พิมพ์แท็ก แล้วกด Enter เช่น ใกล้นิคม"
                     className="flex-1 px-4 py-2.5 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-900/20"
                     onKeyDown={(e) => {
                       if (e.key === 'Enter') {
@@ -1044,15 +1124,16 @@ export default function PropertyForm() {
                 )}
               </div>
               <p className="text-xs text-slate-500 mt-2">
-                Tags เหล่านี้จะถูกแสดงผลในหน้าบ้านพร้อมไอคอนอัตโนมัติ
+                แท็กจะช่วยค้นหาและแสดงจุดเด่นของบ้านบนหน้าเว็บ
               </p>
-            </div>
+            </details>
 
             <div>
-              <label className="block text-sm font-medium text-slate-700 mb-1">ระบบโครงการ</label>
+              <label htmlFor="property-project" className="block text-sm font-medium text-slate-700 mb-1">ระบบโครงการ</label>
               {existingProjects.length > 0 ? (
                 <div className="space-y-3">
                   <select
+                    id="property-project"
                     value={isCustomProject ? '__custom__' : (form.project || '')}
                     onChange={(e) => {
                       const value = e.target.value
@@ -1080,7 +1161,8 @@ export default function PropertyForm() {
                       type="text"
                       value={form.project}
                       onChange={(e) => update({ project: e.target.value })}
-                      placeholder="ระบุชื่อโครงการใหม่..."
+                      aria-label="ชื่อโครงการใหม่"
+                      placeholder="ระบุชื่อโครงการใหม่"
                       className="w-full px-4 py-3 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-900/20"
                       autoFocus
                     />
@@ -1091,7 +1173,8 @@ export default function PropertyForm() {
                   type="text"
                   value={form.project}
                   onChange={(e) => update({ project: e.target.value })}
-                  placeholder="เช่น โครงการหมู่บ้านจัดสรร..."
+                  id="property-project"
+                  placeholder="เช่น โครงการหมู่บ้านจัดสรร"
                   className="w-full px-4 py-3 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-900/20"
                 />
               )}
@@ -1103,8 +1186,10 @@ export default function PropertyForm() {
               </p>
             </div>
             <div>
-              <label className="block text-sm font-medium text-slate-700 mb-1">พื้นที่ (จังหวัด/อำเภอ/ตำบล) *</label>
+              <label htmlFor="property-location" className="block text-sm font-medium text-slate-700 mb-1">พื้นที่ (จังหวัด/อำเภอ/ตำบล) *</label>
               <LocationAutocomplete
+                id="property-location"
+                enableTypingAnimation={false}
                 value={form.locationDisplay}
                 onChange={(v) => {
                   update({ locationDisplay: v })
@@ -1114,10 +1199,10 @@ export default function PropertyForm() {
                 placeholder="ค้นหาพื้นที่..."
               />
             </div>
-            <div className="grid grid-cols-3 gap-4">
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-3 md:col-span-2">
               <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">ห้องนอน</label>
-                <input
+                <label htmlFor="property-bedrooms" className="block text-sm font-medium text-slate-700 mb-1">ห้องนอน</label>
+                <input id="property-bedrooms"
                   type="number"
                   min="0"
                   value={form.bedrooms}
@@ -1126,8 +1211,8 @@ export default function PropertyForm() {
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">ห้องน้ำ</label>
-                <input
+                <label htmlFor="property-bathrooms" className="block text-sm font-medium text-slate-700 mb-1">ห้องน้ำ</label>
+                <input id="property-bathrooms"
                   type="number"
                   min="0"
                   value={form.bathrooms}
@@ -1136,48 +1221,55 @@ export default function PropertyForm() {
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">พื้นที่ (ตร.ว.)</label>
-                <input
+                <label htmlFor="property-area" className="block text-sm font-medium text-slate-700 mb-1">พื้นที่ (ตร.ว.)</label>
+                <input id="property-area"
                   type="number"
                   min="0"
-                  step="0.5"
+                  step="0.1"
                   value={form.area !== '' && form.area != null ? String(Number(form.area) / 4) : ''}
-                  onChange={(e) => update({ area: e.target.value ? String(Math.round(Number(e.target.value) * 4)) : '' })}
+                  onChange={(e) => update({ area: e.target.value ? String(Number((Number(e.target.value) * 4).toFixed(4))) : '' })}
                   placeholder="เช่น 25"
                   className="w-full px-4 py-3 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-900/20"
                 />
               </div>
             </div>
-            <div>
-              <label className="block text-sm font-medium text-slate-700 mb-1">รายละเอียด</label>
-              <textarea
+            <div className="md:col-span-2">
+              <label htmlFor="property-usable-area" className="mb-1 block text-sm font-medium text-slate-700">พื้นที่ใช้สอย (ตร.ม.) — แยกจากพื้นที่ดิน</label>
+              <input id="property-usable-area" type="number" min="0" step="0.1" value={form.usableAreaSqm} onChange={e => update({ usableAreaSqm: e.target.value })} placeholder="เว้นว่างเมื่อไม่มีข้อมูล" />
+            </div>
+            <div className="md:col-span-2">
+              <label htmlFor="property-description" className="block text-sm font-medium text-slate-700 mb-1">รายละเอียด</label>
+              <textarea id="property-description"
                 value={form.description}
                 onChange={(e) => update({ description: e.target.value })}
-                rows={4}
+                rows={6}
                 className="w-full px-4 py-3 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-900/20"
-                placeholder="อธิบายทรัพย์สิน..."
+                aria-describedby="property-description-rule"
+                placeholder="อธิบายจุดเด่นและของแถม โดยไม่ใส่ราคาเต็มหรือราคาสุทธิ"
               />
             </div>
-            <div>
-              <label className="block text-sm font-medium text-slate-700 mb-1">ลิงก์ Google Maps (ถ้ามี)</label>
+            <p id="property-description-rule" className="md:col-span-2 text-xs text-slate-500">รายละเอียดห้ามมีราคาเต็มหรือราคาสุทธิ หากต้องกล่าวถึงราคาให้ใช้ช่วงปกปิด เช่น 1.6x–1.9x ล้านบาท ตัวเลขเต็มให้กรอกในช่องราคาเท่านั้น</p>
+            <div className="md:col-span-2">
+              <label htmlFor="property-map" className="block text-sm font-medium text-slate-700 mb-1">ลิงก์ Google Maps (ถ้ามี)</label>
               <GoogleMapsInputWithPreview
+                id="property-map"
                 value={form.mapUrl}
                 onChange={(url) => update({ mapUrl: url })}
-                onCoordinatesChange={(coords) => coords && update({ lat: coords.lat, lng: coords.lng })}
+                onCoordinatesChange={(coords) => update({ lat: coords?.lat ?? null, lng: coords?.lng ?? null })}
               />
             </div>
           </div>
 
           {/* Map Coordinates */}
-          <div className="bg-white rounded-xl border border-slate-200 p-6 space-y-4">
-            <h3 className="font-medium text-blue-900">พิกัดแผนที่ (Latitude/Longitude)</h3>
+          <div className="bg-white rounded-2xl border border-slate-200 p-4 sm:p-6 shadow-sm space-y-4">
+            <h3 className="form-section-title">ตำแหน่งบนแผนที่</h3>
             <p className="text-sm text-slate-600">
               กรอกพิกัดหรือคลิกบนแผนที่ด้านล่างเพื่อเลือกตำแหน่งอัตโนมัติ
             </p>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">Latitude (ละติจูด)</label>
-                <input
+                <label htmlFor="property-latitude" className="block text-sm font-medium text-slate-700 mb-1">Latitude (ละติจูด)</label>
+                <input id="property-latitude" min="-90" max="90" inputMode="decimal"
                   type="number"
                   step="any"
                   value={form.lat ?? ''}
@@ -1187,8 +1279,8 @@ export default function PropertyForm() {
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">Longitude (ลองจิจูด)</label>
-                <input
+                <label htmlFor="property-longitude" className="block text-sm font-medium text-slate-700 mb-1">Longitude (ลองจิจูด)</label>
+                <input id="property-longitude" min="-180" max="180" inputMode="decimal"
                   type="number"
                   step="any"
                   value={form.lng ?? ''}
@@ -1226,7 +1318,7 @@ export default function PropertyForm() {
           </div>
 
           {/* Images */}
-          <div className="bg-white rounded-xl border border-slate-200 p-6">
+          <div className="bg-white rounded-2xl border border-slate-200 p-4 sm:p-6 shadow-sm">
             <div className="flex flex-wrap items-center justify-between gap-4 mb-3">
               <div>
                 <label className="block text-sm font-medium text-slate-700 mb-1">รูปภาพทรัพย์</label>
@@ -1238,7 +1330,12 @@ export default function PropertyForm() {
               )}
             </div>
 
-            <div className="flex flex-wrap gap-3 mb-4">
+            {newFiles.length > 0 && !aiReview?.coverGenerated && <div className="mb-4 rounded-xl bg-blue-50 p-3 text-sm text-blue-900">
+              <p>ใช้รูปแรกเป็นหน้าปก และเพิ่มชื่อประกาศพร้อมทำเลโดยไม่แก้ภาพบ้านจริง</p>
+              <button type="button" disabled={compressing} onClick={makeAnnouncementCover} className="mt-2 min-h-11 rounded-lg bg-blue-900 px-4 py-2 text-white">{manualCoverReady ? 'ทำภาพหน้าปกใหม่จากข้อความล่าสุด' : 'ใส่ข้อความประกาศบนรูปแรก'}</button>
+              {manualCoverReady && <p className="mt-2">เตรียมหน้าปกแล้ว รูปแรกจะใช้เป็นภาพหน้าปกเมื่อบันทึก</p>}
+            </div>}
+            <div className="flex flex-wrap gap-3">
               {form.images.map((url, i) => {
                 const isCoverImage = form.coverImageUrl === url || (!form.coverImageUrl && i === 0)
                 return (
@@ -1363,13 +1460,41 @@ export default function PropertyForm() {
               />
             </label>
             {compressing && (
-              <p className="text-sm text-slate-500 mt-2">กำลังบีบอัดรูปภาพเพื่อลดขนาดไฟล์…</p>
+              <p className="text-sm text-slate-500 mt-2">กำลังย่อรูปก่อนเพิ่มในประกาศ · เพิ่มได้ไม่เกิน 15 รูปรวมหน้าปก…</p>
             )}
           </div>
 
 
 
-          <div className="flex flex-wrap items-center gap-3">
+          <details className="rounded-xl border border-slate-200 bg-white p-5">
+            <summary className="min-h-11 cursor-pointer font-semibold text-blue-900">ข้อมูลประกอบการขาย · ค่าคอมมิชชั่นและราคาประเมิน</summary>
+            <div className="mt-4 grid gap-4 sm:grid-cols-2">
+              <div>
+                <label htmlFor="property-commission" className="block text-sm font-medium text-slate-700 mb-1">ค่าคอมมิชชั่น (%)</label>
+                <input id="property-commission" inputMode="decimal"
+                  type="text"
+                  value={form.commissionRate}
+                  onChange={(e) => {
+                    const rawValue = e.target.value.replace(/,/g, '')
+                    if (rawValue === '' || /^\d*\.?\d*$/.test(rawValue)) {
+                      update({ commissionRate: rawValue })
+                    }
+                  }}
+                  placeholder="เช่น 3"
+                  className="w-full px-4 py-3 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-900/20"
+                />
+              </div>
+            {/* ราคาหน้าสัญญา */}
+            <div>
+              <label htmlFor="property-bankPrice" className="block text-sm font-medium text-slate-700 mb-1">ราคาหน้าสัญญา / ราคาประเมิน (บาท)</label>
+              <p className="mb-2 text-xs text-slate-500">กรอกราคาก่อนหักส่วนลด ส่วนราคาหลังส่วนลดใช้ในช่องราคาประกาศ</p>
+              <MoneyInput id="property-bankPrice" value={form.bankPrice} onValueChange={value => update({ bankPrice: value })} placeholder="เช่น 2,500,000" />
+            </div>
+
+            </div>
+          </details>
+
+          <div className="sticky bottom-0 z-20 flex flex-wrap items-center gap-3 rounded-xl border border-slate-200 bg-white/95 p-4 shadow-lg backdrop-blur">
             <button
               type="submit"
               disabled={saving}
@@ -1379,7 +1504,7 @@ export default function PropertyForm() {
             </button>
             <button
               type="button"
-              onClick={() => navigate('/sps-internal-admin')}
+              onClick={() => navigate('/sps-internal-admin/properties')}
               disabled={saving || deleting}
               className="px-6 py-3 rounded-lg border border-slate-200 text-slate-700 hover:bg-slate-50 disabled:opacity-50"
             >

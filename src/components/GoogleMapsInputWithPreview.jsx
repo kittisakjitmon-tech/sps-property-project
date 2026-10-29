@@ -1,24 +1,30 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { Trash2, MapPin, ExternalLink } from 'lucide-react'
-import { processMapInput, parseCoordinatesFromUrl } from '../lib/googleMapsUrl'
+import { processMapInput, parseCoordinatesFromUrl, mapPlaceQuery } from '../lib/googleMapsUrl'
+import { loadGoogleMapsApi } from '../lib/googleMapsLoader'
 
 /**
  * Google Maps Input พร้อม Live Preview และ Auto-Coordinates
  * รองรับทั้งลิงก์ธรรมดาและโค้ด iframe
  */
-export default function GoogleMapsInputWithPreview({ value, onChange, onCoordinatesChange }) {
+export default function GoogleMapsInputWithPreview({ id, value, onChange, onCoordinatesChange }) {
   const [inputValue, setInputValue] = useState(value || '')
   const [cleanedUrl, setCleanedUrl] = useState(value || '')
   const [embedUrl, setEmbedUrl] = useState(null)
-  const [isShortLink, setIsShortLink] = useState(false)
+  const [, setIsShortLink] = useState(false)
   const [error, setError] = useState(null)
   const [processing, setProcessing] = useState(false)
   const [showPreview, setShowPreview] = useState(false)
   const processTimerRef = useRef(null)
+  const lookupRef = useRef(0)
+  const [coordinateMessage, setCoordinateMessage] = useState('')
+  const [candidates, setCandidates] = useState([])
+  const [locating, setLocating] = useState(false)
 
   // Cleanup timer on unmount
   useEffect(() => () => {
     if (processTimerRef.current) clearTimeout(processTimerRef.current)
+    lookupRef.current += 1
   }, [])
 
   // Sync กับ value จากภายนอก (เมื่อโหลดข้อมูล edit)
@@ -43,6 +49,10 @@ export default function GoogleMapsInputWithPreview({ value, onChange, onCoordina
   }, [value])
 
   const processAndApply = useCallback((raw) => {
+    lookupRef.current += 1
+    setCandidates([])
+    setCoordinateMessage('')
+    setLocating(false)
     if (processTimerRef.current) clearTimeout(processTimerRef.current)
     setProcessing(true)
     setError(null)
@@ -85,6 +95,10 @@ export default function GoogleMapsInputWithPreview({ value, onChange, onCoordina
       const coords = parseCoordinatesFromUrl(c || trimmed)
       if (coords) {
         onCoordinatesChange?.(coords)
+        setCoordinateMessage('เติมละติจูดและลองจิจูดจากลิงก์แล้ว')
+      } else {
+        onCoordinatesChange?.(null)
+        setCoordinateMessage('ลิงก์นี้ไม่มีตัวเลขพิกัด กดค้นหาตำแหน่ง แล้วเลือกจุดที่ถูกต้องเพื่อเติมพิกัด')
       }
     }, 300)
   }, [onChange, onCoordinatesChange])
@@ -105,6 +119,11 @@ export default function GoogleMapsInputWithPreview({ value, onChange, onCoordina
   }
 
   const handleClear = () => {
+    if (processTimerRef.current) clearTimeout(processTimerRef.current)
+    lookupRef.current += 1
+    setCandidates([])
+    setLocating(false)
+    setCoordinateMessage('')
     setInputValue('')
     setCleanedUrl('')
     setEmbedUrl(null)
@@ -115,12 +134,58 @@ export default function GoogleMapsInputWithPreview({ value, onChange, onCoordina
     onCoordinatesChange?.(null)
   }
 
+  const findCoordinates = async () => {
+    const query = mapPlaceQuery(cleanedUrl || inputValue)
+    if (!query) {
+      setCoordinateMessage('ลิงก์นี้ไม่มีชื่อสถานที่ให้ค้นหา กรุณาเปิด Google Maps แล้วคัดลอกลิงก์เต็ม หรือคัดลอกพิกัดจากจุดบ้าน')
+      return
+    }
+    const request = ++lookupRef.current
+    setLocating(true)
+    setCandidates([])
+    setCoordinateMessage('กำลังค้นหาตำแหน่ง…')
+    try {
+      const google = await loadGoogleMapsApi()
+      const { Geocoder } = await google.maps.importLibrary('geocoding')
+      const { results } = await new Geocoder().geocode({ address: query, region: 'th', language: 'th' })
+      if (request !== lookupRef.current) return
+      const matches = (results || []).filter(r => r.geometry?.location && !r.partial_match)
+      setCandidates(matches)
+      setCoordinateMessage(matches.length ? 'ตรวจที่อยู่แล้วเลือกตำแหน่งที่ตรงกับทรัพย์ เพื่อเติมพิกัดทั้งสองช่อง' : 'ไม่พบจุดที่ตรงชัดเจน กรุณาคัดลอกพิกัดจากจุดบ้านใน Google Maps')
+    } catch {
+      if (request !== lookupRef.current) return
+      setCoordinateMessage('ค้นหาพิกัดไม่สำเร็จ กรุณาตรวจการเปิดใช้ Geocoding API ของเว็บ หรือคัดลอกพิกัดจาก Google Maps มากรอก')
+    } finally {
+      if (request === lookupRef.current) setLocating(false)
+    }
+  }
+
   return (
     <div className="space-y-3">
+      {coordinateMessage && <p className="text-sm text-slate-600" role="status">{coordinateMessage}</p>}
+      {showPreview && !parseCoordinatesFromUrl(cleanedUrl) && (
+        <button type="button" disabled={locating} onClick={findCoordinates}
+          className="inline-flex items-center gap-2 rounded-lg bg-blue-900 px-4 py-2 text-sm text-white disabled:opacity-50">
+          <MapPin className="h-4 w-4" />{locating ? 'กำลังค้นหา…' : 'ค้นหาตำแหน่งเพื่อเติมพิกัด'}
+        </button>
+      )}
+      {candidates.map(candidate => <button type="button" key={candidate.place_id}
+        className="block w-full rounded-xl border border-blue-200 bg-blue-50 p-3 text-left text-sm text-blue-900"
+        onClick={() => {
+          const lat = candidate.geometry.location.lat(), lng = candidate.geometry.location.lng()
+          onCoordinatesChange?.({ lat, lng })
+          setEmbedUrl(`https://maps.google.com/maps?q=${lat},${lng}&output=embed`)
+          setCandidates([])
+          setCoordinateMessage(`เติมพิกัดแล้ว: ${lat.toFixed(7)}, ${lng.toFixed(7)} — ${candidate.formatted_address}`)
+        }}>
+        <strong>ใช้ตำแหน่งนี้</strong> · {candidate.formatted_address}<br />
+        {candidate.geometry.location.lat().toFixed(7)}, {candidate.geometry.location.lng().toFixed(7)}
+      </button>)}
       {/* Input - แสดงเมื่อยังไม่มี preview หรือต้องการแก้ไข */}
       {!showPreview && (
         <div>
           <input
+          id={id}
             type="text"
             value={inputValue}
             onChange={handleChange}

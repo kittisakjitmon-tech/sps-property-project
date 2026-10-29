@@ -1134,3 +1134,87 @@ export async function uploadBlogImage(file, onProgress, storageInstance) {
   const url = await getDownloadURL(storageRef)
   return url
 }
+
+// ─── Portfolio / ผลงาน ─────────────────────────────────────────────────────────
+
+const PORTFOLIO = 'portfolio'
+
+/**
+ * Get all portfolio items snapshot
+ */
+export function getPortfolioSnapshot(callback, firestore) {
+  const db = firestoreDb(firestore)
+  const q = query(collection(db, PORTFOLIO), orderBy('order', 'asc'))
+  return onSnapshot(q, (snapshot) => {
+    const items = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }))
+    callback(items)
+  })
+}
+
+/**
+ * Get all portfolio items once
+ */
+export async function getPortfolioOnce() {
+  const q = query(collection(db, PORTFOLIO), orderBy('order', 'asc'))
+  const snapshot = await getDocs(q)
+  return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }))
+}
+
+/**
+ * Add a portfolio item
+ */
+export async function addPortfolioItem(data, firestore) {
+  const db = firestoreDb(firestore)
+  const q = query(collection(db, PORTFOLIO), orderBy('order', 'desc'))
+  const snapshot = await getDocs(q)
+  const nextOrder = snapshot.empty ? 1 : (snapshot.docs[0].data().order || 0) + 1
+  const docRef = await addDoc(collection(db, PORTFOLIO), {
+    ...data,
+    order: nextOrder,
+    createdAt: serverTimestamp(),
+    updatedAt: serverTimestamp(),
+  })
+  return docRef.id
+}
+
+/**
+ * Update portfolio item
+ */
+export async function updatePortfolioById(id, data, firestore) {
+  const db = firestoreDb(firestore)
+  await updateDoc(doc(db, PORTFOLIO, id), {
+    ...data,
+    updatedAt: serverTimestamp(),
+  })
+}
+
+/**
+ * Delete portfolio item
+ */
+export async function deletePortfolioById(id, firestore) {
+  const db = firestoreDb(firestore)
+  await deleteDoc(doc(db, PORTFOLIO, id))
+}
+
+/**
+ * Upload portfolio image to Firebase Storage
+ */
+export async function uploadPortfolioImage(file, storageInstance) {
+  const s = storageInstance || storage
+  const storageRef = ref(s, `portfolio/${Date.now()}_${file.name}`)
+  await uploadBytes(storageRef, file)
+  const url = await getDownloadURL(storageRef)
+  return url
+}
+
+/**
+ * Batch update portfolio orders
+ */
+export async function batchUpdatePortfolioOrders(updates, firestore) {
+  const db = firestoreDb(firestore)
+  const batch = writeBatch(db)
+  updates.forEach(({ id, order }) => {
+    batch.update(doc(db, PORTFOLIO, id), { order, updatedAt: serverTimestamp() })
+  })
+  await batch.commit()
+}

@@ -13,7 +13,7 @@ const MAP_URL_PATTERN = /https?:\/\/(?:www\.)?(?:google\.com\/maps|maps\.google|
  */
 export function extractMapUrl(input) {
   if (!input || typeof input !== 'string') return { url: null, isEmbed: false }
-  const s = input.trim()
+  const s = input.trim().replace(/^(?=(?:www\.)?(?:google\.com\/maps|maps\.google\.com|maps\.app\.goo\.gl|goo\.gl\/maps)(?:[/?]|$))/i, 'https://')
   if (!s) return { url: null, isEmbed: false }
 
   // กรณีเป็นโค้ด iframe: ดึง src="..."
@@ -168,6 +168,19 @@ export function parseCoordinatesFromUrl(url) {
       const lng = lngMatch ? parseFloat(lngMatch[1]) : null
       if (!Number.isNaN(lat) && lng != null && !Number.isNaN(lng)) return { lat, lng }
     }
-  } catch (_) {}
+  } catch { return null }
   return null
+}
+
+// A feature/CID identifier is not a latitude/longitude pair. Search the place name
+// and require confirmation rather than interpreting the identifier as coordinates.
+export function mapPlaceQuery(input) {
+  const { url } = extractMapUrl(input)
+  if (!url) return ''
+  try {
+    const parsed = new URL(url)
+    const place = parsed.pathname.match(/\/place\/([^/]+)/)?.[1]
+    const query = place ? decodeURIComponent(place.replace(/\+/g, ' ')) : parsed.searchParams.get('q')
+    return query && !/^[-\d.,\s]+$/.test(query) ? query.trim() : ''
+  } catch { return '' }
 }

@@ -19,6 +19,7 @@ const TYPING_PHRASES = [
 ]
 
 export default function LocationAutocomplete({
+  id,
   value = '',
   onChange,
   onSelect,
@@ -129,6 +130,7 @@ export default function LocationAutocomplete({
       <div className="relative">
         <MapPin className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400 pointer-events-none" />
         <input
+          id={id}
           type="text"
           value={searchQuery}
           onChange={handleInputChange}
