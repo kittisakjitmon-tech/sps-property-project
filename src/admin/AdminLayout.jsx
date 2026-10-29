@@ -23,10 +23,11 @@ import {
   Sparkles,
   MessageCircle,
 } from 'lucide-react'
+import { useMessengerUnreadCount } from './messenger/useMessengerData'
 
 const allNavItems = [
   { to: '/sps-internal-admin', end: true, label: 'แดชบอร์ด', icon: LayoutDashboard, roles: ['super_admin', 'admin', 'member', 'agent'] },
-  { to: '/sps-internal-admin/messenger', end: false, label: 'ข้อความ Facebook', icon: MessageCircle, roles: ['super_admin', 'admin'] },
+  { to: '/sps-internal-admin/messenger', end: false, label: 'ข้อความ Facebook', icon: MessageCircle, roles: ['super_admin', 'admin'], badgeKey: 'messenger' },
   { to: '/sps-internal-admin/properties', end: false, label: 'จัดการทรัพย์', icon: Building2, roles: ['super_admin', 'admin', 'agent'] },
   { to: '/sps-internal-admin/ai-property', end: false, label: 'AI ช่วยกรอกทรัพย์', icon: Sparkles, roles: ['super_admin', 'admin', 'agent'] },
   { to: '/sps-internal-admin/my-properties', end: false, label: 'ประกาศของฉัน', icon: FileText, roles: ['member'] },
@@ -45,7 +46,7 @@ const allNavItems = [
 ]
 
 // ─── Sidebar content (shared between desktop & mobile drawer) ───────────────
-function SidebarContent({ navItems, userRole, getRoleDisplayName, handleLogout, onNavClick = () => { } }) {
+function SidebarContent({ navItems, badges = {}, userRole, getRoleDisplayName, handleLogout, onNavClick = () => { } }) {
   return (
     <>
       <div className="p-6 border-b border-blue-800">
@@ -57,7 +58,7 @@ function SidebarContent({ navItems, userRole, getRoleDisplayName, handleLogout, 
       </div>
 
       <nav className="flex-1 p-4 space-y-1 overflow-y-auto admin-scrollbar">
-        {navItems.map(({ to, end, label, icon: Icon }) => (
+        {navItems.map(({ to, end, label, icon: Icon, badgeKey }) => (
           <NavLink
             key={to}
             to={to}
@@ -70,6 +71,11 @@ function SidebarContent({ navItems, userRole, getRoleDisplayName, handleLogout, 
           >
             <Icon className="h-5 w-5 shrink-0" />
             <span className="truncate">{label}</span>
+            {badgeKey && badges[badgeKey] > 0 && (
+              <span className="ml-auto flex h-5 min-w-5 items-center justify-center rounded-full bg-red-500 px-1.5 text-[10px] font-bold text-white" aria-label={`ยังไม่อ่าน ${badges[badgeKey]} ข้อความ`}>
+                {badges[badgeKey] > 99 ? '99+' : badges[badgeKey]}
+              </span>
+            )}
           </NavLink>
         ))}
       </nav>
@@ -100,6 +106,14 @@ export default function AdminLayout() {
   const { user, loading, logout, userRole, hasRole } = useAdminAuth()
   const navigate = useNavigate()
   const [drawerOpen, setDrawerOpen] = useState(false)
+  const canReadMessenger = userRole === 'admin' || userRole === 'super_admin'
+  const messengerUnread = useMessengerUnreadCount(Boolean(user) && canReadMessenger)
+
+  // Show unread Facebook messages in the browser tab so staff notice them from any page.
+  useEffect(() => {
+    const baseTitle = document.title.replace(/^\(\d+\+?\) /, '')
+    document.title = messengerUnread > 0 ? `(${messengerUnread > 99 ? '99+' : messengerUnread}) ${baseTitle}` : baseTitle
+  }, [messengerUnread])
 
   // Redirect to login if not authenticated
   useEffect(() => {
@@ -150,6 +164,7 @@ export default function AdminLayout() {
       {/* ─── Desktop Sidebar (always in document flow, never fixed) ─── */}
       <aside className="hidden lg:flex w-64 bg-blue-900 text-white shrink-0 flex-col min-h-screen sticky top-0 self-start h-screen">
         <SidebarContent
+          badges={{ messenger: messengerUnread }}
           navItems={navItems}
           userRole={userRole}
           getRoleDisplayName={getRoleDisplayName}
@@ -212,6 +227,7 @@ export default function AdminLayout() {
           </button>
         </div>
         <SidebarContent
+          badges={{ messenger: messengerUnread }}
           navItems={navItems}
           userRole={userRole}
           getRoleDisplayName={getRoleDisplayName}

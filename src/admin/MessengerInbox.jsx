@@ -15,7 +15,9 @@ import {
 import Avatar from './messenger/Avatar'
 import ContactPanel from './messenger/ContactPanel'
 import PageManager from './messenger/PageManager'
+import { useAdminAuth } from '../context/AdminAuthContext'
 import {
+  PAGE_SIZE,
   useConversations,
   useMessages,
   useMessengerApi,
@@ -74,10 +76,15 @@ function Attachment({ attachment, outgoing }) {
 
 export default function MessengerInbox() {
   const callApi = useMessengerApi()
-  const { items: conversations, loading: listLoading, error: listError } = useConversations()
+  const { isSuperAdmin } = useAdminAuth()
+  const [conversationLimit, setConversationLimit] = useState(PAGE_SIZE)
+  const [messageLimit, setMessageLimit] = useState(PAGE_SIZE)
+  const { items: conversations, loading: listLoading, error: listError } = useConversations(conversationLimit)
   const { items: pages } = useMessengerPages()
   const [selectedId, setSelectedId] = useState(null)
-  const { items: messages, loading: messagesLoading, error: messagesError } = useMessages(selectedId)
+  const { items: messages, loading: messagesLoading, error: messagesError } = useMessages(selectedId, messageLimit)
+  const hasMoreConversations = conversations.length >= conversationLimit
+  const hasMoreMessages = messages.length >= messageLimit
   const [search, setSearch] = useState('')
   const [pageFilter, setPageFilter] = useState('all')
   const [draft, setDraft] = useState('')
@@ -135,6 +142,7 @@ export default function MessengerInbox() {
   }, [messages])
 
   function selectConversation(id) {
+    if (id !== selectedId) setMessageLimit(PAGE_SIZE)
     setSelectedId(id)
     setMobileChatOpen(true)
     setActionError('')
@@ -276,6 +284,15 @@ export default function MessengerInbox() {
                 </button>
               ))
             )}
+            {!listLoading && hasMoreConversations && (
+              <button
+                type="button"
+                onClick={() => setConversationLimit(limitCount => limitCount + PAGE_SIZE)}
+                className="w-full px-4 py-3 text-sm font-medium text-blue-700 hover:bg-blue-50"
+              >
+                โหลดห้องสนทนาเก่าเพิ่ม
+              </button>
+            )}
           </div>
         </aside>
 
@@ -324,6 +341,17 @@ export default function MessengerInbox() {
                   </div>
                 ) : (
                   <div className="space-y-3">
+                    {hasMoreMessages && (
+                      <div className="flex justify-center">
+                        <button
+                          type="button"
+                          onClick={() => setMessageLimit(limitCount => limitCount + PAGE_SIZE)}
+                          className="rounded-full border border-slate-200 bg-white px-4 py-1.5 text-xs font-medium text-blue-700 shadow-sm hover:bg-blue-50"
+                        >
+                          โหลดข้อความก่อนหน้า
+                        </button>
+                      </div>
+                    )}
                     {messages.map(message => {
                       const outgoing = message.direction === 'outgoing'
                       const imageOnly = !message.text && message.attachments?.every(item => item.type === 'image')
@@ -415,6 +443,12 @@ export default function MessengerInbox() {
               key={selectedConversation.id}
               conversation={selectedConversation}
               onClose={() => setContactOpen(false)}
+              onDeleted={() => {
+                setContactOpen(false)
+                setSelectedId(null)
+                setMobileChatOpen(false)
+              }}
+              canDelete={isSuperAdmin()}
               callApi={callApi}
             />
           </aside>

@@ -546,7 +546,7 @@ async function requireAdmin(req) {
   if (role !== 'admin' && role !== 'super_admin') {
     throw httpError(403, 'บัญชีนี้ไม่มีสิทธิ์จัดการข้อความ')
   }
-  return decoded
+  return { ...decoded, role }
 }
 
 async function loadConversation(id) {
@@ -636,6 +636,25 @@ const adminActions = {
         updatedBy: adminUser.uid,
       },
     }, { merge: true })
+    return { success: true }
+  },
+
+  // PDPA erasure: removes the conversation, every message and all stored media.
+  async deleteConversation({ conversationId: id }, adminUser) {
+    if (adminUser.role !== 'super_admin') throw httpError(403, 'เฉพาะ Super Admin เท่านั้นที่ลบข้อมูลลูกค้าได้')
+    const { conversationRef, data } = await loadConversation(id)
+    const bucket = admin.storage().bucket()
+
+    await Promise.all([
+      bucket.deleteFiles({ prefix: `messenger/${id}/` }),
+      bucket.file(`messenger/avatars/${id}.jpg`).delete({ ignoreNotFound: true }),
+    ])
+    await admin.firestore().recursiveDelete(conversationRef)
+    functions.logger.info('Messenger conversation deleted', {
+      conversationId: id,
+      pageId: data.pageId,
+      deletedBy: adminUser.uid,
+    })
     return { success: true }
   },
 

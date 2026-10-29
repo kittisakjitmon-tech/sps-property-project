@@ -1,5 +1,5 @@
 import { useId, useState } from 'react'
-import { Check, Loader2, Mail, Phone, RefreshCw, X } from 'lucide-react'
+import { Check, Loader2, Mail, Phone, RefreshCw, Trash2, X } from 'lucide-react'
 import Avatar from './Avatar'
 import { customerName, formatDateTime } from './messengerUtils'
 
@@ -44,11 +44,12 @@ function DetectedList({ icon, label, values, href, onUse }) {
   )
 }
 
-export default function ContactPanel({ conversation, onClose, callApi }) {
+export default function ContactPanel({ conversation, onClose, onDeleted, callApi, canDelete }) {
   const formId = useId()
   const [form, setForm] = useState(() => emptyForm(conversation.contact))
   const [saving, setSaving] = useState(false)
   const [refreshing, setRefreshing] = useState(false)
+  const [deleting, setDeleting] = useState(false)
   const [status, setStatus] = useState({ type: '', message: '' })
 
   function updateField(key, value) {
@@ -78,6 +79,23 @@ export default function ContactPanel({ conversation, onClose, callApi }) {
       setStatus({ type: 'error', message: error.message })
     } finally {
       setRefreshing(false)
+    }
+  }
+
+  async function handleDelete() {
+    const name = customerName(conversation)
+    const confirmed = window.confirm(
+      `ลบแชทของ "${name}" ถาวร?\n\nข้อความ รูปภาพ และข้อมูลลูกค้าทั้งหมดในระบบจะถูกลบและกู้คืนไม่ได้ ` +
+      '(ใช้เมื่อลูกค้าขอลบข้อมูลตาม PDPA) แชทในกล่องข้อความ Facebook ของเพจจะไม่ถูกลบ',
+    )
+    if (!confirmed) return
+    setDeleting(true)
+    try {
+      await callApi({ action: 'deleteConversation', conversationId: conversation.id })
+      onDeleted()
+    } catch (error) {
+      setStatus({ type: 'error', message: error.message })
+      setDeleting(false)
     }
   }
 
@@ -190,6 +208,21 @@ export default function ContactPanel({ conversation, onClose, callApi }) {
             {saving ? 'กำลังบันทึก…' : 'บันทึกข้อมูลลูกค้า'}
           </button>
         </form>
+
+        {canDelete && (
+          <div className="space-y-2 border-t border-slate-200 pt-4">
+            <p className="text-xs text-slate-500">ลูกค้าขอลบข้อมูล (PDPA): ลบแชท รูป และข้อมูลทั้งหมดของลูกค้าคนนี้ออกจากระบบ</p>
+            <button
+              type="button"
+              onClick={handleDelete}
+              disabled={deleting}
+              className="flex w-full items-center justify-center gap-2 rounded-lg border border-red-200 px-4 py-2.5 text-sm font-medium text-red-600 hover:bg-red-50 disabled:opacity-50"
+            >
+              {deleting ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> : <Trash2 className="h-4 w-4" aria-hidden="true" />}
+              {deleting ? 'กำลังลบ…' : 'ลบแชทและข้อมูลลูกค้านี้'}
+            </button>
+          </div>
+        )}
       </div>
     </div>
   )

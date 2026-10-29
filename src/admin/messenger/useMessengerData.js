@@ -6,6 +6,7 @@ import {
   onSnapshot,
   orderBy,
   query,
+  where,
 } from 'firebase/firestore'
 import { adminDb } from '../../lib/firebase'
 import { useAdminAuth } from '../../context/AdminAuthContext'
@@ -60,10 +61,12 @@ function useCollectionSnapshot(buildQuery, deps, errorMessage) {
   return { items, loading, error }
 }
 
-export function useConversations() {
+export const PAGE_SIZE = 100
+
+export function useConversations(limitCount = PAGE_SIZE) {
   return useCollectionSnapshot(
-    () => query(collection(adminDb, 'messenger_conversations'), orderBy('lastMessageAt', 'desc'), limit(200)),
-    [],
+    () => query(collection(adminDb, 'messenger_conversations'), orderBy('lastMessageAt', 'desc'), limit(limitCount)),
+    [limitCount],
     'โหลดห้องสนทนาไม่สำเร็จ กรุณาตรวจสอบสิทธิ์และ Firestore Rules',
   )
 }
@@ -76,16 +79,28 @@ export function useMessengerPages() {
   )
 }
 
-export function useMessages(conversationId) {
+export function useMessages(conversationId, limitCount = PAGE_SIZE) {
   return useCollectionSnapshot(
     () => conversationId
       ? query(
         collection(adminDb, 'messenger_conversations', conversationId, 'messages'),
         orderBy('timestamp', 'asc'),
-        limitToLast(200),
+        limitToLast(limitCount),
       )
       : null,
-    [conversationId],
+    [conversationId, limitCount],
     'โหลดข้อความไม่สำเร็จ',
   )
+}
+
+// Total unread across all conversations, for the sidebar badge and tab title.
+export function useMessengerUnreadCount(enabled) {
+  const { items } = useCollectionSnapshot(
+    () => enabled
+      ? query(collection(adminDb, 'messenger_conversations'), where('unreadCount', '>', 0), limit(500))
+      : null,
+    [enabled],
+    'โหลดจำนวนข้อความที่ยังไม่อ่านไม่สำเร็จ',
+  )
+  return items.reduce((sum, item) => sum + (item.unreadCount || 0), 0)
 }
