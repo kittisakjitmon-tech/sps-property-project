@@ -34,6 +34,14 @@
     ],
     "rewrites": [
       {
+        "source": "/api/webhooks/facebook",
+        "function": "facebookWebhook"
+      },
+      {
+        "source": "/api/admin/messenger",
+        "function": "facebookMessengerAdmin"
+      },
+      {
         "source": "/sitemap.xml",
         "function": "sitemap"
       },

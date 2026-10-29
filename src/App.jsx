@@ -10,6 +10,7 @@ const AgentPropertiesPage = lazy(() => import('./features/agent/AgentPropertiesP
 const AIPropertyPage = lazy(() => import('./features/ai-property/AIPropertyPage'))
 const PropertyForm = lazy(() => import('./admin/PropertyForm'))
 const LeadsInbox = lazy(() => import('./admin/LeadsInbox'))
+const MessengerInbox = lazy(() => import('./admin/MessengerInbox'))
 const HeroSlidesAdmin = lazy(() => import('./admin/HeroSlidesAdmin'))
 const HomepageSectionsAdmin = lazy(() => import('./admin/HomepageSectionsAdmin'))
 const PopularLocationsAdmin = lazy(() => import('./admin/PopularLocationsAdmin'))
@@ -22,6 +23,8 @@ const ActivityLogsPage = lazy(() => import('./admin/ActivityLogsPage'))
 const Login = lazy(() => import('./admin/Login'))
 const AdminBlogs = lazy(() => import('./admin/AdminBlogs'))
 const AdminPortfolio = lazy(() => import('./admin/AdminPortfolio'))
+const PrivacyPolicy = lazy(() => import('./features/legal/PrivacyPolicy'))
+const DataDeletion = lazy(() => import('./features/legal/DataDeletion'))
 
 // ─── Route Loading Fallback ───────────────────────────────────────────────────
 function RouteLoading() {
@@ -44,6 +47,10 @@ function App() {
         {/* Login */}
         <Route path="/login" element={<Login />} />
 
+        {/* Public legal pages (required by Meta app review). */}
+        <Route path="/privacy" element={<PrivacyPolicy />} />
+        <Route path="/data-deletion" element={<DataDeletion />} />
+
         {/* Public agent catalogue: browsing and local PDF generation only. */}
         <Route path="/agent" element={<AgentPropertiesPage />} />
 
@@ -56,6 +63,7 @@ function App() {
           <Route path="properties/:id/edit" element={<PropertyForm />} />
           <Route path="property-form" element={<PropertyForm />} />
           <Route path="leads" element={<LeadsInbox />} />
+          <Route path="messenger" element={<MessengerInbox />} />
           <Route path="hero-slides" element={<HeroSlidesAdmin />} />
           <Route path="homepage-sections" element={<HomepageSectionsAdmin />} />
           <Route path="popular-locations" element={<PopularLocationsAdmin />} />

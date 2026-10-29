@@ -958,3 +958,7 @@ exports.checkPropertyLimit = functions
 
 // Authenticated AI property intake; secrets and provider calls stay server-side.
 exports.aiPropertyAssistant = require('./ai-property').aiPropertyAssistant
+
+// Facebook Messenger webhook and authenticated admin replies.
+exports.facebookWebhook = require('./facebook-messenger').facebookWebhook
+exports.facebookMessengerAdmin = require('./facebook-messenger').facebookMessengerAdmin

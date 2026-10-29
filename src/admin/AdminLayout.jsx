@@ -21,10 +21,12 @@ import {
   X,
   Briefcase,
   Sparkles,
+  MessageCircle,
 } from 'lucide-react'
 
 const allNavItems = [
   { to: '/sps-internal-admin', end: true, label: 'แดชบอร์ด', icon: LayoutDashboard, roles: ['super_admin', 'admin', 'member', 'agent'] },
+  { to: '/sps-internal-admin/messenger', end: false, label: 'ข้อความ Facebook', icon: MessageCircle, roles: ['super_admin', 'admin'] },
   { to: '/sps-internal-admin/properties', end: false, label: 'จัดการทรัพย์', icon: Building2, roles: ['super_admin', 'admin', 'agent'] },
   { to: '/sps-internal-admin/ai-property', end: false, label: 'AI ช่วยกรอกทรัพย์', icon: Sparkles, roles: ['super_admin', 'admin', 'agent'] },
   { to: '/sps-internal-admin/my-properties', end: false, label: 'ประกาศของฉัน', icon: FileText, roles: ['member'] },
