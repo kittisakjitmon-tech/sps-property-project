@@ -962,3 +962,4 @@ exports.aiPropertyAssistant = require('./ai-property').aiPropertyAssistant
 // Facebook Messenger webhook and authenticated admin replies.
 exports.facebookWebhook = require('./facebook-messenger').facebookWebhook
 exports.facebookMessengerAdmin = require('./facebook-messenger').facebookMessengerAdmin
+exports.facebookAiReply = require('./facebook-ai-reply').facebookAiReply

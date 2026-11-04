@@ -318,7 +318,11 @@ async function storeMessengerMessage({
 
   await db.runTransaction(async transaction => {
     const existingMessage = await transaction.get(messageRef)
-    if (existingMessage.exists) return
+    if (existingMessage.exists) {
+      // The echo of a message we just sent can arrive before we store it; keep the sender tag.
+      if (sentBy && !existingMessage.get('sentBy')) transaction.update(messageRef, { sentBy })
+      return
+    }
 
     const existingConversation = await transaction.get(conversationRef)
     const current = existingConversation.data() || {}
@@ -747,6 +751,10 @@ const facebookMessengerAdmin = functions
 module.exports = {
   facebookWebhook,
   facebookMessengerAdmin,
+  CONVERSATIONS,
+  FACEBOOK_SECRETS,
+  sendFacebookMessage,
+  storeMessengerMessage,
   _private: {
     conversationId,
     messageId,
