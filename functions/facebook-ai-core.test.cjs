@@ -9,7 +9,10 @@ const {
   buildSystemPrompt,
   runConversation,
   vertexClientOptions,
-  splitIntoMessages,
+  replyCharLimit,
+  isTooLong,
+  hardTrim,
+  buildShortenRequest,
   maskPrice,
   findPriceLeaks,
   buildCardElements,
@@ -337,44 +340,48 @@ test('the global location uses the global Vertex endpoint instead of a nonexiste
   })
 })
 
-test('a long reply is cut into a few short chat bubbles', () => {
-  assert.deepEqual(splitIntoMessages('มีครับ'), ['มีครับ'])
-  assert.deepEqual(splitIntoMessages('  \n\n '), [])
-  assert.deepEqual(splitIntoMessages(null), [])
-  assert.deepEqual(splitIntoMessages('ข้อความแรก\n\nข้อความสอง'), ['ข้อความแรก', 'ข้อความสอง'])
-  // at most 3 bubbles; the rest is folded into the last one
-  const many = splitIntoMessages('a\n\nb\n\nc\n\nd\n\ne')
-  assert.equal(many.length, 3)
-  assert.match(many[2], /c[\s\S]*d[\s\S]*e/)
-  // one long paragraph is split at spaces without breaking a link
-  const link = 'https://spspropertysolution.com/p/abc123'
-  const long = Array.from({ length: 30 }, (_, i) => `คำที่${i}`).join(' ') + ` ${link} จบ`
-  const parts = splitIntoMessages(long, { maxBubbles: 10, maxChars: 80 })
-  assert.ok(parts.length > 1)
-  assert.ok(parts.every(part => part.length <= 80 || part.includes(link)))
-  assert.ok(parts.join(' ').includes(link))
-})
-
-test('follow-up bubbles and cards do not use up the hourly reply limit', () => {
-  const now = 10_000_000
-  const ok = { settings: { enabled: true, maxRepliesPerHour: 2 }, conversation: {}, text: 'x', timestamp: now, now }
-  const recent = [
-    { direction: 'outgoing', sentBy: 'ai', timestamp: now - 1000 },
-    { direction: 'outgoing', sentBy: 'ai', kind: 'part', timestamp: now - 900 },
-    { direction: 'outgoing', sentBy: 'ai', kind: 'part', timestamp: now - 800 },
-    { direction: 'outgoing', sentBy: 'ai', kind: 'cards', timestamp: now - 700 },
-  ]
-  assert.equal(shouldReply({ ...ok, recentMessages: recent }).reply, true)
-})
-
 test('the prompt asks for short human chat, not letters, and examples use placeholders', () => {
   const prompt = buildSystemPrompt({ isFirstReply: false })
-  assert.match(prompt, /ตอบสั้น/)
-  assert.match(prompt, /ไม่เกินประมาณ 120 ตัวอักษร/)
-  assert.match(prompt, /เว้นบรรทัดว่าง/)
+  assert.match(prompt, /ข้อความเดียวและสั้น/)
+  assert.match(prompt, /ห้ามเกิน 220 ตัวอักษร/)
+  assert.doesNotMatch(prompt, /เว้นบรรทัดว่าง|ทีละฟอง/)
   assert.match(prompt, /ยินดีให้บริการ/)
   assert.match(prompt, /\{priceApprox\}/)
   assert.ok(!/ตัวอย่างน้ำเสียง[\s\S]*2\.1xxx/.test(prompt.split('กฎด้านข้อมูล')[0]), 'examples must not contain a copyable price')
   assert.doesNotMatch(prompt, /ไม่เกิน 600 ตัวอักษร/)
   assert.match(buildSystemPrompt({ isFirstReply: true }), /ประโยคเดียว/)
+})
+
+test('the reply length limit ignores links, is configurable and clamped', () => {
+  assert.equal(replyCharLimit({}), 220)
+  assert.equal(replyCharLimit({ maxReplyChars: 150 }), 150)
+  assert.equal(replyCharLimit({ maxReplyChars: 10 }), 220)
+  assert.equal(replyCharLimit({ maxReplyChars: 5000 }), 220)
+  assert.equal(replyCharLimit({ maxReplyChars: 'abc' }), 220)
+  const link = 'https://spspropertysolution.com/p/' + 'a'.repeat(40)
+  assert.equal(isTooLong('ก'.repeat(220), 220), false)
+  assert.equal(isTooLong('ก'.repeat(221), 220), true)
+  assert.equal(isTooLong(`${'ก'.repeat(200)} ${link}`, 220), false, 'links are not counted')
+  assert.equal(isTooLong(null, 220), false)
+})
+
+test('a last-resort cut stops at a space and keeps links intact', () => {
+  const words = Array.from({ length: 60 }, (_, i) => `คำ${i}`).join(' ')
+  const cut = hardTrim(words, 100)
+  assert.ok(cut.length <= 100)
+  assert.ok(!cut.endsWith(' '))
+  assert.ok(words.startsWith(cut))
+  assert.equal(hardTrim('สั้น', 100), 'สั้น')
+  const link = 'https://spspropertysolution.com/p/abc'
+  const withLink = `${words} ${link}`
+  assert.ok(hardTrim(withLink, 100).length <= 100 + link.length)
+})
+
+test('the shorten request keeps facts, prices and links and states the limit', () => {
+  const request = buildShortenRequest('ข้อความยาว 2.1xxx ล้านบาท', 180, 'ค่ะ')
+  assert.match(request.systemInstruction, /ค่ะ/)
+  assert.match(request.systemInstruction, /ห้ามเปลี่ยนตัวเลข/)
+  assert.match(request.systemInstruction, /ลิงก์/)
+  assert.match(request.contents[0].parts[0].text, /ไม่เกิน 180 ตัวอักษร/)
+  assert.match(request.contents[0].parts[0].text, /2\.1xxx/)
 })

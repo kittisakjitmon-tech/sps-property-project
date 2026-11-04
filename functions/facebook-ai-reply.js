@@ -13,7 +13,11 @@ const {
   validateAppointment,
   findPriceLeaks,
   sanitizeUrls,
-  splitIntoMessages,
+  replyCharLimit,
+  isTooLong,
+  hardTrim,
+  buildShortenRequest,
+  cleanReplyText,
   shouldReply,
   historyToContents,
   buildSystemPrompt,
@@ -34,7 +38,7 @@ const {
 //     particle: 'ครับ' | 'ค่ะ',   // how the bot ends sentences
 //     extraInstructions: '...',  // tone / brand notes added to the prompt
 //     maxRepliesPerHour: 8,
-//     bubbleDelayMs: 800,        // pause between the chat bubbles of one reply (0 = none)
+//     maxReplyChars: 220,        // longer replies are shortened before sending (80-1000)
 //   }
 // Company facts and FAQs live in the messenger_faq collection: { question, answer, active }.
 const SETTINGS_DOC = 'messenger_settings/ai'
@@ -125,7 +129,7 @@ function createGenerate({ settings, systemInstruction }) {
     model: settings.model || DEFAULT_MODEL,
     systemInstruction: { role: 'system', parts: [{ text: systemInstruction }] },
     tools: [{ functionDeclarations: TOOL_DECLARATIONS }],
-    generationConfig: { temperature: 0.6, maxOutputTokens: 600 },
+    generationConfig: { temperature: 0.6, maxOutputTokens: 500 },
   })
   return async contents => {
     const result = await model.generateContent({ contents })
@@ -133,7 +137,26 @@ function createGenerate({ settings, systemInstruction }) {
   }
 }
 
-const sleep = ms => new Promise(resolve => setTimeout(resolve, ms))
+// Asks the model to rewrite a too-long reply; falls back to a plain cut if that fails.
+async function shortenReply(settings, text, maxChars) {
+  try {
+    const projectId = process.env.GCLOUD_PROJECT || admin.app().options.projectId
+    const vertex = new VertexAI(vertexClientOptions(settings, projectId, DEFAULT_LOCATION))
+    const request = buildShortenRequest(text, maxChars, settings.particle)
+    const model = vertex.getGenerativeModel({
+      model: settings.model || DEFAULT_MODEL,
+      systemInstruction: { role: 'system', parts: [{ text: request.systemInstruction }] },
+      generationConfig: { temperature: 0.3, maxOutputTokens: 300 },
+    })
+    const result = await model.generateContent({ contents: request.contents })
+    const parts = result.response?.candidates?.[0]?.content?.parts || []
+    const shorter = cleanReplyText(parts.map(part => part.text || '').join(''))
+    if (shorter && !isTooLong(shorter, maxChars * 1.3)) return shorter
+  } catch (error) {
+    functions.logger.warn('AI shorten failed', { reason: error.message })
+  }
+  return hardTrim(text, maxChars)
+}
 
 // Used instead of an AI answer when a safety check fails; a human takes over.
 function safeFallbackText(particle) {
@@ -276,11 +299,16 @@ const facebookAiReply = functions
         return null
       }
 
+      // Keep it chat-sized: a too-long answer is rewritten shorter before anything else.
+      stage = 'shorten'
+      const maxChars = replyCharLimit(settings)
+      const replyText = isTooLong(rawText, maxChars) ? await shortenReply(settings, rawText, maxChars) : rawText
+
       // Safety checks run in code, not just in the prompt.
       stage = 'guard'
       const allowedCodes = new Set([...seen.keys(), ...shownCodes, ...cardCodes])
       const allowedUrls = [...allowedCodes].map(code => catalogByCode.get(code)?.url).filter(Boolean)
-      let text = sanitizeUrls(rawText, allowedUrls)
+      let text = sanitizeUrls(replyText, allowedUrls)
       // A price that is public on another listing is not a secret, so don't count it as a leak.
       const visiblePrices = new Set(catalog.filter(p => !p._hidden && p._numericPrice).map(p => p._numericPrice))
       const hiddenPrices = catalog.filter(p => p._hidden && p._numericPrice && !visiblePrices.has(p._numericPrice)).map(p => p._numericPrice)
@@ -293,33 +321,20 @@ const facebookAiReply = functions
         sendCards = false
       }
 
-      // One reply goes out as a few short bubbles, like a person typing.
-      const bubbles = splitIntoMessages(text)
-      const delay = Number.isFinite(settings.bubbleDelayMs) ? Math.max(0, Math.min(3000, settings.bubbleDelayMs)) : 800
-      for (let index = 0; index < bubbles.length; index += 1) {
-        stage = 'send'
-        if (index > 0 && delay) await sleep(delay)
-        try {
-          const sent = await sendFacebookMessage(conversation.pageId, conversation.participantId, { text: bubbles[index] })
-          stage = 'store'
-          await storeMessengerMessage({
-            pageId: conversation.pageId,
-            pageName: conversation.pageName,
-            participantId: conversation.participantId,
-            externalId: sent.message_id,
-            direction: 'outgoing',
-            text: bubbles[index],
-            attachments: [],
-            timestamp: Date.now(),
-            sentBy: 'ai',
-            ...(index > 0 ? { extra: { kind: 'part' } } : {}),
-          })
-        } catch (error) {
-          if (index === 0) throw error // nothing reached the customer yet
-          functions.logger.warn('AI follow-up bubble failed', { ...logContext, index, reason: error.message })
-          break
-        }
-      }
+      stage = 'send'
+      const sent = await sendFacebookMessage(conversation.pageId, conversation.participantId, { text })
+      stage = 'store'
+      await storeMessengerMessage({
+        pageId: conversation.pageId,
+        pageName: conversation.pageName,
+        participantId: conversation.participantId,
+        externalId: sent.message_id,
+        direction: 'outgoing',
+        text,
+        attachments: [],
+        timestamp: Date.now(),
+        sentBy: 'ai',
+      })
 
       // Cards are a bonus: a failure here must not undo the reply that was already sent.
       const shown = new Set(cardCodes)

@@ -149,7 +149,7 @@ beforeEach(() => {
   sent = []
   stored = []
   modelScript = []
-  store.set('messenger_settings/ai', { enabled: true, bubbleDelayMs: 0 })
+  store.set('messenger_settings/ai', { enabled: true })
   store.set(`messenger_conversations/${CID}`, { pageId: 'P1', participantId: 'U1', pageName: 'เพจ' })
   store.set('properties/prop1', property())
   store.set('properties/prop2', property({ displayId: 'SPS-CD-9', type: 'SPS-CD-ID', price: 1500000, showPrice: true, locationDisplay: 'ศรีราชา, ชลบุรี' }))
@@ -325,31 +325,51 @@ test('uses the persona and FAQ from settings in the prompt it sends', async () =
   assert.match(prompt, /เรียกลูกค้าว่าพี่/)
 })
 
-test('a reply with blank lines goes out as separate short bubbles, only the first counts toward the limit', async () => {
-  model([{ text: 'มีครับ ตอนนี้เจอ 2 หลัง\n\nส่งรูปให้ดูนะครับ\n\nงบประมาณประมาณเท่าไหร่ครับ' }])
-  await receive('มีทาวน์โฮมไหม')
-  assert.deepEqual(sent.map(item => item.message.text), ['มีครับ ตอนนี้เจอ 2 หลัง', 'ส่งรูปให้ดูนะครับ', 'งบประมาณประมาณเท่าไหร่ครับ'])
-  assert.equal(stored.length, 3)
-  assert.equal(stored[0].extra, undefined)
-  assert.deepEqual(stored.slice(1).map(item => item.extra.kind), ['part', 'part'])
-  assert.ok(stored.every(item => item.sentBy === 'ai'))
+
+const LONG = 'ก'.repeat(300)
+
+test('a reply over the limit is rewritten shorter by the model before it is sent', async () => {
+  model([{ text: LONG }], [{ text: 'มีครับ 3 นอน ราคาประมาณ 2.1xxx ล้านบาท สนใจดูไหมครับ' }])
+  await receive('มีบ้านไหม')
+  assert.equal(sent.length, 1)
+  assert.equal(sent[0].message.text, 'มีครับ 3 นอน ราคาประมาณ 2.1xxx ล้านบาท สนใจดูไหมครับ')
+  assert.equal(modelScript.length, 0, 'both model calls were used')
 })
 
-test('if a follow-up bubble fails the first one stays sent and nothing is retried', async () => {
-  model([{ text: 'ข้อความแรก\n\nข้อความสอง' }])
-  const original = sent.push.bind(sent)
-  let count = 0
-  sent.push = item => { count += 1; if (count === 2) throw new Error('rate limited'); return original(item) }
+test('if the rewrite is still too long or fails, the reply is cut instead', async () => {
+  const words = Array.from({ length: 80 }, (_, i) => `คำที่${i}`).join(' ')
+  model([{ text: words }], [{ text: words }])
+  await receive('ถามยาวๆ')
+  assert.ok(sent[0].message.text.length <= 220)
+  assert.ok(words.startsWith(sent[0].message.text))
+
+  sent.length = 0
+  model([{ text: words }], [])
+  modelScript.push(async () => { throw new Error('model down') })
+  await receive('ถามอีกที')
+  assert.ok(sent[0].message.text.length <= 220)
+})
+
+test('a reply within the limit is sent as is with no extra model call', async () => {
+  model([{ text: 'สวัสดีครับ ผมเป็นผู้ช่วย AI ของ SPS ครับ' }])
   await receive('สวัสดี')
-  assert.equal(count, 2)
-  assert.equal(stored.length, 1)
+  assert.equal(sent.length, 1)
+  assert.equal(modelScript.length, 0)
 })
 
-test('the pause between bubbles can be switched off or set in settings', async () => {
-  store.set('messenger_settings/ai', { enabled: true, bubbleDelayMs: 0 })
-  model([{ text: 'หนึ่ง\n\nสอง' }])
-  const started = Date.now()
+test('the limit comes from settings and links do not count toward it', async () => {
+  store.set('messenger_settings/ai', { enabled: true, maxReplyChars: 100 })
+  model([{ text: 'ก'.repeat(150) }], [{ text: 'สั้นลงแล้วครับ' }])
   await receive('x')
-  assert.ok(Date.now() - started < 500)
-  assert.equal(sent.length, 2)
+  assert.equal(sent[0].message.text, 'สั้นลงแล้วครับ')
+
+  sent.length = 0
+  store.set('messenger_settings/ai', { enabled: true })
+  model(
+    [{ functionCall: { name: 'search_properties', args: {} } }],
+    [{ text: `${'ก'.repeat(150)} https://spspropertysolution.com/p/prop1` }],
+  )
+  await receive('มีไหม')
+  assert.ok(sent[0].message.text.includes('/p/prop1'), 'a link must not force a rewrite')
+  assert.equal(modelScript.length, 0)
 })

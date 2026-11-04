@@ -385,8 +385,8 @@ function shouldReply({ settings, conversation, text, timestamp, recentMessages, 
     return { reply: false, reason: 'human-active' }
   }
   const limit = Number(settings?.maxRepliesPerHour) > 0 ? Number(settings.maxRepliesPerHour) : DEFAULT_MAX_REPLIES_PER_HOUR
-  // Cards and follow-up bubbles belong to the same reply, so they don't count against the limit.
-  const aiLastHour = outgoing.filter(m => m.sentBy === 'ai' && m.kind !== 'cards' && m.kind !== 'part' && now - m.timestamp < 60 * 60 * 1000).length
+  // Property cards belong to the same reply, so they don't count against the limit.
+  const aiLastHour = outgoing.filter(m => m.sentBy === 'ai' && m.kind !== 'cards' && now - m.timestamp < 60 * 60 * 1000).length
   if (aiLastHour >= limit) return { reply: false, reason: 'rate-limited' }
   return { reply: true, reason: 'ok' }
 }
@@ -421,25 +421,48 @@ function cleanReplyText(raw) {
   return text
 }
 
-// Splits one reply into a few short chat bubbles: first at blank lines (the model is
-// asked to separate thoughts that way), then long paragraphs at spaces. Thai has no
-// sentence punctuation, so words are grouped up to maxChars without cutting a link.
-function splitIntoMessages(text, { maxBubbles = 3, maxChars = 220 } = {}) {
-  if (typeof text !== 'string' || !text.trim()) return []
-  const pieces = []
-  for (const paragraph of text.split(/\n{2,}/).map(part => part.trim()).filter(Boolean)) {
-    if (paragraph.length <= maxChars) { pieces.push(paragraph); continue }
-    let current = ''
-    for (const word of paragraph.split(/(?<=\s)/)) {
-      if (current && (current + word).length > maxChars) { pieces.push(current.trim()); current = '' }
-      current += word
-    }
-    if (current.trim()) pieces.push(current.trim())
+// A reply is one message. If it is longer than the limit (links don't count) it is
+// shortened by the model, and as a last resort cut at the last space before the limit.
+const DEFAULT_MAX_REPLY_CHARS = 220
+const URL_PATTERN = /https?:\/\/[^\s)]+/g
+
+function replyCharLimit(settings) {
+  const n = Number(settings?.maxReplyChars)
+  return Number.isFinite(n) && n >= 80 && n <= 1000 ? Math.floor(n) : DEFAULT_MAX_REPLY_CHARS
+}
+
+function visibleLength(text) {
+  return typeof text === 'string' ? text.replace(URL_PATTERN, '').replace(/\s+/g, ' ').trim().length : 0
+}
+
+function isTooLong(text, maxChars) {
+  return visibleLength(text) > maxChars
+}
+
+function hardTrim(text, maxChars) {
+  if (typeof text !== 'string') return text
+  const linkChars = (text.match(URL_PATTERN) || []).reduce((sum, url) => sum + url.length, 0)
+  const limit = maxChars + linkChars
+  if (text.length <= limit) return text
+  const cut = text.slice(0, limit)
+  const lastSpace = cut.lastIndexOf(' ')
+  return (lastSpace > limit * 0.5 ? cut.slice(0, lastSpace) : cut).trim()
+}
+
+function buildShortenRequest(text, maxChars, particle = 'ครับ') {
+  const p = particle === 'ค่ะ' ? 'ค่ะ' : 'ครับ'
+  return {
+    systemInstruction: [
+      'คุณช่วยย่อข้อความแชทภาษาไทยของเซลส์อสังหาริมทรัพย์ให้สั้นลง',
+      `ตอบเป็นข้อความเดียว เหมือนคนพิมพ์แชท ใช้คำลงท้าย "${p}" ไม่ใช้ markdown ไม่ใช้ภาษาทางการ`,
+      'รักษาข้อเท็จจริงเดิมทั้งหมด ห้ามเพิ่มข้อมูลใหม่ ห้ามเปลี่ยนตัวเลข รหัส หรือราคาโดยประมาณ (เช่น 2.1xxx ล้านบาท) และเก็บลิงก์เดิมไว้ถ้ามี',
+      'ตัดรายละเอียดที่ไม่จำเป็นออก เก็บเฉพาะสิ่งที่ตอบคำถามลูกค้าและคำถามต่อท้ายที่สั้นที่สุด',
+    ].join('\n'),
+    contents: [{
+      role: 'user',
+      parts: [{ text: `ย่อข้อความนี้ให้ไม่เกิน ${maxChars} ตัวอักษร (ไม่นับลิงก์):\n\n${text}` }],
+    }],
   }
-  if (pieces.length <= maxBubbles) return pieces
-  // Too many pieces: keep the first ones and fold the rest into the last bubble.
-  const head = pieces.slice(0, maxBubbles - 1)
-  return [...head, pieces.slice(maxBubbles - 1).join('\n')]
 }
 
 // ─── Prompt & tools ──────────────────────────────────────────────────────────
@@ -459,15 +482,15 @@ function buildSystemPrompt({ isFirstReply, particle = 'ครับ', extraInstr
     '',
     'สไตล์การพูด (สำคัญมาก ต้องเหมือนคนพิมพ์แชท ไม่ใช่เขียนจดหมาย):',
     `- พูดเหมือนเซลส์อสังหาที่เป็นกันเองและสุภาพ ใช้คำลงท้าย "${p}" ภาษาพูดธรรมชาติ เช่น "ได้${p}" "มี${p}" "โอเค${p}" "เดี๋ยว...ให้นะ${p}" ห้ามใช้คำแข็งๆ เช่น "ท่าน" "กรุณา" "ขออนุญาต" "ยินดีให้บริการ" "หากมีข้อสงสัยเพิ่มเติม"`,
-    '- ตอบสั้น: ปกติ 1-2 ประโยค ไม่เกินประมาณ 120 ตัวอักษร และไม่เกิน 250 ตัวอักษรแม้จะแนะนำทรัพย์ อย่าเล่ายาว เล่าแค่ที่ลูกค้าอยากรู้ตอนนี้ ที่เหลือรอให้ลูกค้าถามต่อหรือให้ดูในการ์ด',
+    '- ตอบเป็นข้อความเดียวและสั้น: ปกติ 1-2 ประโยค ประมาณ 100-150 ตัวอักษร ห้ามเกิน 220 ตัวอักษร (ไม่นับลิงก์) แม้จะแนะนำทรัพย์ อย่าเล่ายาว เล่าแค่ที่ลูกค้าอยากรู้ตอนนี้ ที่เหลือรอให้ลูกค้าถามต่อหรือให้ดูในการ์ด',
     '- ตอบตรงคำถามก่อนเสมอ ไม่ทวนคำถามของลูกค้า ไม่ขึ้นต้นด้วยคำขอบคุณหรือคำชมทุกครั้ง ไม่สรุปปิดท้ายซ้ำ ไม่ขอโทษเกินจำเป็น',
     '- จบด้วยคำถามสั้นๆ ได้ครั้งละ 1 ข้อเท่านั้น เพื่อให้บทสนทนาไปต่อ (เช่น งบประมาณ ทำเลที่ชอบ) ห้ามถามหลายข้อพร้อมกัน',
     '- แนะนำทรัพย์: พูดถึงแต่ละหลังไม่เกิน 1 บรรทัด (ทำเล ห้องนอน ราคา จุดเด่น 1 อย่าง) ห้ามเรียงเป็นรายการยาวหรือหัวข้อ ห้ามใช้ markdown เช่น ** หรือ #',
-    '- ถ้ามีหลายเรื่องจะพูด ให้แยกเป็นข้อความสั้นๆ 2-3 ข้อความ โดยเว้นบรรทัดว่างระหว่างข้อความ เหมือนคนพิมพ์ส่งทีละฟอง แต่ละข้อความสั้นและจบในตัว',
+    '- ถ้ามีหลายเรื่อง ให้พูดเรื่องที่สำคัญที่สุดก่อนเรื่องเดียว แล้วให้ลูกค้าถามต่อ ห้ามอัดทุกเรื่องในข้อความเดียว',
     '- ใช้อีโมจิได้บ้างไม่เกิน 1 ตัวต่อการตอบ ใช้เฉพาะเมื่อเข้ากับบริบท',
     '',
     'ตัวอย่างน้ำเสียงที่ต้องการ (ดูแค่สไตล์ ค่าในวงเล็บปีกกา {} คือค่าที่ต้องมาจากผลค้นหาจริง ห้ามเอาตัวเลขในตัวอย่างไปใช้):',
-    `ลูกค้า: มีทาวน์โฮมแถวพานทองไหม → "มี${p} ตอนนี้เจอ {จำนวน} หลัง {ห้องนอน} นอน\n\nราคาประมาณ {priceApprox} ส่งรูปให้ดูนะ${p} งบประมาณประมาณเท่าไหร่${p}"`,
+    `ลูกค้า: มีทาวน์โฮมแถวพานทองไหม → "มี${p} ตอนนี้เจอ {จำนวน} หลัง {ห้องนอน} นอน ราคาประมาณ {priceApprox} ส่งรูปให้ดูนะ${p} งบประมาณประมาณเท่าไหร่${p}"`,
     `ลูกค้า: ราคาเท่าไหร่ (ทรัพย์ที่ซ่อนราคา) → "ประมาณ {priceApprox}${p} ราคาจริงเดี๋ยวให้ทีมงานแจ้งอีกทีนะ${p}"`,
     `ลูกค้า: ขอคุยกับคนหน่อย → "ได้${p} เดี๋ยวให้ทีมงานติดต่อกลับเลยนะ${p}"`,
     'ตัวอย่างที่ไม่ต้องการ: "ขอบคุณที่สอบถามนะครับ ทางเรามีทาวน์โฮมหลายโครงการ ได้แก่ 1. ... 2. ... 3. ... หากท่านมีข้อสงสัยเพิ่มเติม สามารถสอบถามได้ตลอดเวลา ยินดีให้บริการ" (ยาว เป็นทางการ เรียงข้อ)',
@@ -629,7 +652,11 @@ module.exports = {
   sanitizeCustomerInfo,
   validateAppointment,
   sanitizeUrls,
-  splitIntoMessages,
+  DEFAULT_MAX_REPLY_CHARS,
+  replyCharLimit,
+  isTooLong,
+  hardTrim,
+  buildShortenRequest,
   shouldReply,
   historyToContents,
   cleanReplyText,
