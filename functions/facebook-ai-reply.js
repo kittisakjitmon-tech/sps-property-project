@@ -99,13 +99,17 @@ const facebookAiReply = functions
     const db = admin.firestore()
     const conversationRef = db.collection(CONVERSATIONS).doc(context.params.conversationId)
     const logContext = { conversationId: context.params.conversationId }
+    // Which step we were in, so a failure says where it happened.
+    let stage = 'settings'
 
     try {
       const settings = (await db.doc(SETTINGS_DOC).get()).data() || {}
       if (settings.enabled !== true) return null
 
+      stage = 'claim'
       if (!(await claimMessage(snapshot.ref))) return null
 
+      stage = 'history'
       const conversation = (await conversationRef.get()).data()
       if (!conversation?.pageId || !conversation?.participantId) return null
 
@@ -122,10 +126,12 @@ const facebookAiReply = functions
         return null
       }
 
+      stage = 'catalog'
       const isFirstReply = !recent.some(m => m.direction === 'outgoing' && m.sentBy === 'ai')
       const catalog = await loadCatalog()
       let handoffReason = null
 
+      stage = 'gemini'
       const { text } = await runConversation({
         generate: createGenerate({ settings, systemInstruction: buildSystemPrompt({ isFirstReply }) }),
         contents: historyToContents(recent),
@@ -143,7 +149,9 @@ const facebookAiReply = functions
         return null
       }
 
+      stage = 'send'
       const sent = await sendFacebookMessage(conversation.pageId, conversation.participantId, { text })
+      stage = 'store'
       await storeMessengerMessage({
         pageId: conversation.pageId,
         pageName: conversation.pageName,
@@ -166,7 +174,15 @@ const facebookAiReply = functions
       }
       functions.logger.info('AI reply sent', { ...logContext, handoff: Boolean(handoffReason) })
     } catch (error) {
-      functions.logger.error('AI reply failed', { ...logContext, message: error.message })
+      // Don't use a field called "message": the Firebase logger overwrites it.
+      functions.logger.error('AI reply failed', {
+        ...logContext,
+        stage,
+        reason: error.message,
+        code: error.code,
+        status: error.status || error.response?.status,
+        facebook: error.response?.data?.error,
+      })
     }
     return null
   })
