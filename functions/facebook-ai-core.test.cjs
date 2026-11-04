@@ -8,6 +8,7 @@ const {
   cleanReplyText,
   buildSystemPrompt,
   runConversation,
+  vertexClientOptions,
 } = require('./facebook-ai-core.cjs')
 
 const base = {
@@ -172,4 +173,15 @@ test('tool loop stops after the round limit and survives failing or unknown tool
     handlers: { search_properties: () => { throw new Error('boom') } },
   })
   assert.equal(resilient.text, 'ขออภัยครับ')
+})
+
+test('the global location uses the global Vertex endpoint instead of a nonexistent global- host', () => {
+  assert.deepEqual(vertexClientOptions({}, 'p'), { project: 'p', location: 'us-central1' })
+  assert.deepEqual(vertexClientOptions({ location: ' europe-west4 ' }, 'p'), { project: 'p', location: 'europe-west4' })
+  assert.deepEqual(vertexClientOptions({ location: '' }, 'p'), { project: 'p', location: 'us-central1' })
+  assert.deepEqual(vertexClientOptions({ location: 'global' }, 'p'), {
+    project: 'p',
+    location: 'global',
+    apiEndpoint: 'aiplatform.googleapis.com',
+  })
 })

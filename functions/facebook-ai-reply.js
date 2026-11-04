@@ -9,6 +9,7 @@ const {
   historyToContents,
   buildSystemPrompt,
   runConversation,
+  vertexClientOptions,
 } = require('./facebook-ai-core.cjs')
 const {
   CONVERSATIONS,
@@ -76,7 +77,7 @@ async function loadRecentMessages(conversationRef) {
 
 function createGenerate({ settings, systemInstruction }) {
   const projectId = process.env.GCLOUD_PROJECT || admin.app().options.projectId
-  const vertex = new VertexAI({ project: projectId, location: settings.location || DEFAULT_LOCATION })
+  const vertex = new VertexAI(vertexClientOptions(settings, projectId, DEFAULT_LOCATION))
   const model = vertex.getGenerativeModel({
     model: settings.model || DEFAULT_MODEL,
     systemInstruction: { role: 'system', parts: [{ text: systemInstruction }] },

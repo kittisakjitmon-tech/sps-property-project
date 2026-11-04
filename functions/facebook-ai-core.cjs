@@ -199,6 +199,17 @@ function buildSystemPrompt({ isFirstReply }) {
   ].join('\n')
 }
 
+// Options for the Vertex AI client. The SDK builds "<location>-aiplatform.googleapis.com",
+// which does not exist for "global", so the global endpoint has to be given explicitly.
+function vertexClientOptions(settings, projectId, defaultLocation = 'us-central1') {
+  const location = typeof settings?.location === 'string' && settings.location.trim()
+    ? settings.location.trim()
+    : defaultLocation
+  return location === 'global'
+    ? { project: projectId, location, apiEndpoint: 'aiplatform.googleapis.com' }
+    : { project: projectId, location }
+}
+
 const TOOL_DECLARATIONS = [
   {
     name: 'search_properties',
@@ -264,6 +275,7 @@ module.exports = {
   TYPE_LABELS,
   TOOL_DECLARATIONS,
   DEFAULT_MAX_REPLIES_PER_HOUR,
+  vertexClientOptions,
   toIndexedProperty,
   searchProperties,
   shouldReply,
