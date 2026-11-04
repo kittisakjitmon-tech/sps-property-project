@@ -9,6 +9,7 @@ const {
   buildSystemPrompt,
   runConversation,
   vertexClientOptions,
+  splitIntoMessages,
   maskPrice,
   findPriceLeaks,
   buildCardElements,
@@ -334,4 +335,46 @@ test('the global location uses the global Vertex endpoint instead of a nonexiste
     location: 'global',
     apiEndpoint: 'aiplatform.googleapis.com',
   })
+})
+
+test('a long reply is cut into a few short chat bubbles', () => {
+  assert.deepEqual(splitIntoMessages('มีครับ'), ['มีครับ'])
+  assert.deepEqual(splitIntoMessages('  \n\n '), [])
+  assert.deepEqual(splitIntoMessages(null), [])
+  assert.deepEqual(splitIntoMessages('ข้อความแรก\n\nข้อความสอง'), ['ข้อความแรก', 'ข้อความสอง'])
+  // at most 3 bubbles; the rest is folded into the last one
+  const many = splitIntoMessages('a\n\nb\n\nc\n\nd\n\ne')
+  assert.equal(many.length, 3)
+  assert.match(many[2], /c[\s\S]*d[\s\S]*e/)
+  // one long paragraph is split at spaces without breaking a link
+  const link = 'https://spspropertysolution.com/p/abc123'
+  const long = Array.from({ length: 30 }, (_, i) => `คำที่${i}`).join(' ') + ` ${link} จบ`
+  const parts = splitIntoMessages(long, { maxBubbles: 10, maxChars: 80 })
+  assert.ok(parts.length > 1)
+  assert.ok(parts.every(part => part.length <= 80 || part.includes(link)))
+  assert.ok(parts.join(' ').includes(link))
+})
+
+test('follow-up bubbles and cards do not use up the hourly reply limit', () => {
+  const now = 10_000_000
+  const ok = { settings: { enabled: true, maxRepliesPerHour: 2 }, conversation: {}, text: 'x', timestamp: now, now }
+  const recent = [
+    { direction: 'outgoing', sentBy: 'ai', timestamp: now - 1000 },
+    { direction: 'outgoing', sentBy: 'ai', kind: 'part', timestamp: now - 900 },
+    { direction: 'outgoing', sentBy: 'ai', kind: 'part', timestamp: now - 800 },
+    { direction: 'outgoing', sentBy: 'ai', kind: 'cards', timestamp: now - 700 },
+  ]
+  assert.equal(shouldReply({ ...ok, recentMessages: recent }).reply, true)
+})
+
+test('the prompt asks for short human chat, not letters, and examples use placeholders', () => {
+  const prompt = buildSystemPrompt({ isFirstReply: false })
+  assert.match(prompt, /ตอบสั้น/)
+  assert.match(prompt, /ไม่เกินประมาณ 120 ตัวอักษร/)
+  assert.match(prompt, /เว้นบรรทัดว่าง/)
+  assert.match(prompt, /ยินดีให้บริการ/)
+  assert.match(prompt, /\{priceApprox\}/)
+  assert.ok(!/ตัวอย่างน้ำเสียง[\s\S]*2\.1xxx/.test(prompt.split('กฎด้านข้อมูล')[0]), 'examples must not contain a copyable price')
+  assert.doesNotMatch(prompt, /ไม่เกิน 600 ตัวอักษร/)
+  assert.match(buildSystemPrompt({ isFirstReply: true }), /ประโยคเดียว/)
 })

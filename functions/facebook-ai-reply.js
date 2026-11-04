@@ -13,6 +13,7 @@ const {
   validateAppointment,
   findPriceLeaks,
   sanitizeUrls,
+  splitIntoMessages,
   shouldReply,
   historyToContents,
   buildSystemPrompt,
@@ -33,6 +34,7 @@ const {
 //     particle: 'ครับ' | 'ค่ะ',   // how the bot ends sentences
 //     extraInstructions: '...',  // tone / brand notes added to the prompt
 //     maxRepliesPerHour: 8,
+//     bubbleDelayMs: 800,        // pause between the chat bubbles of one reply (0 = none)
 //   }
 // Company facts and FAQs live in the messenger_faq collection: { question, answer, active }.
 const SETTINGS_DOC = 'messenger_settings/ai'
@@ -123,13 +125,15 @@ function createGenerate({ settings, systemInstruction }) {
     model: settings.model || DEFAULT_MODEL,
     systemInstruction: { role: 'system', parts: [{ text: systemInstruction }] },
     tools: [{ functionDeclarations: TOOL_DECLARATIONS }],
-    generationConfig: { temperature: 0.5, maxOutputTokens: 900 },
+    generationConfig: { temperature: 0.6, maxOutputTokens: 600 },
   })
   return async contents => {
     const result = await model.generateContent({ contents })
     return result.response?.candidates?.[0]?.content?.parts || []
   }
 }
+
+const sleep = ms => new Promise(resolve => setTimeout(resolve, ms))
 
 // Used instead of an AI answer when a safety check fails; a human takes over.
 function safeFallbackText(particle) {
@@ -289,20 +293,33 @@ const facebookAiReply = functions
         sendCards = false
       }
 
-      stage = 'send'
-      const sent = await sendFacebookMessage(conversation.pageId, conversation.participantId, { text })
-      stage = 'store'
-      await storeMessengerMessage({
-        pageId: conversation.pageId,
-        pageName: conversation.pageName,
-        participantId: conversation.participantId,
-        externalId: sent.message_id,
-        direction: 'outgoing',
-        text,
-        attachments: [],
-        timestamp: Date.now(),
-        sentBy: 'ai',
-      })
+      // One reply goes out as a few short bubbles, like a person typing.
+      const bubbles = splitIntoMessages(text)
+      const delay = Number.isFinite(settings.bubbleDelayMs) ? Math.max(0, Math.min(3000, settings.bubbleDelayMs)) : 800
+      for (let index = 0; index < bubbles.length; index += 1) {
+        stage = 'send'
+        if (index > 0 && delay) await sleep(delay)
+        try {
+          const sent = await sendFacebookMessage(conversation.pageId, conversation.participantId, { text: bubbles[index] })
+          stage = 'store'
+          await storeMessengerMessage({
+            pageId: conversation.pageId,
+            pageName: conversation.pageName,
+            participantId: conversation.participantId,
+            externalId: sent.message_id,
+            direction: 'outgoing',
+            text: bubbles[index],
+            attachments: [],
+            timestamp: Date.now(),
+            sentBy: 'ai',
+            ...(index > 0 ? { extra: { kind: 'part' } } : {}),
+          })
+        } catch (error) {
+          if (index === 0) throw error // nothing reached the customer yet
+          functions.logger.warn('AI follow-up bubble failed', { ...logContext, index, reason: error.message })
+          break
+        }
+      }
 
       // Cards are a bonus: a failure here must not undo the reply that was already sent.
       const shown = new Set(cardCodes)

@@ -149,7 +149,7 @@ beforeEach(() => {
   sent = []
   stored = []
   modelScript = []
-  store.set('messenger_settings/ai', { enabled: true })
+  store.set('messenger_settings/ai', { enabled: true, bubbleDelayMs: 0 })
   store.set(`messenger_conversations/${CID}`, { pageId: 'P1', participantId: 'U1', pageName: 'เพจ' })
   store.set('properties/prop1', property())
   store.set('properties/prop2', property({ displayId: 'SPS-CD-9', type: 'SPS-CD-ID', price: 1500000, showPrice: true, locationDisplay: 'ศรีราชา, ชลบุรี' }))
@@ -323,4 +323,33 @@ test('uses the persona and FAQ from settings in the prompt it sends', async () =
   assert.match(prompt, /โอนบ้านกี่วัน/)
   assert.ok(!prompt.includes('ไม่ควรโผล่'))
   assert.match(prompt, /เรียกลูกค้าว่าพี่/)
+})
+
+test('a reply with blank lines goes out as separate short bubbles, only the first counts toward the limit', async () => {
+  model([{ text: 'มีครับ ตอนนี้เจอ 2 หลัง\n\nส่งรูปให้ดูนะครับ\n\nงบประมาณประมาณเท่าไหร่ครับ' }])
+  await receive('มีทาวน์โฮมไหม')
+  assert.deepEqual(sent.map(item => item.message.text), ['มีครับ ตอนนี้เจอ 2 หลัง', 'ส่งรูปให้ดูนะครับ', 'งบประมาณประมาณเท่าไหร่ครับ'])
+  assert.equal(stored.length, 3)
+  assert.equal(stored[0].extra, undefined)
+  assert.deepEqual(stored.slice(1).map(item => item.extra.kind), ['part', 'part'])
+  assert.ok(stored.every(item => item.sentBy === 'ai'))
+})
+
+test('if a follow-up bubble fails the first one stays sent and nothing is retried', async () => {
+  model([{ text: 'ข้อความแรก\n\nข้อความสอง' }])
+  const original = sent.push.bind(sent)
+  let count = 0
+  sent.push = item => { count += 1; if (count === 2) throw new Error('rate limited'); return original(item) }
+  await receive('สวัสดี')
+  assert.equal(count, 2)
+  assert.equal(stored.length, 1)
+})
+
+test('the pause between bubbles can be switched off or set in settings', async () => {
+  store.set('messenger_settings/ai', { enabled: true, bubbleDelayMs: 0 })
+  model([{ text: 'หนึ่ง\n\nสอง' }])
+  const started = Date.now()
+  await receive('x')
+  assert.ok(Date.now() - started < 500)
+  assert.equal(sent.length, 2)
 })

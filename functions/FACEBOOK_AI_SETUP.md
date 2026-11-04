@@ -18,13 +18,22 @@ apply immediately. The on/off switch is also in the admin Messenger inbox
 | `location` | string | Vertex AI region, e.g. `us-central1` or `global`. Default `us-central1`. |
 | `particle` | string | `ครับ` (default) or `ค่ะ`: how the bot ends sentences. |
 | `extraInstructions` | string | Tone or brand notes appended to the prompt, e.g. "เรียกลูกค้าว่าพี่". |
-| `maxRepliesPerHour` | number | Per conversation. Default 8 (property cards don't count). |
+| `maxRepliesPerHour` | number | Per conversation. Default 8 (cards and follow-up bubbles don't count). |
+| `bubbleDelayMs` | number | Pause between the chat bubbles of one reply. Default 800, `0` sends them at once. |
 
 ## Company facts and FAQ
 
 Collection `messenger_faq`, one document per entry:
 `{ question: string, answer: string, active: boolean }`. The bot answers
 company questions only from these entries (up to 40, cached for 5 minutes).
+
+## Style
+
+The prompt asks for short chat-style replies (usually 1-2 sentences, about 120
+characters), one question at a time, no formal phrases and no lists. When the
+model puts blank lines between thoughts, each part is sent as its own chat bubble
+(at most 3, a short pause between them). Use `extraInstructions` to tune the tone
+without a deploy, e.g. "ตอบไม่เกิน 1 ประโยค เรียกลูกค้าว่าพี่".
 
 ## What the bot can do
 
