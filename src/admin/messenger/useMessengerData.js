@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import {
   collection,
+  doc,
   limit,
   limitToLast,
   onSnapshot,
@@ -88,4 +89,20 @@ export function useMessages(conversationId) {
     [conversationId],
     'โหลดข้อความไม่สำเร็จ',
   )
+}
+
+// Global AI assistant switch (messenger_settings/ai). Missing document means off.
+export function useBotSettings() {
+  const [settings, setSettings] = useState({ enabled: false })
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => onSnapshot(doc(adminDb, 'messenger_settings', 'ai'), snapshot => {
+    setSettings({ enabled: false, ...snapshot.data() })
+    setLoading(false)
+  }, snapshotError => {
+    console.error('โหลดสถานะบอทไม่สำเร็จ', snapshotError)
+    setLoading(false)
+  }), [])
+
+  return { settings, loading }
 }

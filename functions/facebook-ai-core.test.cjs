@@ -94,6 +94,10 @@ test('replies are off unless explicitly enabled and honour pause, humans and rat
   assert.equal(shouldReply({ ...ok, recentMessages: human }).reason, 'human-active')
   const echoFromInbox = [{ direction: 'outgoing', sentBy: null, timestamp: now - 60_000 }]
   assert.equal(shouldReply({ ...ok, recentMessages: echoFromInbox }).reason, 'human-active')
+  const resumed = shouldReply({ ...ok, conversation: { botResumedAtMs: now - 30_000 }, recentMessages: human })
+  assert.equal(resumed.reply, true, 'resuming the bot overrides earlier human replies')
+  const humanAfterResume = [{ direction: 'outgoing', sentBy: 'uid-admin', timestamp: now - 10_000 }]
+  assert.equal(shouldReply({ ...ok, conversation: { botResumedAtMs: now - 30_000 }, recentMessages: humanAfterResume }).reason, 'human-active')
   const oldHuman = [{ direction: 'outgoing', sentBy: 'uid-admin', timestamp: now - 13 * 3600_000 }]
   assert.equal(shouldReply({ ...ok, recentMessages: oldHuman }).reply, true)
 

@@ -136,7 +136,9 @@ function shouldReply({ settings, conversation, text, timestamp, recentMessages, 
   if (now - timestamp > MAX_MESSAGE_AGE_MS) return { reply: false, reason: 'stale' }
 
   const outgoing = (recentMessages || []).filter(m => m.direction === 'outgoing')
-  if (outgoing.some(m => m.sentBy !== 'ai' && now - m.timestamp < HUMAN_ACTIVE_MS)) {
+  // An admin who resumes the bot overrides earlier human replies.
+  const resumedAt = Number(conversation?.botResumedAtMs) || 0
+  if (outgoing.some(m => m.sentBy !== 'ai' && m.timestamp > resumedAt && now - m.timestamp < HUMAN_ACTIVE_MS)) {
     return { reply: false, reason: 'human-active' }
   }
   const limit = Number(settings?.maxRepliesPerHour) > 0 ? Number(settings.maxRepliesPerHour) : DEFAULT_MAX_REPLIES_PER_HOUR

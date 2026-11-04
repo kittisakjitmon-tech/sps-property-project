@@ -112,7 +112,7 @@ const facebookAiReply = functions
       const recent = await loadRecentMessages(conversationRef)
       const decision = shouldReply({
         settings,
-        conversation,
+        conversation: { ...conversation, botResumedAtMs: conversation.botResumedAt?.toMillis?.() || 0 },
         text: message.text,
         timestamp: message.timestamp?.toMillis?.() || Date.now(),
         recentMessages: recent,

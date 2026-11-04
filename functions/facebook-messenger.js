@@ -550,7 +550,7 @@ async function requireAdmin(req) {
   if (role !== 'admin' && role !== 'super_admin') {
     throw httpError(403, 'บัญชีนี้ไม่มีสิทธิ์จัดการข้อความ')
   }
-  return decoded
+  return { ...decoded, role }
 }
 
 async function loadConversation(id) {
@@ -566,6 +566,35 @@ function cleanField(value, maxLength) {
 }
 
 const adminActions = {
+  // Pause or resume the AI assistant for one conversation. Resuming also clears the
+  // "needs a human" flag and tells the bot to ignore earlier human replies.
+  async setBotPaused({ conversationId: id, paused }) {
+    if (typeof paused !== 'boolean') throw httpError(400, 'ค่าสถานะบอทไม่ถูกต้อง')
+    const { conversationRef } = await loadConversation(id)
+    const FieldValue = admin.firestore.FieldValue
+    await conversationRef.set(paused
+      ? { botPaused: true }
+      : {
+        botPaused: false,
+        needsHuman: false,
+        handoffReason: FieldValue.delete(),
+        botResumedAt: admin.firestore.Timestamp.now(),
+      }, { merge: true })
+    return { success: true }
+  },
+
+  // Global on/off switch for the AI assistant. Super admins only.
+  async setBotEnabled({ enabled }, adminUser) {
+    if (adminUser.role !== 'super_admin') throw httpError(403, 'เฉพาะ Super Admin เท่านั้นที่เปิด/ปิดบอทได้')
+    if (typeof enabled !== 'boolean') throw httpError(400, 'ค่าสถานะบอทไม่ถูกต้อง')
+    await admin.firestore().doc('messenger_settings/ai').set({
+      enabled,
+      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      updatedBy: adminUser.uid,
+    }, { merge: true })
+    return { success: true }
+  },
+
   async read({ conversationId: id }) {
     const { conversationRef } = await loadConversation(id)
     await conversationRef.set({ unreadCount: 0 }, { merge: true })

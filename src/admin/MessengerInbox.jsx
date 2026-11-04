@@ -3,6 +3,7 @@ import {
   AlertCircle,
   AlertTriangle,
   ArrowLeft,
+  Bot,
   ImagePlus,
   Loader2,
   MessageCircle,
@@ -12,10 +13,12 @@ import {
   Settings2,
   UserRound,
 } from 'lucide-react'
+import { useAdminAuth } from '../context/AdminAuthContext'
 import Avatar from './messenger/Avatar'
 import ContactPanel from './messenger/ContactPanel'
 import PageManager from './messenger/PageManager'
 import {
+  useBotSettings,
   useConversations,
   useMessages,
   useMessengerApi,
@@ -74,6 +77,9 @@ function Attachment({ attachment, outgoing }) {
 
 export default function MessengerInbox() {
   const callApi = useMessengerApi()
+  const { isSuperAdmin } = useAdminAuth()
+  const { settings: botSettings, loading: botLoading } = useBotSettings()
+  const [botBusy, setBotBusy] = useState(false)
   const { items: conversations, loading: listLoading, error: listError } = useConversations()
   const { items: pages } = useMessengerPages()
   const [selectedId, setSelectedId] = useState(null)
@@ -154,6 +160,36 @@ export default function MessengerInbox() {
     }
   }
 
+  async function runBotAction(body) {
+    setBotBusy(true)
+    setActionError('')
+    try {
+      await callApi(body)
+    } catch (botError) {
+      setActionError(botError.message || 'ตั้งค่าบอทไม่สำเร็จ')
+    } finally {
+      setBotBusy(false)
+    }
+  }
+
+  function toggleBotEnabled() {
+    const turningOn = !botSettings.enabled
+    const message = turningOn
+      ? 'เปิดให้ AI ตอบข้อความลูกค้าอัตโนมัติทุกแชทที่ไม่ได้หยุดไว้?'
+      : 'ปิดการตอบอัตโนมัติของ AI ทั้งระบบ?'
+    if (!window.confirm(message)) return
+    runBotAction({ action: 'setBotEnabled', enabled: turningOn })
+  }
+
+  function toggleConversationBot() {
+    if (!selectedId) return
+    runBotAction({
+      action: 'setBotPaused',
+      conversationId: selectedId,
+      paused: selectedConversation?.botPaused !== true,
+    })
+  }
+
   async function handleSend(event) {
     event.preventDefault()
     const text = draft.trim()
@@ -183,6 +219,23 @@ export default function MessengerInbox() {
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
+          {isSuperAdmin() ? (
+            <button
+              type="button"
+              onClick={toggleBotEnabled}
+              disabled={botBusy || botLoading}
+              aria-pressed={botSettings.enabled}
+              className={`inline-flex items-center gap-2 rounded-xl border px-3 py-2 text-sm font-medium disabled:opacity-50 ${botSettings.enabled ? 'border-emerald-300 bg-emerald-50 text-emerald-800 hover:bg-emerald-100' : 'border-slate-300 bg-white text-slate-700 hover:bg-slate-50'}`}
+            >
+              {botBusy ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> : <Bot className="h-4 w-4" aria-hidden="true" />}
+              AI ตอบอัตโนมัติ: {botLoading ? '…' : botSettings.enabled ? 'เปิด' : 'ปิด'}
+            </button>
+          ) : (
+            <span className={`inline-flex items-center gap-2 rounded-xl border px-3 py-2 text-sm font-medium ${botSettings.enabled ? 'border-emerald-300 bg-emerald-50 text-emerald-800' : 'border-slate-300 bg-white text-slate-500'}`}>
+              <Bot className="h-4 w-4" aria-hidden="true" />
+              AI ตอบอัตโนมัติ: {botLoading ? '…' : botSettings.enabled ? 'เปิด' : 'ปิด'}
+            </span>
+          )}
           <label className="sr-only" htmlFor="messenger-page-filter">กรองตามเพจ</label>
           <select
             id="messenger-page-filter"
@@ -269,8 +322,13 @@ export default function MessengerInbox() {
                         </span>
                       )}
                     </div>
-                    <div className="mt-1">
+                    <div className="mt-1 flex flex-wrap items-center gap-1.5">
                       <PageBadge name={conversation.pageName || pageNames.get(conversation.pageId)} />
+                      {conversation.needsHuman && (
+                        <span className="inline-flex items-center rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-semibold text-amber-800">
+                          รอเจ้าหน้าที่
+                        </span>
+                      )}
                     </div>
                   </div>
                 </button>
@@ -308,6 +366,17 @@ export default function MessengerInbox() {
                 </div>
                 <button
                   type="button"
+                  onClick={toggleConversationBot}
+                  disabled={botBusy}
+                  aria-pressed={selectedConversation.botPaused !== true}
+                  title={selectedConversation.botPaused === true ? 'AI หยุดตอบแชทนี้อยู่ กดเพื่อให้ AI ตอบต่อ' : 'AI ตอบแชทนี้ได้ กดเพื่อหยุด AI แล้วตอบเอง'}
+                  className={`inline-flex items-center gap-1.5 rounded-lg px-3 py-2 text-xs font-medium disabled:opacity-50 ${selectedConversation.botPaused === true ? 'bg-amber-50 text-amber-800 hover:bg-amber-100' : 'bg-emerald-50 text-emerald-800 hover:bg-emerald-100'}`}
+                >
+                  <Bot className="h-4 w-4" aria-hidden="true" />
+                  <span className="hidden sm:inline">{selectedConversation.botPaused === true ? 'AI หยุด · เปิดต่อ' : 'AI ตอบอยู่ · หยุด'}</span>
+                </button>
+                <button
+                  type="button"
                   onClick={() => setContactOpen(open => !open)}
                   className={`inline-flex items-center gap-1.5 rounded-lg px-3 py-2 text-xs font-medium ${contactOpen ? 'bg-blue-50 text-blue-700' : 'text-slate-600 hover:bg-slate-100'}`}
                   aria-pressed={contactOpen}
@@ -316,6 +385,13 @@ export default function MessengerInbox() {
                   <span className="hidden sm:inline">ข้อมูลลูกค้า</span>
                 </button>
               </div>
+
+              {selectedConversation.needsHuman && (
+                <div className="flex gap-2 border-b border-amber-200 bg-amber-50 px-4 py-2 text-xs text-amber-800" role="status">
+                  <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
+                  AI ส่งต่อแชทนี้ให้เจ้าหน้าที่{selectedConversation.handoffReason ? ` (${selectedConversation.handoffReason})` : ''} · AI หยุดตอบแล้ว กด &quot;เปิดต่อ&quot; เมื่อต้องการให้ AI ตอบอีกครั้ง
+                </div>
+              )}
 
               <div className="min-h-0 flex-1 overflow-y-auto bg-slate-50 p-4 sm:p-6">
                 {messagesLoading && messages.length === 0 ? (
@@ -344,7 +420,7 @@ export default function MessengerInbox() {
                               </div>
                             )}
                             <p className={`mt-1 text-right text-[10px] ${outgoing && !imageOnly ? 'text-blue-100' : 'text-slate-400'}`}>
-                              {formatDateTime(message.timestamp)}
+                              {message.sentBy === 'ai' ? 'AI · ' : ''}{formatDateTime(message.timestamp)}
                             </p>
                           </div>
                         </div>
