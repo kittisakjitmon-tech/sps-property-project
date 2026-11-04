@@ -602,6 +602,104 @@ const TOOL_DECLARATIONS = [
   },
 ]
 
+// ─── OpenRouter (OpenAI-compatible) adapter ─────────────────────────────────
+
+// Our conversation is kept in Gemini's shape (roles user/model, parts with text,
+// functionCall, functionResponse). These helpers translate to and from the
+// OpenAI chat format that OpenRouter speaks.
+function toOpenAiTools(declarations) {
+  const convert = schema => {
+    if (Array.isArray(schema)) return schema.map(convert)
+    if (!schema || typeof schema !== 'object') return schema
+    return Object.fromEntries(Object.entries(schema).map(([key, value]) => [
+      key,
+      key === 'type' && typeof value === 'string' ? value.toLowerCase() : convert(value),
+    ]))
+  }
+  return (declarations || []).map(declaration => ({
+    type: 'function',
+    function: {
+      name: declaration.name,
+      description: declaration.description,
+      parameters: convert(declaration.parameters),
+    },
+  }))
+}
+
+function toOpenAiMessages(contents, systemInstruction) {
+  const messages = systemInstruction ? [{ role: 'system', content: systemInstruction }] : []
+  const pendingIds = []
+  let counter = 0
+  for (const content of contents || []) {
+    const parts = content.parts || []
+    const text = parts.filter(part => typeof part.text === 'string').map(part => part.text).join('\n')
+    if (content.role === 'model') {
+      const calls = parts.filter(part => part.functionCall)
+      const message = { role: 'assistant', content: text || null }
+      if (calls.length) {
+        message.tool_calls = calls.map(({ functionCall }) => {
+          const id = `call_${counter++}`
+          pendingIds.push(id)
+          return { id, type: 'function', function: { name: functionCall.name, arguments: JSON.stringify(functionCall.args || {}) } }
+        })
+      }
+      messages.push(message)
+    } else {
+      for (const part of parts.filter(item => item.functionResponse)) {
+        messages.push({
+          role: 'tool',
+          tool_call_id: pendingIds.shift() || `call_${counter++}`,
+          content: JSON.stringify(part.functionResponse.response ?? {}),
+        })
+      }
+      if (text) messages.push({ role: 'user', content: text })
+    }
+  }
+  return messages
+}
+
+function fromOpenAiMessage(message) {
+  const parts = []
+  if (typeof message?.content === 'string' && message.content.trim()) parts.push({ text: message.content })
+  for (const call of Array.isArray(message?.tool_calls) ? message.tool_calls : []) {
+    const name = call?.function?.name
+    if (typeof name !== 'string' || !name) continue
+    let args = {}
+    try { args = JSON.parse(call.function.arguments || '{}') } catch { args = {} }
+    parts.push({ functionCall: { name, args: args && typeof args === 'object' && !Array.isArray(args) ? args : {} } })
+  }
+  return parts
+}
+
+// Free-only: the model id must end in ":free" AND every price must be exactly zero,
+// so a paid model can never be picked, even by a pinned setting.
+const FREE_MODEL_PREFERENCE = [
+  'openai/gpt-oss', 'qwen/qwen3', 'google/gemma', 'meta-llama/llama-3.3', 'deepseek/', 'mistralai/', 'nvidia/', 'z-ai/',
+]
+
+function isZeroPriced(model) {
+  const pricing = model?.pricing
+  if (!pricing || pricing.prompt == null || pricing.completion == null) return false
+  return Object.values(pricing).every(value => value !== '' && value != null && Number.isFinite(Number(value)) && Number(value) === 0)
+}
+
+function selectFreeChatModels(models, { pinned } = {}) {
+  const usable = (Array.isArray(models) ? models : []).filter(model =>
+    typeof model?.id === 'string' && model.id.endsWith(':free') && isZeroPriced(model) &&
+    model.architecture?.input_modalities?.includes('text') &&
+    model.architecture?.output_modalities?.includes('text') &&
+    model.supported_parameters?.includes('tools') &&
+    Number(model.context_length) >= 16000)
+  const rank = id => {
+    const index = FREE_MODEL_PREFERENCE.findIndex(prefix => id.startsWith(prefix))
+    return index < 0 ? FREE_MODEL_PREFERENCE.length : index
+  }
+  const ordered = [...usable].sort((a, b) =>
+    rank(a.id) - rank(b.id) || Number(b.context_length) - Number(a.context_length) || a.id.localeCompare(b.id))
+  const ids = ordered.map(model => model.id)
+  return pinned && ids.includes(pinned) ? [pinned, ...ids.filter(id => id !== pinned)] : ids
+}
+
 // generate(contents) must resolve to the model's content parts for one turn.
 // handlers: { toolName(args) -> plain object }.
 async function runConversation({ generate, contents, handlers, maxRounds = MAX_TOOL_ROUNDS }) {
@@ -657,6 +755,10 @@ module.exports = {
   isTooLong,
   hardTrim,
   buildShortenRequest,
+  toOpenAiTools,
+  toOpenAiMessages,
+  fromOpenAiMessage,
+  selectFreeChatModels,
   shouldReply,
   historyToContents,
   cleanReplyText,

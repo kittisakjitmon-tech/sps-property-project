@@ -23,6 +23,7 @@ const {
   buildSystemPrompt,
   runConversation,
 } = require('./facebook-ai-core.cjs')
+const { createOpenRouterGenerate } = require('./facebook-ai-openrouter')
 const {
   CONVERSATIONS,
   FACEBOOK_SECRETS,
@@ -34,7 +35,10 @@ const {
 //   messenger_settings/ai = {
 //     enabled: true,             // OFF unless exactly true
 //     model: '...',              // Gemini model id
-//     location: 'global',        // Vertex AI region
+//     provider: 'vertex' | 'openrouter',   // who answers (default vertex)
+//     location: 'global',        // Vertex AI region (vertex only)
+//     openrouterModel: '...',    // pin a free OpenRouter model (optional; otherwise picked automatically)
+//     openrouterDataCollection: 'deny', // only use providers that don't keep prompts (may leave no free model)
 //     particle: 'ครับ' | 'ค่ะ',   // how the bot ends sentences
 //     extraInstructions: '...',  // tone / brand notes added to the prompt
 //     maxRepliesPerHour: 8,
@@ -122,7 +126,8 @@ async function loadRecentMessages(conversationRef) {
   })
 }
 
-function createGenerate({ settings, systemInstruction }) {
+function createGenerate({ settings, systemInstruction, info }) {
+  if (settings.provider === 'openrouter') return createOpenRouterGenerate({ settings, systemInstruction, info })
   const projectId = process.env.GCLOUD_PROJECT || admin.app().options.projectId
   const vertex = new VertexAI(vertexClientOptions(settings, projectId, DEFAULT_LOCATION))
   const model = vertex.getGenerativeModel({
@@ -140,16 +145,22 @@ function createGenerate({ settings, systemInstruction }) {
 // Asks the model to rewrite a too-long reply; falls back to a plain cut if that fails.
 async function shortenReply(settings, text, maxChars) {
   try {
-    const projectId = process.env.GCLOUD_PROJECT || admin.app().options.projectId
-    const vertex = new VertexAI(vertexClientOptions(settings, projectId, DEFAULT_LOCATION))
     const request = buildShortenRequest(text, maxChars, settings.particle)
-    const model = vertex.getGenerativeModel({
-      model: settings.model || DEFAULT_MODEL,
-      systemInstruction: { role: 'system', parts: [{ text: request.systemInstruction }] },
-      generationConfig: { temperature: 0.3, maxOutputTokens: 300 },
-    })
-    const result = await model.generateContent({ contents: request.contents })
-    const parts = result.response?.candidates?.[0]?.content?.parts || []
+    let parts
+    if (settings.provider === 'openrouter') {
+      const generate = createOpenRouterGenerate({ settings, systemInstruction: request.systemInstruction, withTools: false })
+      parts = await generate(request.contents)
+    } else {
+      const projectId = process.env.GCLOUD_PROJECT || admin.app().options.projectId
+      const vertex = new VertexAI(vertexClientOptions(settings, projectId, DEFAULT_LOCATION))
+      const model = vertex.getGenerativeModel({
+        model: settings.model || DEFAULT_MODEL,
+        systemInstruction: { role: 'system', parts: [{ text: request.systemInstruction }] },
+        generationConfig: { temperature: 0.3, maxOutputTokens: 300 },
+      })
+      const result = await model.generateContent({ contents: request.contents })
+      parts = result.response?.candidates?.[0]?.content?.parts || []
+    }
     const shorter = cleanReplyText(parts.map(part => part.text || '').join(''))
     if (shorter && !isTooLong(shorter, maxChars * 1.3)) return shorter
   } catch (error) {
@@ -165,7 +176,7 @@ function safeFallbackText(particle) {
 }
 
 const facebookAiReply = functions
-  .runWith({ timeoutSeconds: 120, memory: '512MB', maxInstances: 5, secrets: FACEBOOK_SECRETS })
+  .runWith({ timeoutSeconds: 120, memory: '512MB', maxInstances: 5, secrets: [...FACEBOOK_SECRETS, 'OPENROUTER_API_KEY'] })
   .firestore.document(`${CONVERSATIONS}/{conversationId}/messages/{messageDocId}`)
   .onCreate(async (snapshot, context) => {
     const message = snapshot.data()
@@ -214,6 +225,7 @@ const facebookAiReply = functions
       let lastSearchCodes = []
       const cardCodes = []
       let handoffReason = null
+      const servedBy = {}
       let appointmentRequested = false
       const contactUpdates = {}
 
@@ -289,7 +301,7 @@ const facebookAiReply = functions
         today,
       })
       const { text: rawText } = await runConversation({
-        generate: createGenerate({ settings, systemInstruction }),
+        generate: createGenerate({ settings, systemInstruction, info: servedBy }),
         contents: historyToContents(recent),
         handlers,
       })
@@ -382,6 +394,8 @@ const facebookAiReply = functions
 
       functions.logger.info('AI reply sent', {
         ...logContext,
+        provider: settings.provider === 'openrouter' ? 'openrouter' : 'vertex',
+        model: servedBy.model || settings.model || DEFAULT_MODEL,
         cards: sendCards ? cardCodes.length : 0,
         handoff: Boolean(handoffReason),
         appointment: appointmentRequested,
