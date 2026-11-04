@@ -307,6 +307,7 @@ async function storeMessengerMessage({
   attachments,
   timestamp,
   sentBy,
+  extra,
 }) {
   const db = admin.firestore()
   const id = conversationId(pageId, participantId)
@@ -330,6 +331,7 @@ async function storeMessengerMessage({
     const isLatest = timestamp >= previousMessageAt
 
     transaction.set(messageRef, {
+      ...(extra || {}),
       channel: 'facebook',
       externalId,
       direction,
@@ -591,6 +593,24 @@ const adminActions = {
       enabled,
       updatedAt: admin.firestore.FieldValue.serverTimestamp(),
       updatedBy: adminUser.uid,
+    }, { merge: true })
+    return { success: true }
+  },
+
+  // Thumbs up/down on an AI message, used to review and improve the assistant.
+  async rateAiMessage({ conversationId: id, messageId: messageDocId, rating }, adminUser) {
+    if (rating !== 'good' && rating !== 'bad') throw httpError(400, 'คะแนนไม่ถูกต้อง')
+    if (!messageDocId || typeof messageDocId !== 'string') throw httpError(400, 'ไม่พบรหัสข้อความ')
+    const { conversationRef } = await loadConversation(id)
+    const messageRef = conversationRef.collection('messages').doc(messageDocId)
+    const snapshot = await messageRef.get()
+    if (!snapshot.exists || snapshot.get('sentBy') !== 'ai') throw httpError(404, 'ไม่พบข้อความของ AI')
+    await messageRef.set({
+      aiFeedback: {
+        rating,
+        by: adminUser.uid,
+        at: admin.firestore.FieldValue.serverTimestamp(),
+      },
     }, { merge: true })
     return { success: true }
   },

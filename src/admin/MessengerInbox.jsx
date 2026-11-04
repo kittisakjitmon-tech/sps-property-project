@@ -11,6 +11,8 @@ import {
   Search,
   Send,
   Settings2,
+  ThumbsDown,
+  ThumbsUp,
   UserRound,
 } from 'lucide-react'
 import { useAdminAuth } from '../context/AdminAuthContext'
@@ -157,6 +159,15 @@ export default function MessengerInbox() {
       return false
     } finally {
       setSending(false)
+    }
+  }
+
+  async function rateAiMessage(messageId, rating) {
+    setActionError('')
+    try {
+      await callApi({ action: 'rateAiMessage', conversationId: selectedId, messageId, rating })
+    } catch (rateError) {
+      setActionError(rateError.message || 'บันทึกคะแนนไม่สำเร็จ')
     }
   }
 
@@ -324,6 +335,11 @@ export default function MessengerInbox() {
                     </div>
                     <div className="mt-1 flex flex-wrap items-center gap-1.5">
                       <PageBadge name={conversation.pageName || pageNames.get(conversation.pageId)} />
+                      {conversation.leadCapturedAt && (
+                        <span className="inline-flex items-center rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-semibold text-emerald-800">
+                          ได้ข้อมูลติดต่อแล้ว
+                        </span>
+                      )}
                       {conversation.needsHuman && (
                         <span className="inline-flex items-center rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-semibold text-amber-800">
                           รอเจ้าหน้าที่
@@ -419,9 +435,31 @@ export default function MessengerInbox() {
                                 ))}
                               </div>
                             )}
-                            <p className={`mt-1 text-right text-[10px] ${outgoing && !imageOnly ? 'text-blue-100' : 'text-slate-400'}`}>
-                              {message.sentBy === 'ai' ? 'AI · ' : ''}{formatDateTime(message.timestamp)}
-                            </p>
+                            <div className={`mt-1 flex items-center justify-end gap-2 text-[10px] ${outgoing && !imageOnly ? 'text-blue-100' : 'text-slate-400'}`}>
+                              {message.sentBy === 'ai' && (
+                                <span className="flex items-center gap-1">
+                                  <button
+                                    type="button"
+                                    onClick={() => rateAiMessage(message.id, 'good')}
+                                    aria-label="คำตอบ AI ดี"
+                                    aria-pressed={message.aiFeedback?.rating === 'good'}
+                                    className={`rounded p-0.5 hover:bg-white/20 ${message.aiFeedback?.rating === 'good' ? 'text-white' : 'opacity-60'}`}
+                                  >
+                                    <ThumbsUp className="h-3.5 w-3.5" aria-hidden="true" />
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => rateAiMessage(message.id, 'bad')}
+                                    aria-label="คำตอบ AI ไม่ดี"
+                                    aria-pressed={message.aiFeedback?.rating === 'bad'}
+                                    className={`rounded p-0.5 hover:bg-white/20 ${message.aiFeedback?.rating === 'bad' ? 'text-amber-300' : 'opacity-60'}`}
+                                  >
+                                    <ThumbsDown className="h-3.5 w-3.5" aria-hidden="true" />
+                                  </button>
+                                </span>
+                              )}
+                              <span>{message.sentBy === 'ai' ? 'AI · ' : ''}{formatDateTime(message.timestamp)}</span>
+                            </div>
                           </div>
                         </div>
                       )

@@ -188,6 +188,10 @@ service cloud.firestore {
       allow read: if isAdmin();
       allow write: if false;
     }
+    // messenger_faq: ข้อมูลบริษัท/คำถามที่พบบ่อยที่บอท AI ใช้ตอบ Admin อ่านและแก้ไขได้
+    match /messenger_faq/{id} {
+      allow read, write: if isAdmin();
+    }
     // messenger_settings: สวิตช์/ตั้งค่าบอท AI ตอบข้อความ Admin อ่านได้, Super Admin เขียนได้
     match /messenger_settings/{id} {
       allow read: if isAdmin();
