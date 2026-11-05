@@ -237,13 +237,16 @@ export default function MessengerInbox() {
     }
   }
 
-  async function addHouseImage(file, caption) {
+  // Pictures dropped or chosen (one or many) go up one by one; the first failure stops the rest.
+  async function addHouseImages(files, listingId) {
     if (!selectedId) return false
     setPropertyBusy(true)
     setActionError('')
     try {
-      const { base64, mimeType } = await imageFileToJpegBase64(file)
-      await callApi({ action: 'addConversationImage', conversationId: selectedId, imageBase64: base64, mimeType, caption })
+      for (const file of files) {
+        const { base64, mimeType } = await imageFileToJpegBase64(file)
+        await callApi({ action: 'addConversationImage', conversationId: selectedId, imageBase64: base64, mimeType, listingId })
+      }
       return true
     } catch (imageError) {
       setActionError(imageError.message || 'เพิ่มรูปไม่สำเร็จ')
@@ -253,14 +256,42 @@ export default function MessengerInbox() {
     }
   }
 
-  async function removeHouseImage(url) {
+  async function removeHouseImage(url, listingId) {
     if (!selectedId || !window.confirm('ลบรูปนี้ออกจากแชท? AI จะไม่ส่งรูปนี้ให้ลูกค้าอีก')) return
     setPropertyBusy(true)
     setActionError('')
     try {
-      await callApi({ action: 'removeConversationImage', conversationId: selectedId, url })
+      await callApi({ action: 'removeConversationImage', conversationId: selectedId, url, listingId })
     } catch (imageError) {
       setActionError(imageError.message || 'ลบรูปไม่สำเร็จ')
+    } finally {
+      setPropertyBusy(false)
+    }
+  }
+
+  async function saveListing(listing) {
+    if (!selectedId) return false
+    setPropertyBusy(true)
+    setActionError('')
+    try {
+      await callApi({ action: 'saveConversationListing', conversationId: selectedId, listing })
+      return true
+    } catch (listingError) {
+      setActionError(listingError.message || 'บันทึกบ้านไม่สำเร็จ')
+      return false
+    } finally {
+      setPropertyBusy(false)
+    }
+  }
+
+  async function removeListing(listingId) {
+    if (!selectedId || !window.confirm('ลบบ้านหลังนี้และรูปของมันออกจากแชท?')) return
+    setPropertyBusy(true)
+    setActionError('')
+    try {
+      await callApi({ action: 'removeConversationListing', conversationId: selectedId, listingId })
+    } catch (listingError) {
+      setActionError(listingError.message || 'ลบบ้านไม่สำเร็จ')
     } finally {
       setPropertyBusy(false)
     }
@@ -447,7 +478,7 @@ export default function MessengerInbox() {
                           รอเจ้าหน้าที่
                         </span>
                       )}
-                      {conversation.needsProperty && !conversation.currentPropertyCode && !conversation.staffNote && (
+                      {conversation.needsProperty && !conversation.currentPropertyCode && !conversation.staffNote && !conversation.staffListings?.length && (
                         <span className="inline-flex items-center rounded-full bg-blue-100 px-2 py-0.5 text-[10px] font-semibold text-blue-800">
                           รอรายละเอียดบ้าน
                         </span>
@@ -490,13 +521,13 @@ export default function MessengerInbox() {
                 <button
                   type="button"
                   onClick={toggleConversationBot}
-                  disabled={botBusy || (selectedConversation.botPaused === true && botSettings.requirePropertyForBot === true && !selectedConversation.currentPropertyCode && !selectedConversation.staffNote)}
+                  disabled={botBusy || (selectedConversation.botPaused === true && botSettings.requirePropertyForBot === true && !selectedConversation.currentPropertyCode && !selectedConversation.staffNote && !selectedConversation.staffListings?.length)}
                   aria-pressed={selectedConversation.botPaused !== true}
-                  title={selectedConversation.botPaused === true ? (botSettings.requirePropertyForBot === true && !selectedConversation.currentPropertyCode && !selectedConversation.staffNote ? 'เลือกทรัพย์หรือกรอกรายละเอียดบ้านก่อน จึงจะเปิดให้ AI ตอบได้' : 'AI หยุดตอบแชทนี้อยู่ กดเพื่อให้ AI ตอบต่อ') : 'AI ตอบแชทนี้ได้ กดเพื่อหยุด AI แล้วตอบเอง'}
+                  title={selectedConversation.botPaused === true ? (botSettings.requirePropertyForBot === true && !selectedConversation.currentPropertyCode && !selectedConversation.staffNote && !selectedConversation.staffListings?.length ? 'เลือกทรัพย์หรือกรอกรายละเอียดบ้านก่อน จึงจะเปิดให้ AI ตอบได้' : 'AI หยุดตอบแชทนี้อยู่ กดเพื่อให้ AI ตอบต่อ') : 'AI ตอบแชทนี้ได้ กดเพื่อหยุด AI แล้วตอบเอง'}
                   className={`inline-flex items-center gap-1.5 rounded-lg px-3 py-2 text-xs font-medium disabled:opacity-50 ${selectedConversation.botPaused === true ? 'bg-amber-50 text-amber-800 hover:bg-amber-100' : 'bg-emerald-50 text-emerald-800 hover:bg-emerald-100'}`}
                 >
                   <Bot className="h-4 w-4" aria-hidden="true" />
-                  <span className="hidden sm:inline">{selectedConversation.botPaused === true ? 'AI หยุด · เปิดต่อ' : (botSettings.requirePropertyForBot === true && !selectedConversation.currentPropertyCode && !selectedConversation.staffNote) ? 'AI รอรายละเอียดบ้าน · หยุด' : 'AI ตอบอยู่ · หยุด'}</span>
+                  <span className="hidden sm:inline">{selectedConversation.botPaused === true ? 'AI หยุด · เปิดต่อ' : (botSettings.requirePropertyForBot === true && !selectedConversation.currentPropertyCode && !selectedConversation.staffNote && !selectedConversation.staffListings?.length) ? 'AI รอรายละเอียดบ้าน · หยุด' : 'AI ตอบอยู่ · หยุด'}</span>
                 </button>
                 <button
                   type="button"
@@ -518,8 +549,10 @@ export default function MessengerInbox() {
                 onSet={changeConversationProperty}
                 onClear={() => changeConversationProperty('')}
                 onSaveNote={changeConversationNote}
-                onAddImage={addHouseImage}
+                onAddImages={addHouseImages}
                 onRemoveImage={removeHouseImage}
+                onSaveListing={saveListing}
+                onRemoveListing={removeListing}
               />
 
               {selectedConversation.needsHuman && (

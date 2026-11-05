@@ -667,3 +667,70 @@ test('the checklist shown in the admin dialog is the same text the bot uses by d
   const literal = source.slice(source.indexOf('= ') + 2).trim()
   assert.equal(JSON.parse(literal), DEFAULT_CREDIT_CHECKLIST)
 })
+
+// ─── Houses the team types in by hand ────────────────────────────────────────
+const { sanitizeStaffListing, formatStaffListings } = require('./facebook-ai-core.cjs')
+
+test('a typed-in house keeps sensible values and needs a name or details', () => {
+  const ok = sanitizeStaffListing({
+    title: '  บ้านเดี่ยว 2 ชั้น โครงการสวนสวย ', type: 'บ้านเดี่ยว', listing: 'sale', location: 'พานทอง', bedrooms: '3', bathrooms: 2,
+    price: '2,490,000', priceNote: 'เริ่มต้น', priceVisible: true, details: 'ที่จอดรถ 2 คัน ฟรีค่าโอน',
+  })
+  assert.equal(ok.ok, true)
+  assert.deepEqual(ok.value, {
+    title: 'บ้านเดี่ยว 2 ชั้น โครงการสวนสวย', type: 'บ้านเดี่ยว', listing: 'sale', location: 'พานทอง', bedrooms: 3, bathrooms: 2,
+    price: 2490000, priceNote: 'เริ่มต้น', priceVisible: true, details: 'ที่จอดรถ 2 คัน ฟรีค่าโอน',
+  })
+  assert.equal(sanitizeStaffListing({}).ok, false)
+  assert.equal(sanitizeStaffListing({ title: '   ', details: '' }).ok, false)
+  assert.equal(sanitizeStaffListing({ details: 'มีแต่รายละเอียด' }).ok, true)
+})
+
+test('prices, room counts and lengths are checked; the picture list cannot be typed in', () => {
+  assert.equal(sanitizeStaffListing({ title: 'x', price: 'abc' }).ok, false)
+  assert.equal(sanitizeStaffListing({ title: 'x', price: -5 }).ok, false)
+  assert.equal(sanitizeStaffListing({ title: 'x', price: 5e9 }).ok, false)
+  assert.equal(sanitizeStaffListing({ title: 'x', price: '' }).value.price, null)
+  assert.equal(sanitizeStaffListing({ title: 'x', price: 0 }).ok, false)
+  const odd = sanitizeStaffListing({ title: 'x', bedrooms: 99, bathrooms: -1, priceVisible: 'no', listing: 'whatever', type: 'วิลล่า' }).value
+  assert.equal(odd.bedrooms, null)
+  assert.equal(odd.bathrooms, null)
+  assert.equal(odd.priceVisible, true) // only an explicit false hides the price
+  assert.equal(odd.listing, 'sale')
+  assert.equal(odd.type, 'วิลล่า')
+  const long = sanitizeStaffListing({ title: 'ก'.repeat(500), details: 'ข'.repeat(5000) }).value
+  assert.equal(long.title.length, 80)
+  assert.equal(long.details.length, 600)
+  assert.equal('images' in sanitizeStaffListing({ title: 'x', images: [{ url: 'https://evil.example/a.png' }], id: 'abc' }).value, false)
+})
+
+test('houses typed in by the team are given to the AI with their price, or masked when not to be told', () => {
+  const lines = formatStaffListings([
+    { id: 'a1', type: 'บ้านเดี่ยว', title: 'สวนสวย', location: 'พานทอง', bedrooms: 3, bathrooms: 2, price: 2490000, priceNote: 'เริ่มต้น', priceVisible: true, details: 'ฟรีค่าโอน', images: [{ url: 'u' }, { url: 'v' }] },
+    { id: 'b2', type: 'บ้านแฝด', title: 'แฝดสุขใจ', price: 1850000, priceVisible: false, listing: 'sale' },
+    { id: 'c3', type: 'ทาวน์โฮม', title: 'ไม่มีราคา' },
+    { id: 'd4', type: 'บ้านเช่า', title: 'เช่า', price: 12000, priceVisible: true, listing: 'rent' },
+  ])
+  assert.equal(lines.length, 4)
+  assert.match(lines[0], /id=a1/)
+  assert.match(lines[0], /บ้านเดี่ยว สวนสวย/)
+  assert.match(lines[0], /3 นอน 2 น้ำ/)
+  assert.match(lines[0], /ราคา: 2,490,000 บาท \(เริ่มต้น\)/)
+  assert.match(lines[0], /มีรูปแบบบ้าน 2 รูป/)
+  assert.match(lines[1], /ประมาณ 1\.8xxx ล้านบาท/)
+  assert.ok(!lines[1].includes('1850000') && !lines[1].includes('1,850,000'))
+  assert.match(lines[2], /ไม่ได้ระบุราคา/)
+  assert.match(lines[3], /12,000 บาท\/เดือน/)
+  assert.deepEqual(formatStaffListings(undefined), [])
+  assert.equal(formatStaffListings(Array.from({ length: 30 }, (_, n) => ({ id: `i${n}`, title: 't' }))).length, 10)
+})
+
+test('the prompt lists the team\'s houses, tells the AI not to invent links, and is silent when there are none', () => {
+  const prompt = buildSystemPrompt({ isFirstReply: false, staffListings: [{ id: 'a1', type: 'บ้านแฝด', title: 'แฝดสุขใจ', price: 1850000, priceVisible: true }] })
+  assert.match(prompt, /บ้านที่ทีมงานกรอกไว้สำหรับแชทนี้/)
+  assert.match(prompt, /id=a1 \| บ้านแฝด แฝดสุขใจ/)
+  assert.match(prompt, /listingId/)
+  assert.ok(!buildSystemPrompt({ isFirstReply: false }).includes('บ้านที่ทีมงานกรอกไว้สำหรับแชทนี้'))
+  const tool = TOOL_DECLARATIONS.find(item => item.name === 'send_house_images')
+  assert.ok(tool.parameters.properties.listingId)
+})

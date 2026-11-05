@@ -347,6 +347,77 @@ function findPropertyByRef({ code, url }, catalog) {
   return null
 }
 
+// ─── Houses the team types in by hand (e.g. from a post with several houses) ──
+
+const MAX_STAFF_LISTINGS = 10
+const LISTING_TYPES = ['บ้านเดี่ยว', 'บ้านแฝด', 'ทาวน์โฮม', 'คอนโด', 'ที่ดิน', 'อื่นๆ']
+
+// A house the team wrote down for one chat. Only the typed fields: pictures are kept by the
+// server and never come from this input. Returns { ok, value } or { ok: false, error }.
+function sanitizeStaffListing(input = {}) {
+  const title = clean(input.title, 80)
+  const details = clean(input.details, 600)
+  if (!title && !details) return { ok: false, error: 'กรุณาใส่ชื่อบ้านหรือรายละเอียดอย่างน้อยหนึ่งอย่าง' }
+  const count = (value, max) => {
+    const n = toNumber(value)
+    return n != null && n >= 0 && n <= max ? Math.round(n) : null
+  }
+  // People type "2,490,000" or "2490000 บาท".
+  const typedPrice = typeof input.price === 'string' ? input.price.replace(/[,\s]|บาท/g, '') : input.price
+  const rawPrice = toNumber(typedPrice)
+  if (typedPrice !== undefined && typedPrice !== null && typedPrice !== '' && !(rawPrice > 0 && rawPrice <= 1000000000)) {
+    return { ok: false, error: 'ราคาไม่ถูกต้อง ใส่เป็นตัวเลข (บาท)' }
+  }
+  const type = clean(input.type, 40)
+  return {
+    ok: true,
+    value: {
+      title,
+      type: LISTING_TYPES.includes(type) ? type : (type || ''),
+      listing: input.listing === 'rent' ? 'rent' : 'sale',
+      location: clean(input.location, 80),
+      bedrooms: count(input.bedrooms, 20),
+      bathrooms: count(input.bathrooms, 20),
+      price: rawPrice > 0 ? Math.round(rawPrice) : null,
+      priceNote: clean(input.priceNote, 40),
+      priceVisible: input.priceVisible !== false,
+      details,
+    },
+  }
+}
+
+// Lines for the prompt. A price the team marked "do not tell" is given only as the masked
+// approximation, like a hidden price in the catalog.
+function formatStaffListings(listings) {
+  return (Array.isArray(listings) ? listings : []).slice(0, MAX_STAFF_LISTINGS).map(item => {
+    let price = 'ไม่ได้ระบุราคา ให้ทีมงานแจ้ง'
+    if (item.price > 0 && item.priceVisible !== false) {
+      price = `${formatPrice(item.price, item.listing)}${item.priceNote ? ` (${item.priceNote})` : ''}`
+    } else if (item.price > 0) {
+      const masked = maskPrice(item.price, item.listing)
+      price = masked
+        ? `ไม่เปิดเผยราคาจริง ให้บอกได้เฉพาะประมาณ ${masked} และบอกว่าทีมงานจะแจ้งราคาจริง`
+        : 'ไม่เปิดเผยราคา ให้ทีมงานแจ้ง'
+    }
+    const rooms = [
+      item.bedrooms != null ? `${item.bedrooms} นอน` : '',
+      item.bathrooms != null ? `${item.bathrooms} น้ำ` : '',
+    ].filter(Boolean).join(' ')
+    const pictures = Array.isArray(item.images) && item.images.length ? `มีรูปแบบบ้าน ${item.images.length} รูป` : ''
+    const parts = [
+      `id=${item.id}`,
+      [item.type, item.title].filter(Boolean).join(' '),
+      item.listing === 'rent' ? 'เช่า' : '',
+      item.location,
+      rooms,
+      `ราคา: ${price}`,
+      item.details ? clean(item.details, 600) : '',
+      pictures,
+    ].filter(Boolean)
+    return `- ${parts.join(' | ')}`
+  })
+}
+
 // ─── Cards (Messenger generic template) ──────────────────────────────────────
 
 function buildCardElements(properties) {
@@ -774,7 +845,7 @@ function estimateLoan(args = {}, settings = {}) {
 
 // ─── Prompt & tools ──────────────────────────────────────────────────────────
 
-function buildSystemPrompt({ isFirstReply, particle = 'ครับ', extraInstructions = '', faq = [], today, focus = [], imagesEnabled = false, staffNote = '', creditChecklist = '', staffImages = [] } = {}) {
+function buildSystemPrompt({ isFirstReply, particle = 'ครับ', extraInstructions = '', faq = [], today, focus = [], imagesEnabled = false, staffNote = '', creditChecklist = '', staffImages = [], staffListings = [] } = {}) {
   const p = particle === 'ค่ะ' ? 'ค่ะ' : 'ครับ'
   const faqBlock = (faq || []).length
     ? [
@@ -796,6 +867,15 @@ function buildSystemPrompt({ isFirstReply, particle = 'ครับ', extraInstr
     ? [
       '',
       `ทีมงานแนบรูปแบบบ้านไว้ในแชทนี้ ${staffImages.length} รูป${imageCaptions.length ? ` (${imageCaptions.join(', ')})` : ''} ถ้าลูกค้าขอดูแบบบ้าน แปลน หรือรูปเพิ่ม ให้เรียก send_house_images แล้วบอกสั้นๆ ว่าส่งให้แล้ว ห้ามส่งรูปเมื่อลูกค้าไม่ได้ขอ`,
+    ]
+    : []
+  const listingLines = formatStaffListings(staffListings)
+  const listingsBlock = listingLines.length
+    ? [
+      '',
+      'บ้านที่ทีมงานกรอกไว้สำหรับแชทนี้ (มาจากโพสต์หรือข้อมูลของทีมงาน ไม่ได้อยู่ในฐานข้อมูลทรัพย์ ใช้ตอบได้ทันที ถ้าลูกค้าถามถึงบ้านประเภทหรือราคาใด ให้ตอบตามรายการนี้ ห้ามบอกว่าไม่มีข้อมูล ห้ามแต่งข้อมูลที่ไม่มีในรายการ):',
+      ...listingLines,
+      'ลิงก์ของเว็บไม่มีสำหรับบ้านเหล่านี้ ห้ามสร้างลิงก์ ถ้าลูกค้าอยากดูรูปแบบบ้านให้เรียก send_house_images พร้อม listingId ของบ้านหลังนั้น',
     ]
     : []
   const noteText = clean(staffNote, 1500)
@@ -869,6 +949,7 @@ function buildSystemPrompt({ isFirstReply, particle = 'ครับ', extraInstr
       ? `- นี่คือการตอบครั้งแรก ให้ทักทายสั้นๆ ประโยคเดียว แนะนำตัวว่าเป็นผู้ช่วย AI ของ SPS (เช่น "สวัสดี${p} ผมเป็นผู้ช่วย AI ของ SPS นะ${p}") แล้วตอบคำถามต่อเลย และให้ลูกค้ารู้ว่าขอคุยกับทีมงานได้`
       : '- ไม่ต้องแนะนำตัวซ้ำ',
     ...focusBlock,
+    ...listingsBlock,
     ...noteBlock,
     ...imagesBlock,
     ...faqBlock,
@@ -995,8 +1076,13 @@ const TOOL_DECLARATIONS = [
   },
   {
     name: 'send_house_images',
-    description: 'ส่งรูปแบบบ้านที่ทีมงานแนบไว้ในแชทนี้ให้ลูกค้า ใช้เมื่อลูกค้าขอดูแบบบ้าน แปลน หรือรูปเพิ่มเท่านั้น',
-    parameters: { type: 'OBJECT', properties: {} },
+    description: 'ส่งรูปแบบบ้านที่ทีมงานแนบไว้ในแชทนี้ให้ลูกค้า ใช้เมื่อลูกค้าขอดูแบบบ้าน แปลน หรือรูปเพิ่มเท่านั้น ถ้าทีมงานกรอกบ้านหลายหลัง ให้ระบุ listingId ของหลังที่ลูกค้าถาม',
+    parameters: {
+      type: 'OBJECT',
+      properties: {
+        listingId: { type: 'STRING', description: 'id ของบ้านในรายการที่ทีมงานกรอก (ดูจาก id= ในรายการ)' },
+      },
+    },
   },
   {
     name: 'request_human',
@@ -1158,6 +1244,9 @@ module.exports = {
   normalizeEmail,
   sanitizeCustomerInfo,
   validateAppointment,
+  sanitizeStaffListing,
+  formatStaffListings,
+  MAX_STAFF_LISTINGS,
   sanitizeCreditProfile,
   DEFAULT_CREDIT_CHECKLIST,
   estimateLoan,

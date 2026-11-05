@@ -2,6 +2,7 @@ const crypto = require('node:crypto')
 const axios = require('axios')
 const admin = require('firebase-admin')
 const functions = require('firebase-functions')
+const { sanitizeStaffListing, MAX_STAFF_LISTINGS } = require('./facebook-ai-core.cjs')
 
 const CONVERSATIONS = 'messenger_conversations'
 const PAGES = 'messenger_pages'
@@ -568,6 +569,13 @@ function cleanField(value, maxLength) {
   return typeof value === 'string' ? value.trim().slice(0, maxLength) : ''
 }
 
+async function deleteStaffImageFile(conversationId, image) {
+  if (!image?.path) return
+  await admin.storage().bucket().file(image.path).delete().catch(error => {
+    functions.logger.warn('Could not delete staff image file', { conversationId, reason: error.message })
+  })
+}
+
 const adminActions = {
   // Pause or resume the AI assistant for one conversation. Resuming also clears the
   // "needs a human" flag and tells the bot to ignore earlier human replies.
@@ -578,8 +586,8 @@ const adminActions = {
     if (!paused) {
       // When the team asks for it, the AI only answers chats that have a property set.
       const aiSettings = (await admin.firestore().doc('messenger_settings/ai').get()).data() || {}
-      if (aiSettings.requirePropertyForBot === true && !data.currentPropertyCode && !cleanField(data.staffNote, 2000)) {
-        throw httpError(409, 'ต้องเลือกทรัพย์หรือกรอกรายละเอียดบ้านของแชทนี้ก่อน จึงจะเปิดให้ AI ตอบได้')
+      if (aiSettings.requirePropertyForBot === true && !data.currentPropertyCode && !cleanField(data.staffNote, 2000) && !(Array.isArray(data.staffListings) && data.staffListings.length)) {
+        throw httpError(409, 'ต้องเลือกทรัพย์ เพิ่มบ้านที่กรอกเอง หรือกรอกรายละเอียดบ้านของแชทนี้ก่อน จึงจะเปิดให้ AI ตอบได้')
       }
     }
     await conversationRef.set(paused
@@ -649,36 +657,91 @@ const adminActions = {
     return { success: true, length: text.length }
   },
 
-  // House-plan pictures the team attaches to a chat; the AI sends them when the customer asks.
-  async addConversationImage({ conversationId: id, imageBase64, mimeType, caption }, adminUser) {
-    const { data } = await loadConversation(id)
+  // Houses the team types in for one chat (for example from a post with several houses that
+  // are not in the property database). Pictures are managed by the image actions below.
+  async saveConversationListing({ conversationId: id, listing }, adminUser) {
+    const { conversationRef, data } = await loadConversation(id)
+    const checked = sanitizeStaffListing(listing && typeof listing === 'object' ? listing : {})
+    if (!checked.ok) throw httpError(400, checked.error)
+    const existing = Array.isArray(data.staffListings) ? data.staffListings : []
+    const wantedId = typeof listing?.id === 'string' ? listing.id : ''
+    const index = wantedId ? existing.findIndex(item => item.id === wantedId) : -1
+    if (wantedId && index === -1) throw httpError(404, 'ไม่พบบ้านรายการนี้ อาจถูกลบไปแล้ว')
+    if (index === -1 && existing.length >= MAX_STAFF_LISTINGS) {
+      throw httpError(409, `เพิ่มบ้านได้ไม่เกิน ${MAX_STAFF_LISTINGS} รายการต่อแชท กรุณาลบรายการเก่าก่อน`)
+    }
+    const saved = {
+      ...checked.value,
+      id: index === -1 ? crypto.randomUUID().replace(/-/g, '').slice(0, 10) : existing[index].id,
+      images: index === -1 ? [] : (existing[index].images || []),
+      updatedAt: Date.now(),
+      updatedBy: adminUser.uid,
+    }
+    const next = index === -1 ? [...existing, saved] : existing.map((item, position) => (position === index ? saved : item))
+    await conversationRef.set({
+      staffListings: next,
+      needsProperty: admin.firestore.FieldValue.delete(),
+    }, { merge: true })
+    return { success: true, listing: saved }
+  },
+
+  async removeConversationListing({ conversationId: id, listingId }) {
+    const { conversationRef, data } = await loadConversation(id)
+    const existing = Array.isArray(data.staffListings) ? data.staffListings : []
+    const target = existing.find(item => item.id === listingId)
+    if (!target) throw httpError(404, 'ไม่พบบ้านรายการนี้')
+    await conversationRef.set({ staffListings: existing.filter(item => item.id !== listingId) }, { merge: true })
+    for (const image of target.images || []) await deleteStaffImageFile(id, image)
+    return { success: true }
+  },
+
+  // House-plan pictures the team attaches to a chat, or to one of its typed-in houses
+  // (listingId); the AI sends them when the customer asks.
+  async addConversationImage({ conversationId: id, imageBase64, mimeType, caption, listingId }, adminUser) {
+    const { conversationRef, data } = await loadConversation(id)
     const extension = OUTGOING_IMAGE_TYPES[mimeType]
     if (!extension) throw httpError(400, 'รองรับเฉพาะไฟล์ JPG, PNG หรือ GIF')
     if (typeof imageBase64 !== 'string' || !imageBase64) throw httpError(400, 'ไม่พบไฟล์รูปภาพ')
     const buffer = Buffer.from(imageBase64, 'base64')
     if (!buffer.length) throw httpError(400, 'ไฟล์รูปภาพไม่ถูกต้อง')
     if (buffer.length > MAX_OUTGOING_IMAGE_BYTES) throw httpError(400, 'รูปภาพต้องมีขนาดไม่เกิน 8 MB')
-    const existing = Array.isArray(data.staffImages) ? data.staffImages : []
-    if (existing.length >= STAFF_IMAGE_LIMIT) throw httpError(409, `แนบรูปได้ไม่เกิน ${STAFF_IMAGE_LIMIT} รูปต่อแชท กรุณาลบรูปเก่าก่อน`)
+
+    const listings = Array.isArray(data.staffListings) ? data.staffListings : []
+    const listingIndex = listingId ? listings.findIndex(item => item.id === listingId) : -1
+    if (listingId && listingIndex === -1) throw httpError(404, 'ไม่พบบ้านรายการนี้ อาจถูกลบไปแล้ว')
+    const current = listingId ? (listings[listingIndex].images || []) : (Array.isArray(data.staffImages) ? data.staffImages : [])
+    if (current.length >= STAFF_IMAGE_LIMIT) {
+      throw httpError(409, `แนบรูปได้ไม่เกิน ${STAFF_IMAGE_LIMIT} รูป กรุณาลบรูปเก่าก่อน`)
+    }
 
     const path = `messenger/${id}/staff-${crypto.randomUUID()}.${extension}`
     const url = await saveBufferToStorage(path, buffer, mimeType)
     const image = { url, path, caption: cleanField(caption, 60), addedBy: adminUser.uid, addedAt: Date.now() }
-    await admin.firestore().collection(CONVERSATIONS).doc(id).set({ staffImages: [...existing, image] }, { merge: true })
+    if (listingId) {
+      const next = listings.map((item, position) => (position === listingIndex ? { ...item, images: [...current, image] } : item))
+      await conversationRef.set({ staffListings: next }, { merge: true })
+    } else {
+      await conversationRef.set({ staffImages: [...current, image] }, { merge: true })
+    }
     return { success: true, image }
   },
 
-  async removeConversationImage({ conversationId: id, url }) {
+  async removeConversationImage({ conversationId: id, url, listingId }) {
     const { conversationRef, data } = await loadConversation(id)
-    const existing = Array.isArray(data.staffImages) ? data.staffImages : []
-    const target = existing.find(image => image.url === url)
+    const listings = Array.isArray(data.staffListings) ? data.staffListings : []
+    const listingIndex = listingId ? listings.findIndex(item => item.id === listingId) : -1
+    if (listingId && listingIndex === -1) throw httpError(404, 'ไม่พบบ้านรายการนี้')
+    const current = listingId ? (listings[listingIndex].images || []) : (Array.isArray(data.staffImages) ? data.staffImages : [])
+    const target = current.find(image => image.url === url)
     if (!target) throw httpError(404, 'ไม่พบรูปนี้ในแชท')
-    await conversationRef.set({ staffImages: existing.filter(image => image.url !== url) }, { merge: true })
-    if (target.path) {
-      await admin.storage().bucket().file(target.path).delete().catch(error => {
-        functions.logger.warn('Could not delete staff image file', { conversationId: id, reason: error.message })
-      })
+    const remaining = current.filter(image => image.url !== url)
+    if (listingId) {
+      const next = listings.map((item, position) => (position === listingIndex ? { ...item, images: remaining } : item))
+      await conversationRef.set({ staffListings: next }, { merge: true })
+    } else {
+      await conversationRef.set({ staffImages: remaining }, { merge: true })
     }
+    await deleteStaffImageFile(id, target)
     return { success: true }
   },
 

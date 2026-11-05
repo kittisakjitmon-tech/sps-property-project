@@ -818,3 +818,104 @@ test('an area with no listings is not filled with other zones unless the custome
   await receive('ได้ครับ โซนใกล้เคียงก็ได้')
   assert.ok(second.total > 0)
 })
+
+// ─── Houses typed in by the team ─────────────────────────────────────────────
+const PIC = n => ({ url: `https://firebasestorage.googleapis.com/v0/b/x/o/h${n}?alt=media`, caption: `รูป ${n}` })
+const LISTINGS = [
+  { id: 'aaa1', type: 'บ้านเดี่ยว', title: 'สวนสวย', listing: 'sale', bedrooms: 3, price: 2490000, priceNote: 'เริ่มต้น', priceVisible: true, details: 'ที่จอดรถ 2 คัน', images: [PIC(1), PIC(2)] },
+  { id: 'bbb2', type: 'บ้านแฝด', title: 'แฝดสุขใจ', listing: 'sale', bedrooms: 3, price: 1850000, priceVisible: false, details: 'ใกล้นิคม', images: [PIC(3)] },
+]
+const withListings = (listings, extra = {}) => store.set('messenger_conversations/conv1', { pageId: 'P1', participantId: 'U1', pageName: 'เพจ', staffListings: listings, ...extra })
+
+test('the AI answers from houses the team typed in, with their prices and no web link', async () => {
+  withListings(LISTINGS)
+  const prompt = await capturePrompt(async () => {
+    model([{ text: 'บ้านเดี่ยวเริ่มต้น 2,490,000 บาท ส่วนบ้านแฝดประมาณ 1.8xxx ล้านบาทครับ' }])
+    await receive('มีบ้านเดี่ยวกับบ้านแฝดราคาเท่าไหร่คะ')
+  })
+  assert.match(prompt, /id=aaa1 \| บ้านเดี่ยว สวนสวย/)
+  assert.match(prompt, /ราคา: 2,490,000 บาท \(เริ่มต้น\)/)
+  assert.match(prompt, /id=bbb2 \| บ้านแฝด แฝดสุขใจ/)
+  assert.match(prompt, /ประมาณ 1\.8xxx ล้านบาท/)
+  assert.ok(!prompt.includes('1850000') && !prompt.includes('1,850,000'))
+  assert.equal(sent.length, 1)
+})
+
+test('a price the team marked "do not tell" is blocked if the AI says it anyway', async () => {
+  withListings(LISTINGS)
+  model([{ text: 'บ้านแฝดราคา 1,850,000 บาทครับ' }])
+  await receive('บ้านแฝดราคาเท่าไหร่')
+  assert.doesNotMatch(sent[0].message.text, /1,850,000/)
+  assert.equal(conversation().botPaused, true)
+  assert.match(conversation().handoffReason, /ราคาจริง/)
+})
+
+test('a visible typed-in price can be said freely', async () => {
+  withListings(LISTINGS)
+  model([{ text: 'บ้านเดี่ยวเริ่มต้น 2,490,000 บาทครับ' }])
+  await receive('บ้านเดี่ยวราคาเท่าไหร่')
+  assert.match(sent[0].message.text, /2,490,000/)
+  assert.equal(conversation().botPaused, undefined)
+})
+
+test('plans are sent for the house the customer asked about, by listingId', async () => {
+  withListings(LISTINGS)
+  model(
+    [{ functionCall: { name: 'send_house_images', args: { listingId: 'bbb2' } } }],
+    [{ text: 'ส่งแปลนบ้านแฝดให้แล้วครับ' }],
+  )
+  await receive('ขอดูแปลนบ้านแฝดหน่อยครับ')
+  assert.equal(sent.length, 2)
+  assert.equal(sent[1].message.attachment.payload.url, PIC(3).url)
+  assert.equal(stored.filter(message => message.extra?.kind === 'images').length, 1)
+})
+
+test('with pictures on several houses and no listingId the AI is asked which one; one wrong id is refused', async () => {
+  withListings(LISTINGS)
+  const answers = []
+  const attempt = args => {
+    modelScript = [
+      async () => [{ functionCall: { name: 'send_house_images', args } }],
+      async contents => { answers.push(contents.at(-1).parts[0].functionResponse.response); return [{ text: 'ครับ' }] },
+    ]
+    return receive('ขอดูแปลน')
+  }
+  await attempt({})
+  await attempt({ listingId: 'nope' })
+  assert.match(answers[0].error, /listingId/)
+  assert.equal(answers[1].ok, false)
+  assert.equal(sent.filter(item => item.message.attachment).length, 0)
+})
+
+test('with exactly one house that has pictures, no listingId is needed', async () => {
+  withListings([LISTINGS[1]])
+  model([{ functionCall: { name: 'send_house_images', args: {} } }], [{ text: 'ส่งให้แล้วครับ' }])
+  await receive('ขอดูแปลน')
+  assert.equal(sent.length, 2)
+  assert.equal(sent[1].message.attachment.payload.url, PIC(3).url)
+})
+
+test('chat-level pictures win when there are some, and a house without pictures says so', async () => {
+  withListings([{ ...LISTINGS[0], images: [] }], { staffImages: [PIC(9)] })
+  model([{ functionCall: { name: 'send_house_images', args: {} } }], [{ text: 'ส่งให้แล้วครับ' }])
+  await receive('ขอดูแปลน')
+  assert.equal(sent[1].message.attachment.payload.url, PIC(9).url)
+
+  withListings([{ ...LISTINGS[0], images: [] }])
+  let answer
+  modelScript = [
+    async () => [{ functionCall: { name: 'send_house_images', args: { listingId: 'aaa1' } } }],
+    async contents => { answer = contents.at(-1).parts[0].functionResponse.response; return [{ text: 'ทีมงานจะส่งให้ครับ' }] },
+  ]
+  await receive('ขอดูแปลนอีกที')
+  assert.equal(answer.ok, false)
+})
+
+test('in "property first" mode houses typed in by the team count as house details', async () => {
+  store.set('messenger_settings/ai', { enabled: true, requirePropertyForBot: true })
+  withListings(LISTINGS, { needsProperty: true })
+  model([{ text: 'มีครับ' }])
+  await receive('มีบ้านไหมคะ')
+  assert.equal(sent.length, 1)
+  assert.equal(conversation().needsProperty, undefined)
+})

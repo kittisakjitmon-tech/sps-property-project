@@ -278,7 +278,9 @@ const facebookAiReply = functions
       // "Property first" mode: the AI waits until the chat has a property (set by the team,
       // named by the customer with a link or code) or house details written by the team. The inbox shows a badge meanwhile.
       const staffNote = typeof conversation.staffNote === 'string' ? conversation.staffNote.trim() : ''
-      if (settings.requirePropertyForBot === true && !focus.length && !staffNote) {
+      const staffListings = (Array.isArray(conversation.staffListings) ? conversation.staffListings : [])
+        .filter(item => item && typeof item.id === 'string')
+      if (settings.requirePropertyForBot === true && !focus.length && !staffNote && !staffListings.length) {
         functions.logger.info('AI reply skipped', { ...logContext, reason: 'no-property' })
         await conversationRef.set({ needsProperty: true }, { merge: true })
         return null
@@ -401,11 +403,27 @@ const facebookAiReply = functions
           creditProfileUpdate = { ...creditProfileUpdate, ...profile }
           return { ok: true, saved: Object.keys(profile) }
         },
-        send_house_images: () => {
-          if (!staffImages.length) {
-            return { ok: false, error: 'ทีมงานยังไม่ได้แนบรูปแบบบ้านในแชทนี้ ให้บอกลูกค้าว่าทีมงานจะส่งให้ และขอเบอร์ติดต่อ' }
+        send_house_images: args => {
+          const wantedId = typeof args?.listingId === 'string' ? args.listingId.trim() : ''
+          let pictures
+          if (wantedId) {
+            const listing = staffListings.find(item => item.id === wantedId)
+            if (!listing) return { ok: false, error: 'ไม่พบบ้านรายการนี้ ใช้ id จากรายการบ้านที่ทีมงานกรอกเท่านั้น' }
+            pictures = Array.isArray(listing.images) ? listing.images : []
+          } else if (staffImages.length) {
+            pictures = staffImages
+          } else {
+            const withPictures = staffListings.filter(item => Array.isArray(item.images) && item.images.length)
+            if (withPictures.length > 1) {
+              return { ok: false, error: 'มีรูปของบ้านหลายหลัง ให้ระบุ listingId ของหลังที่ลูกค้าถาม' }
+            }
+            pictures = withPictures[0]?.images || []
           }
-          houseImagesToSend = staffImages.slice(0, MAX_HOUSE_IMAGES)
+          pictures = pictures.filter(image => typeof image?.url === 'string')
+          if (!pictures.length) {
+            return { ok: false, error: 'ทีมงานยังไม่ได้แนบรูปแบบบ้านนี้ ให้บอกลูกค้าว่าทีมงานจะส่งให้ และขอเบอร์ติดต่อ' }
+          }
+          houseImagesToSend = pictures.slice(0, MAX_HOUSE_IMAGES)
           return { ok: true, queued: houseImagesToSend.length }
         },
         request_human: args => {
@@ -427,6 +445,7 @@ const facebookAiReply = functions
         focus,
         imagesEnabled: imageCfg.enabled,
         staffNote,
+        staffListings,
         creditChecklist: settings.creditChecklist,
         staffImages,
       })
@@ -460,7 +479,11 @@ const facebookAiReply = functions
       let text = sanitizeUrls(replyText, allowedUrls)
       // A price that is public on another listing is not a secret, so don't count it as a leak.
       const visiblePrices = new Set(catalog.filter(p => !p._hidden && p._numericPrice).map(p => p._numericPrice))
-      const hiddenPrices = catalog.filter(p => p._hidden && p._numericPrice && !visiblePrices.has(p._numericPrice)).map(p => p._numericPrice)
+      for (const item of staffListings) if (item.priceVisible !== false && item.price > 0) visiblePrices.add(item.price)
+      const hiddenPrices = [
+        ...catalog.filter(p => p._hidden && p._numericPrice && !visiblePrices.has(p._numericPrice)).map(p => p._numericPrice),
+        ...staffListings.filter(item => item.priceVisible === false && item.price > 0 && !visiblePrices.has(item.price)).map(item => item.price),
+      ]
       const customerText = recent.filter(m => m.direction === 'incoming').map(m => m.text).join(' ')
       let sendCards = cardCodes.length > 0
       let blockedByGuard = false

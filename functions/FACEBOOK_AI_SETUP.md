@@ -125,6 +125,21 @@ whether nearby zones are fine. Listings from other zones are only searched, and 
 after the customer asks for or agrees to nearby zones (`allowNearbyZones`). The search result
 tells the AI whether other zones have matches, but never lists them.
 
+## Houses the team types in (not in the database)
+
+A post can show several houses that are not in the property database. In each chat the team can
+add up to 10 houses by hand (**บ้านที่แอดมินกรอกเอง**): type (detached / twin / townhome / condo /
+land / other), name, sale or rent, area, bedrooms, bathrooms, price, a price note (e.g. "starting
+from"), details, and up to 6 pictures per house (drag several in at once, paste, or click). They are
+saved on the conversation as `staffListings` (`images` are managed by the server only).
+
+- The AI is given them as team facts with an `id`; it answers about any of them, never invents
+  a web link for them, and calls `send_house_images` with that `id` when the customer asks for the
+  plan of that house (one house with pictures needs no id; several do).
+- "Allow the AI to tell this price" off: the AI gets only the masked approximation (like a hidden
+  catalog price), and an exact number in its reply is blocked and the chat handed to the team.
+- They count as house details for "property first".
+
 ## Prices
 
 - Price shown on the website (`showPrice !== false`): the bot may say it.

@@ -203,3 +203,78 @@ test('only a super admin edits what the AI is told about credit checks; empty te
   await reject(adminActions.setAiGuidance({ creditChecklist: 123 }, SUPER), 400)
   await reject(adminActions.setAiGuidance({}, SUPER), 400)
 })
+
+// ─── Houses typed in by the team ─────────────────────────────────────────────
+const house = (extra = {}) => ({ title: 'บ้านเดี่ยว สวนสวย', type: 'บ้านเดี่ยว', price: '2,490,000', bedrooms: 3, details: 'ที่จอดรถ 2 คัน', ...extra })
+
+test('houses typed in by the team are added, edited in place, and removed', async () => {
+  const first = await adminActions.saveConversationListing({ conversationId: 'c1', listing: house() }, ADMIN)
+  assert.match(first.listing.id, /^[0-9a-f]{10}$/)
+  assert.equal(first.listing.price, 2490000)
+  assert.equal(first.listing.priceVisible, true)
+  assert.deepEqual(first.listing.images, [])
+  assert.equal(conversation().needsProperty, undefined)
+  const second = await adminActions.saveConversationListing({ conversationId: 'c1', listing: house({ title: 'บ้านแฝด สุขใจ', type: 'บ้านแฝด', price: 1850000, priceVisible: false }) }, ADMIN)
+  assert.equal(conversation().staffListings.length, 2)
+  assert.equal(second.listing.priceVisible, false)
+
+  const edited = await adminActions.saveConversationListing({ conversationId: 'c1', listing: { ...house({ price: 2590000 }), id: first.listing.id } }, ADMIN)
+  assert.equal(edited.listing.id, first.listing.id)
+  assert.equal(conversation().staffListings.length, 2)
+  assert.equal(conversation().staffListings[0].price, 2590000)
+
+  await adminActions.removeConversationListing({ conversationId: 'c1', listingId: first.listing.id })
+  assert.deepEqual(conversation().staffListings.map(item => item.title), ['บ้านแฝด สุขใจ'])
+  await reject(adminActions.removeConversationListing({ conversationId: 'c1', listingId: first.listing.id }), 404)
+})
+
+test('a typed-in house must be valid, an unknown one cannot be edited, and there is a limit of ten', async () => {
+  await reject(adminActions.saveConversationListing({ conversationId: 'c1', listing: {} }, ADMIN), 400)
+  await reject(adminActions.saveConversationListing({ conversationId: 'c1', listing: house({ price: 'abc' }) }, ADMIN), 400)
+  await reject(adminActions.saveConversationListing({ conversationId: 'c1', listing: { ...house(), id: 'nope' } }, ADMIN), 404)
+  await reject(adminActions.saveConversationListing({ conversationId: 'missing', listing: house() }, ADMIN), 404)
+  for (let n = 0; n < 10; n += 1) await adminActions.saveConversationListing({ conversationId: 'c1', listing: house({ title: `บ้าน ${n}` }) }, ADMIN)
+  await reject(adminActions.saveConversationListing({ conversationId: 'c1', listing: house() }, ADMIN), 409)
+})
+
+test('pictures can be attached to one typed-in house, kept through edits, and are deleted with the house', async () => {
+  const saved = await adminActions.saveConversationListing({ conversationId: 'c1', listing: house() }, ADMIN)
+  const listingId = saved.listing.id
+  const added = await adminActions.addConversationImage({ conversationId: 'c1', listingId, imageBase64: PNG_BASE64, mimeType: 'image/png', caption: 'แปลน' }, ADMIN)
+  assert.equal(conversation().staffListings[0].images.length, 1)
+  assert.equal(conversation().staffImages, undefined) // not on the chat itself
+  assert.equal(files.has(added.image.path), true)
+
+  // editing the text keeps the pictures, and the client cannot overwrite them
+  await adminActions.saveConversationListing({ conversationId: 'c1', listing: { ...house({ title: 'ชื่อใหม่' }), id: listingId, images: [{ url: 'https://evil.example/x.png' }] } }, ADMIN)
+  assert.equal(conversation().staffListings[0].title, 'ชื่อใหม่')
+  assert.deepEqual(conversation().staffListings[0].images.map(image => image.url), [added.image.url])
+
+  await adminActions.addConversationImage({ conversationId: 'c1', listingId, imageBase64: PNG_BASE64, mimeType: 'image/png' }, ADMIN)
+  await adminActions.removeConversationImage({ conversationId: 'c1', listingId, url: added.image.url })
+  assert.equal(conversation().staffListings[0].images.length, 1)
+  assert.equal(files.has(added.image.path), false)
+
+  await reject(adminActions.addConversationImage({ conversationId: 'c1', listingId: 'nope', imageBase64: PNG_BASE64, mimeType: 'image/png' }, ADMIN), 404)
+  await reject(adminActions.removeConversationImage({ conversationId: 'c1', listingId, url: 'https://x/none' }), 404)
+
+  const before = files.size
+  await adminActions.removeConversationListing({ conversationId: 'c1', listingId })
+  assert.equal(files.size, before - 1) // the remaining picture's file went with the house
+})
+
+test('each house holds at most six pictures', async () => {
+  const { listing } = await adminActions.saveConversationListing({ conversationId: 'c1', listing: house() }, ADMIN)
+  const add = () => adminActions.addConversationImage({ conversationId: 'c1', listingId: listing.id, imageBase64: PNG_BASE64, mimeType: 'image/png' }, ADMIN)
+  for (let n = 0; n < 6; n += 1) await add()
+  await reject(add(), 409)
+  assert.equal(conversation().staffListings[0].images.length, 6)
+})
+
+test('with "property first" on, a typed-in house lets the AI be switched on', async () => {
+  store.set('messenger_settings/ai', { enabled: true, requirePropertyForBot: true })
+  await reject(adminActions.setBotPaused({ conversationId: 'c1', paused: false }), 409)
+  await adminActions.saveConversationListing({ conversationId: 'c1', listing: house() }, ADMIN)
+  await adminActions.setBotPaused({ conversationId: 'c1', paused: false })
+  assert.equal(conversation().botPaused, false)
+})
