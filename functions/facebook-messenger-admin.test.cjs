@@ -121,3 +121,26 @@ test('only a super admin can change "property first", and the value must be a bo
   await adminActions.setRequireProperty({ required: false }, SUPER)
   assert.equal(store.get('messenger_settings/ai').requirePropertyForBot, false)
 })
+
+test('setConversationNote saves the team\'s house details, trims and caps them, and clears on empty', async () => {
+  const result = await adminActions.setConversationNote({ conversationId: 'c1', note: '  บ้านหลังริม ใกล้สวนสาธารณะ  ' }, ADMIN)
+  assert.equal(result.success, true)
+  assert.equal(conversation().staffNote, 'บ้านหลังริม ใกล้สวนสาธารณะ')
+  assert.equal(conversation().staffNoteBy, 'u1')
+  assert.equal(conversation().needsProperty, undefined)
+  await adminActions.setConversationNote({ conversationId: 'c1', note: 'ก'.repeat(5000) }, ADMIN)
+  assert.equal(conversation().staffNote.length, 1500)
+  const cleared = await adminActions.setConversationNote({ conversationId: 'c1', note: '   ' }, ADMIN)
+  assert.equal(cleared.cleared, true)
+  assert.equal(conversation().staffNote, undefined)
+  await reject(adminActions.setConversationNote({ conversationId: 'c1', note: { a: 1 } }, ADMIN), 400)
+  await reject(adminActions.setConversationNote({ conversationId: 'missing', note: 'x' }, ADMIN), 404)
+})
+
+test('with "property first" on, house details written by the team also let the AI be switched on', async () => {
+  store.set('messenger_settings/ai', { enabled: true, requirePropertyForBot: true })
+  await reject(adminActions.setBotPaused({ conversationId: 'c1', paused: false }), 409)
+  await adminActions.setConversationNote({ conversationId: 'c1', note: 'ทาวน์โฮม 2 ชั้น ใกล้นิคม' }, ADMIN)
+  await adminActions.setBotPaused({ conversationId: 'c1', paused: false })
+  assert.equal(conversation().botPaused, false)
+})

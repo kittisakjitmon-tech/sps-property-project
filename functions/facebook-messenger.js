@@ -577,8 +577,8 @@ const adminActions = {
     if (!paused) {
       // When the team asks for it, the AI only answers chats that have a property set.
       const aiSettings = (await admin.firestore().doc('messenger_settings/ai').get()).data() || {}
-      if (aiSettings.requirePropertyForBot === true && !data.currentPropertyCode) {
-        throw httpError(409, 'ต้องเลือกทรัพย์ที่ลูกค้าสนใจก่อน จึงจะเปิดให้ AI ตอบแชทนี้ได้')
+      if (aiSettings.requirePropertyForBot === true && !data.currentPropertyCode && !cleanField(data.staffNote, 2000)) {
+        throw httpError(409, 'ต้องเลือกทรัพย์หรือกรอกรายละเอียดบ้านของแชทนี้ก่อน จึงจะเปิดให้ AI ตอบได้')
       }
     }
     await conversationRef.set(paused
@@ -622,6 +622,30 @@ const adminActions = {
       needsProperty: FieldValue.delete(),
     }, { merge: true })
     return { success: true, code: property.displayId, title }
+  },
+
+  // Free-text details the team wants the AI to use in this chat (house details, offers,
+  // anything the listing data does not say). An empty note clears it.
+  async setConversationNote({ conversationId: id, note }, adminUser) {
+    const { conversationRef } = await loadConversation(id)
+    const FieldValue = admin.firestore.FieldValue
+    if (note !== undefined && typeof note !== 'string') throw httpError(400, 'ข้อความไม่ถูกต้อง')
+    const text = cleanField(note, 1500)
+    if (!text) {
+      await conversationRef.set({
+        staffNote: FieldValue.delete(),
+        staffNoteBy: FieldValue.delete(),
+        staffNoteAt: FieldValue.delete(),
+      }, { merge: true })
+      return { success: true, cleared: true }
+    }
+    await conversationRef.set({
+      staffNote: text,
+      staffNoteBy: adminUser.uid,
+      staffNoteAt: FieldValue.serverTimestamp(),
+      needsProperty: FieldValue.delete(),
+    }, { merge: true })
+    return { success: true, length: text.length }
   },
 
   // Whether the AI may answer only chats that have a property set. Super admins only.

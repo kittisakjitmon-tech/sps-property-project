@@ -20,7 +20,7 @@ apply immediately. The on/off switch is also in the admin Messenger inbox
 | `extraInstructions` | string | Tone or brand notes appended to the prompt, e.g. "เรียกลูกค้าว่าพี่". |
 | `maxRepliesPerHour` | number | Per conversation. Default 8 (property cards don't count). |
 | `maxReplyChars` | number | Longest reply, links not counted. Default 220, allowed 80-1000. A longer reply is rewritten shorter by the model before sending, and cut at a space if that fails. |
-| `requirePropertyForBot` | boolean | `true` = "property first": the AI answers a chat only when it has a property (set by the team in the inbox, or named by the customer with a link or listing code). Otherwise it stays silent and the chat gets a "รอเลือกทรัพย์" badge. Switch in the inbox (Super Admin). Default off. |
+| `requirePropertyForBot` | boolean | `true` = "property first": the AI answers a chat only when it has a property (set by the team in the inbox, named by the customer with a link or listing code) or house details written by the team. Otherwise it stays silent and the chat gets a "รอเลือกทรัพย์" badge. Switch in the inbox (Super Admin). Default off. |
 | `loanBankRate` | number | Loan estimate: bank interest, % per year. Default 3.5 (same as the website calculator). |
 | `loanDirectRate` | number | Loan estimate: direct installment (ผ่อนตรง) interest, % per year. Default 2.5. |
 | `loanDefaultDownPercent` | number | Down payment used when the customer does not say one. Default 20. |
@@ -89,6 +89,12 @@ In the inbox each chat has a **ทรัพย์ที่ลูกค้าส�
 The AI uses it exactly like a property the customer named. Each chat also has its own
 AI on/off button (`botPaused`), and Super Admins have the global AI switch plus the
 **ต้องเลือกทรัพย์ก่อน** switch (`requirePropertyForBot`).
+
+Each chat also has a free-text box, **รายละเอียดบ้านให้ AI ใช้ตอบในแชทนี้** (`staffNote`, up to
+1500 characters): anything the team wants the AI to know in that chat, such as house details,
+offers or a listing that is not in the data. It is put in the prompt as facts from the team
+(it overrides the listing data when they disagree). A note counts as having house details
+for "property first". The exact hidden price of a listing is still blocked by the reply check.
 
 With "property first" on: a chat without a property gets no AI reply (the model is not
 called) and shows **รอเลือกทรัพย์**; the AI cannot be switched on for that chat (the server

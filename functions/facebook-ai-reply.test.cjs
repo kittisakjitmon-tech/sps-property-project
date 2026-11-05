@@ -671,3 +671,37 @@ test('when the AI moves to another property it drops the saved title of the old 
   assert.equal(conversation().currentPropertyTitle, undefined)
   assert.equal(conversation().currentPropertySetBy, undefined)
 })
+
+// ─── House details written by the team ───────────────────────────────────────
+
+test('house details written by the team go into the prompt and let the AI answer in "property first" mode', async () => {
+  store.set('messenger_settings/ai', { enabled: true, requirePropertyForBot: true })
+  store.set('messenger_conversations/conv1', {
+    pageId: 'P1', participantId: 'U1', pageName: 'เพจ', needsProperty: true,
+    staffNote: 'บ้านเดี่ยวหลังริม 3 นอน มีที่จอดรถ 2 คัน โปรโมชันฟรีค่าโอนถึงสิ้นเดือน',
+  })
+  const prompt = await capturePrompt(async () => {
+    model([{ text: 'หลังริมมีครับ จอดรถได้ 2 คันครับ' }])
+    await receive('หลังริมไหมคะ')
+  })
+  assert.equal(sent.length, 1)
+  assert.match(prompt, /ข้อมูลที่ทีมงานระบุไว้สำหรับแชทนี้/)
+  assert.match(prompt, /ที่จอดรถ 2 คัน/)
+  assert.equal(conversation().needsProperty, undefined)
+})
+
+test('a blank note does not count, and without one the prompt has no team-details section', async () => {
+  store.set('messenger_settings/ai', { enabled: true, requirePropertyForBot: true })
+  store.set('messenger_conversations/conv1', { pageId: 'P1', participantId: 'U1', pageName: 'เพจ', staffNote: '   ' })
+  model([{ text: 'ต้องไม่ถูกส่ง' }])
+  await receive('หลังริมไหมคะ')
+  assert.equal(sent.length, 0)
+  store.set('messenger_settings/ai', { enabled: true })
+  const prompt = await capturePrompt(async () => { model([{ text: 'ครับ' }]); await receive('สวัสดีครับ') })
+  assert.ok(!prompt.includes('ข้อมูลที่ทีมงานระบุไว้สำหรับแชทนี้'))
+})
+
+test('the prompt tells the AI not to ask the customer for a listing code first', async () => {
+  const prompt = await capturePrompt(async () => { model([{ text: 'ครับ' }]); await receive('สวัสดี') })
+  assert.match(prompt, /ห้ามขอ "รหัสทรัพย์" จากลูกค้าเป็นอย่างแรก/)
+})

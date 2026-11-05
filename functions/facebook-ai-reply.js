@@ -274,8 +274,9 @@ const facebookAiReply = functions
       let focusCode = focus[0]?.code || null
 
       // "Property first" mode: the AI waits until the chat has a property (set by the team,
-      // or named by the customer with a link or code). The inbox shows a badge meanwhile.
-      if (settings.requirePropertyForBot === true && !focus.length) {
+      // named by the customer with a link or code) or house details written by the team. The inbox shows a badge meanwhile.
+      const staffNote = typeof conversation.staffNote === 'string' ? conversation.staffNote.trim() : ''
+      if (settings.requirePropertyForBot === true && !focus.length && !staffNote) {
         functions.logger.info('AI reply skipped', { ...logContext, reason: 'no-property' })
         await conversationRef.set({ needsProperty: true }, { merge: true })
         return null
@@ -406,6 +407,7 @@ const facebookAiReply = functions
         today,
         focus,
         imagesEnabled: imageCfg.enabled,
+        staffNote,
       })
       const { text: rawText } = await runConversation({
         generate: createGenerate({ settings, systemInstruction, info: servedBy }),
