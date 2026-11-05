@@ -1082,7 +1082,7 @@ function estimateLoan(args = {}, settings = {}) {
 
 // ─── Prompt & tools ──────────────────────────────────────────────────────────
 
-function buildSystemPrompt({ isFirstReply, maxChars = DEFAULT_MAX_REPLY_CHARS, particle = 'ครับ', extraInstructions = '', faq = [], today, focus = [], imagesEnabled = false, staffNote = '', creditChecklist = '', staffImages = [], staffListings = [], calendar = null, attachedProperty = false, followUp = false, financeKnowledge = '' } = {}) {
+function buildSystemPrompt({ isFirstReply, maxChars = DEFAULT_MAX_REPLY_CHARS, particle = 'ครับ', extraInstructions = '', faq = [], today, focus = [], imagesEnabled = false, staffNote = '', creditChecklist = '', staffImages = [], staffListings = [], calendar = null, attachedProperty = false, followUp = false, financeKnowledge = '', openingGuide = '' } = {}) {
   const p = particle === 'ค่ะ' ? 'ค่ะ' : 'ครับ'
   const faqBlock = (faq || []).length
     ? [
@@ -1156,6 +1156,7 @@ function buildSystemPrompt({ isFirstReply, maxChars = DEFAULT_MAX_REPLY_CHARS, p
     '- ไม่ต้องบอกว่าเป็น AI บอท หรือระบบอัตโนมัติ แต่ถ้าลูกค้าถามตรงๆ ว่าคุยกับบอท/AI หรือคนจริง ห้ามโกหกว่าเป็นคน ให้ตอบตามจริงสั้นๆ ว่าเป็นผู้ช่วยตอบแชทของเพจ และถ้าลูกค้าอยากคุยกับทีมงานให้เรียก request_human',
     today ? `วันนี้คือ ${today.text} (${today.iso})` : '',
     ...teamBlock,
+    ...(!teamInfo && !(focus || []).length ? openingGuideBlock(openingGuide) : []),
     '',
     'สไตล์การพูด (สำคัญมาก ต้องเหมือนคนพิมพ์แชท ไม่ใช่เขียนจดหมาย):',
     `- พูดเหมือนเซลส์อสังหาที่เป็นกันเองและสุภาพ ใช้คำลงท้าย "${p}" ภาษาพูดธรรมชาติ เช่น "ได้${p}" "มี${p}" "โอเค${p}" "เดี๋ยว...ให้นะ${p}" ห้ามใช้คำแข็งๆ เช่น "ท่าน" "กรุณา" "ขออนุญาต" "ยินดีให้บริการ" "หากมีข้อสงสัยเพิ่มเติม"`,
@@ -1251,6 +1252,27 @@ function financeKnowledgeBlock(text) {
   return [
     '',
     'ความรู้การเงินและสินเชื่อของบริษัท (ข้อมูลจากทีมงาน ใช้ตอบและแนะนำลูกค้าได้ แต่ยังห้ามรับปากว่ากู้ผ่าน ตัวเลขและเงื่อนไขให้บอกตามที่เขียนไว้ตรงตัว เรื่องที่ไม่มีในนี้ห้ามเดา ให้บอกว่าเดี๋ยวทีมงานเช็กให้):',
+    ...lines,
+  ]
+}
+
+// ─── When the customer has not said which house ──────────────────────────────
+
+const MAX_OPENING_GUIDE = 2000
+
+// Written by the team in "คำแนะนำ AI": what the customer saw (an ad with price ranges per house type)
+// and the zones there are houses in. Used only while the chat has no house: the AI asks which zone
+// first instead of guessing a house. Lines still showing "[ใส่ ...]" are left out.
+function openingGuideBlock(text) {
+  const lines = cleanPost(text, MAX_OPENING_GUIDE).split('\n').filter(line => line.trim() && !/\[ใส่/.test(line))
+  if (!lines.length) return []
+  return [
+    '',
+    'ลูกค้ายังไม่ได้บอกว่าสนใจบ้านหลังไหน (มักทักมาจากโพสต์ของเพจ) ทำตามนี้ก่อนกฎอื่น:',
+    '- ถามก่อนว่าสนใจโซนไหน แล้วค่อยถามงบหรือแบบบ้านที่ชอบ ถามทีละข้อ ถ้าลูกค้าบอกแล้วไม่ต้องถามซ้ำ',
+    '- ถ้าลูกค้าถามราคาหรือมีแบบไหนบ้าง ตอบตามช่วงราคาด้านล่างได้เลย แล้วถามโซนต่อ',
+    '- ยังไม่ต้องค้นหรือส่งการ์ดบ้าน จนกว่าจะรู้โซนหรืองบ เมื่อรู้แล้วค่อยใช้ search_properties',
+    'ข้อมูลจากทีมงาน (โพสต์และโซนที่มีบ้าน):',
     ...lines,
   ]
 }
@@ -1638,6 +1660,7 @@ module.exports = {
   cleanReplyText,
   buildSystemPrompt,
   MAX_FINANCE_KNOWLEDGE,
+  MAX_OPENING_GUIDE,
   withFollowUpCue,
   FOLLOW_UP_CUE,
   runConversation,

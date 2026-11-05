@@ -1860,3 +1860,16 @@ test('the finance knowledge from the settings is in what the AI is told', async 
   })
   assert.match(prompt, /พนักงานบริษัทคู่สัญญากู้ได้ดอกเบี้ยพิเศษ/)
 })
+
+test('a customer from the price-range post is asked the zone, and the post\'s prices are not blocked', async () => {
+  // a database house whose hidden price equals the top of a range in the post
+  store.set('properties/prop5', property({ displayId: 'SPS-TH-5', price: 1700000, showPrice: false }))
+  store.set('messenger_settings/ai', { enabled: true, openingGuide: '- ทาวน์โฮม 1.3-1.7 ล้านบาท\nโซนที่มีบ้าน: อมตะซิตี้ พานทอง' })
+  const prompt = await capturePrompt(async () => {
+    model([{ text: 'ทาวน์โฮมเริ่ม 1.3-1.7 ล้านค่ะ สนใจโซนไหนคะ อมตะซิตี้หรือพานทองคะ' }])
+    await receive('สนใจค่ะ')
+  })
+  assert.match(prompt, /ถามก่อนว่าสนใจโซนไหน[\s\S]*อมตะซิตี้ พานทอง/)
+  assert.match(sent[0].message.text, /1\.3-1\.7 ล้าน/)
+  assert.equal(conversation().needsHuman, undefined)
+})

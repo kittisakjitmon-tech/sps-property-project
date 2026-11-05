@@ -512,3 +512,9 @@ test('a super admin sets the loan estimate figures, within sane ranges', async (
   await reject(adminActions.setAiGuidance({ loan: { bankRate: 3 } }, ADMIN), 403)
   assert.equal(store.get('messenger_settings/ai').loanBankRate, 2.95)
 })
+
+test('a super admin writes what to ask when the customer has not said which house', async () => {
+  await adminActions.setAiGuidance({ openingGuide: '- ทาวน์โฮม 1.3-1.7 ล้านบาท\nโซน: อมตะ' }, SUPER)
+  assert.equal(store.get('messenger_settings/ai').openingGuide, '- ทาวน์โฮม 1.3-1.7 ล้านบาท\nโซน: อมตะ')
+  await reject(adminActions.setAiGuidance({ openingGuide: 'ก'.repeat(2001) }, SUPER), 400)
+})

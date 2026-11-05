@@ -1,7 +1,7 @@
 import { useId, useState } from 'react'
 import { Check, Loader2, X } from 'lucide-react'
 import { DEFAULT_CREDIT_CHECKLIST } from './defaultCreditChecklist'
-import { FINANCE_KNOWLEDGE_TEMPLATE } from './financeKnowledgeTemplate'
+import { FINANCE_KNOWLEDGE_TEMPLATE, OPENING_GUIDE_TEMPLATE } from './financeKnowledgeTemplate'
 
 const MAX_FINANCE = 6000 // same limit as the server
 
@@ -29,6 +29,7 @@ export default function AiGuidanceDialog({ settings, callApi, onClose }) {
   const [checklist, setChecklist] = useState(settings.creditChecklist || '')
   const [extra, setExtra] = useState(settings.extraInstructions || '')
   const [finance, setFinance] = useState(settings.financeKnowledge || '')
+  const [opening, setOpening] = useState(settings.openingGuide || '')
   const [loan, setLoan] = useState(() => initialLoan(settings))
   const loanError = LOAN_FIELDS.find(({ key, min, max }) => {
     const value = Number(loan[key])
@@ -47,7 +48,7 @@ export default function AiGuidanceDialog({ settings, callApi, onClose }) {
     setSaving(true)
     setStatus({ type: '', message: '' })
     try {
-      await callApi({ action: 'setAiGuidance', creditChecklist: checklist, extraInstructions: extra, financeKnowledge: finance, particle, loan: Object.fromEntries(LOAN_FIELDS.map(({ key }) => [key, Number(loan[key])])), replyDelaySeconds: delay })
+      await callApi({ action: 'setAiGuidance', creditChecklist: checklist, extraInstructions: extra, financeKnowledge: finance, openingGuide: opening, particle, loan: Object.fromEntries(LOAN_FIELDS.map(({ key }) => [key, Number(loan[key])])), replyDelaySeconds: delay })
       setStatus({ type: 'success', message: 'บันทึกแล้ว AI จะใช้ในข้อความถัดไป' })
     } catch (error) {
       setStatus({ type: 'error', message: error.message || 'บันทึกไม่สำเร็จ' })
@@ -85,6 +86,34 @@ export default function AiGuidanceDialog({ settings, callApi, onClose }) {
             <input type="range" min={0} max={30} step={1} value={delay} onChange={event => setDelay(Number(event.target.value))} className="w-full" />
             <span className="block text-xs text-slate-500">ลูกค้ามักพิมพ์หลายข้อความติดกัน AI จะรอจนลูกค้าหยุดพิมพ์ตามเวลานี้ แล้วตอบทุกคำถามรวมในข้อความเดียว ยิ่งนานยิ่งรวมได้ครบ แต่ลูกค้าที่ถามข้อเดียวจะรอนานขึ้น (แนะนำ 10-20 วินาที)</span>
           </label>
+
+          <div className="space-y-2">
+            <label htmlFor={`${id}-opening`} className="font-medium text-slate-800">เมื่อลูกค้ายังไม่ได้บอกว่าสนใจบ้านหลังไหน</label>
+            <p className="text-xs text-slate-500">
+              เช่น ลูกค้าทักมาจากโพสต์รวมช่วงราคา ใส่เนื้อหาโพสต์และโซนที่มีบ้าน AI จะถามโซนที่สนใจก่อน แล้วถามงบ
+              ตอบช่วงราคาตามนี้ได้ และยังไม่ส่งบ้านจนกว่าจะรู้โซนหรืองบ ใช้เฉพาะแชทที่ยังไม่มีบ้าน
+              (ถ้าอยากให้ AI ตอบแชทแบบนี้ ต้องปิด &quot;ต้องมีข้อมูลบ้านก่อน&quot;)
+            </p>
+            <textarea
+              id={`${id}-opening`}
+              value={opening}
+              onChange={event => { setOpening(event.target.value); setStatus({ type: '', message: '' }) }}
+              rows={8}
+              maxLength={2000}
+              placeholder="ว่างไว้ = AI ถามทำเลและงบแบบทั่วไป"
+              className="w-full resize-y rounded-lg border border-slate-300 px-3 py-2 text-xs leading-relaxed focus:border-blue-600 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-100"
+            />
+            <div className="flex flex-wrap items-center gap-2 text-xs">
+              <button
+                type="button"
+                onClick={() => { setOpening(OPENING_GUIDE_TEMPLATE); setStatus({ type: '', message: '' }) }}
+                className="rounded-lg border border-slate-300 px-3 py-1.5 font-medium text-slate-700 hover:bg-slate-50"
+              >
+                ใส่ตัวอย่างจากโพสต์ช่วงราคา
+              </button>
+              <span className="ml-auto text-slate-500">{opening.length}/2000</span>
+            </div>
+          </div>
 
           <div className="space-y-2">
             <label htmlFor={`${id}-checklist`} className="font-medium text-slate-800">

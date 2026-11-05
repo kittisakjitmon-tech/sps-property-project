@@ -981,3 +981,15 @@ test('the team\'s finance knowledge reaches the AI; unfilled outline lines do no
   assert.match(prompt, /\n- MOU กับ ธอส\.: พนักงานบริษัทที่มี MOU กู้ ธอส\. ดอกเบี้ยพิเศษ\n/) // its own line
   assert.ok(!prompt.includes('[ใส่ใครจ่าย]'))
 })
+
+test('with no house yet, the AI is told to ask the zone first, from the team\'s post', () => {
+  const guide = 'โพสต์ช่วงราคา:\n- ทาวน์โฮม 1.3-1.7 ล้านบาท\nโซนที่มีบ้าน: [ใส่ โซน]'
+  const prompt = buildSystemPrompt({ openingGuide: guide })
+  assert.match(prompt, /ถามก่อนว่าสนใจโซนไหน/)
+  assert.match(prompt, /\n- ทาวน์โฮม 1\.3-1\.7 ล้านบาท\n/)
+  assert.ok(!prompt.includes('[ใส่ โซน]'))
+  assert.ok(prompt.indexOf('ถามก่อนว่าสนใจโซนไหน') < prompt.indexOf('สไตล์การพูด'), 'comes before the general rules')
+  // a chat that already has a house does not get it
+  assert.ok(!buildSystemPrompt({ openingGuide: guide, staffNote: 'บ้านแฝดมาบโป่ง' }).includes('ถามก่อนว่าสนใจโซนไหน'))
+  assert.ok(!buildSystemPrompt({}).includes('ถามก่อนว่าสนใจโซนไหน'))
+})
