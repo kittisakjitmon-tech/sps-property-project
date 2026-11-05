@@ -11,6 +11,7 @@ const {
   buildCarouselMessage,
   sanitizeCustomerInfo,
   validateAppointment,
+  estimateLoan,
   findPriceLeaks,
   sanitizeUrls,
   replyCharLimit,
@@ -216,6 +217,7 @@ const facebookAiReply = functions
       let handoffReason = null
       let appointmentRequested = false
       const contactUpdates = {}
+      let loanRecord = null // set when estimate_loan ran in this reply
 
       const handlers = {
         search_properties: args => {
@@ -274,6 +276,39 @@ const facebookAiReply = functions
           if (!conversation.contact?.phone && !contactUpdates.phone) contactUpdates.phone = result.value.tel
           return { ok: true, message: 'บันทึกคำขอนัดแล้ว ทีมงานจะยืนยันเวลากับลูกค้า' }
         },
+        estimate_loan: args => {
+          const code = typeof args?.propertyCode === 'string' ? args.propertyCode.trim() : ''
+          let price = args?.price
+          if (code) {
+            const listing = catalogByCode.get(code)
+            if (!listing) return { ok: false, needsTeam: true, error: 'ไม่พบรหัสทรัพย์นี้ ให้ใช้รหัสจากผลการค้นหาเท่านั้น หรือถามงบจากลูกค้า' }
+            // A monthly instalment would reveal the price, so hidden prices are never used.
+            if (listing._hidden || !listing._numericPrice) {
+              loanRecord = { needsTeam: true, verdict: 'unknown', reason: 'price-hidden' }
+              return {
+                ok: false,
+                needsTeam: true,
+                error: 'ทรัพย์นี้ไม่เปิดเผยราคา ห้ามใช้ราคาจริงคำนวณ ให้ถามลูกค้าว่างบหรือราคาที่ต้องการประมาณเท่าไหร่ หรือบอกว่าทีมงานกำลังดำเนินการให้ และขอเบอร์ติดต่อ',
+              }
+            }
+            price = listing._numericPrice
+          }
+          const result = estimateLoan({ ...args, price }, settings)
+          loanRecord = {
+            needsTeam: result.needsTeam === true,
+            verdict: result.verdict || 'unknown',
+            ...(result.ok ? {
+              price: result.assumptions.price,
+              monthlyPayment: result.monthlyPayment,
+              years: result.assumptions.years,
+              downPayment: result.assumptions.downPayment,
+              monthlyIncome: Number(args?.monthlyIncome) > 0 ? Math.round(Number(args.monthlyIncome)) : null,
+              monthlyDebt: Number(args?.monthlyDebt) > 0 ? Math.round(Number(args.monthlyDebt)) : 0,
+              dsrPercent: result.dsrPercent ?? null,
+            } : {}),
+          }
+          return result
+        },
         request_human: args => {
           handoffReason = String(args?.reason || 'requested').slice(0, 200)
           return { ok: true }
@@ -298,6 +333,13 @@ const facebookAiReply = functions
         functions.logger.warn('AI produced no reply text', logContext)
         return null
       }
+
+      // A loan estimate the bot could not settle goes to a teammate, but only once we
+      // have a phone number to call (otherwise the bot keeps asking for it).
+      const loanNeedsTeam = loanRecord ? loanRecord.needsTeam : conversation.loanEstimate?.needsTeam === true
+      const knownPhone = conversation.contact?.phone || contactUpdates.phone
+      const loanHandoff = Boolean(loanNeedsTeam && knownPhone)
+      if (loanHandoff) handoffReason = handoffReason || 'ประเมินสินเชื่อไม่ได้ ต้องให้ทีมงานติดต่อกลับ'
 
       // Keep it chat-sized: a too-long answer is rewritten shorter before anything else.
       stage = 'shorten'
@@ -371,6 +413,14 @@ const facebookAiReply = functions
       if (Object.keys(contactUpdates).length) {
         update.contact = contactUpdates
         if (contactUpdates.phone || contactUpdates.email) update.leadCapturedAt = FieldValue.serverTimestamp()
+      }
+      if (loanRecord || loanHandoff) {
+        // Once handed over, clear the flag so resuming the bot does not hand over again.
+        update.loanEstimate = {
+          ...(loanRecord || {}),
+          ...(loanHandoff ? { needsTeam: false, handedOffAt: FieldValue.serverTimestamp() } : {}),
+          updatedAt: FieldValue.serverTimestamp(),
+        }
       }
       if (handoffReason) {
         update.botPaused = true

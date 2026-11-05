@@ -373,3 +373,80 @@ test('the limit comes from settings and links do not count toward it', async () 
   assert.ok(sent[0].message.text.includes('/p/prop1'), 'a link must not force a rewrite')
   assert.equal(modelScript.length, 0)
 })
+
+
+// ─── Loan estimate through the trigger ───────────────────────────────────────
+
+test('estimates a loan from a public price and keeps the bot on when it is clear', async () => {
+  store.set('messenger_conversations/conv1', { pageId: 'P1', participantId: 'U1', pageName: 'เพจ' })
+  model(
+    [{ functionCall: { name: 'search_properties', args: { location: 'ศรีราชา' } } }],
+    [{ functionCall: { name: 'estimate_loan', args: { propertyCode: 'SPS-CD-9', monthlyIncome: 60000, monthlyDebt: 0 } } }],
+    [{ text: 'เบื้องต้นผ่อนประมาณ 5,400 บาท/เดือนครับ (ดาวน์ 20% 30 ปี) เป็นประมาณการเท่านั้นนะครับ' }],
+  )
+  await receive('คอนโดศรีราชากู้ได้ไหม รายได้ 60000')
+  assert.equal(sent.length, 1)
+  assert.equal(conversation().loanEstimate.verdict, 'likely')
+  assert.equal(conversation().loanEstimate.needsTeam, false)
+  assert.equal(conversation().loanEstimate.price, 1500000)
+  assert.equal(conversation().botPaused, undefined)
+})
+
+test('a hidden-price listing is never used for the calculation', async () => {
+  const calls = []
+  model(
+    [{ functionCall: { name: 'search_properties', args: { location: 'พานทอง' } } }],
+    [{ functionCall: { name: 'estimate_loan', args: { propertyCode: 'SPS-TH-1', monthlyIncome: 50000 } } }],
+    [{ text: 'ทีมงานกำลังดำเนินการคำนวณให้ครับ รบกวนฝากเบอร์ติดต่อด้วยนะครับ' }],
+  )
+  await receive('ทาวน์โฮมพานทองกู้ได้ไหม')
+  assert.equal(conversation().loanEstimate.reason, 'price-hidden')
+  assert.equal(conversation().loanEstimate.monthlyPayment, undefined)
+  assert.equal(conversation().loanEstimate.price, undefined)
+  assert.ok(!JSON.stringify(sent).includes('2150000'))
+  void calls
+})
+
+test('an estimate the bot cannot settle waits for a phone number, then hands over once', async () => {
+  // Turn 1: no income -> team follow-up, but no phone yet so the bot stays on to ask for it.
+  model(
+    [{ functionCall: { name: 'estimate_loan', args: { price: 2500000 } } }],
+    [{ text: 'ผ่อนประมาณ 9,000 บาท/เดือนครับ ทีมงานกำลังดำเนินการให้ รบกวนฝากเบอร์ติดต่อด้วยครับ' }],
+  )
+  await receive('งบ 2.5 ล้าน กู้ได้ไหม')
+  assert.equal(conversation().loanEstimate.needsTeam, true)
+  assert.equal(conversation().botPaused, undefined)
+
+  // Turn 2: the customer gives a phone number -> handed to a teammate.
+  model(
+    [{ functionCall: { name: 'save_customer_info', args: { name: 'สมชาย', phone: '0812345678' } } }],
+    [{ text: 'ได้ครับ ทีมงานจะติดต่อกลับเร็วๆ นี้นะครับ' }],
+  )
+  await receive('0812345678')
+  assert.equal(conversation().contact.phone, '0812345678')
+  assert.equal(conversation().botPaused, true)
+  assert.equal(conversation().needsHuman, true)
+  assert.match(conversation().handoffReason, /ประเมินสินเชื่อ/)
+  assert.equal(conversation().loanEstimate.needsTeam, false)
+})
+
+test('resuming the bot after a loan hand-over does not hand over again', async () => {
+  store.set('messenger_conversations/conv1', {
+    pageId: 'P1', participantId: 'U1', pageName: 'เพจ',
+    contact: { phone: '0812345678' }, loanEstimate: { needsTeam: false, verdict: 'unlikely' },
+  })
+  model([{ text: 'ได้ครับ' }])
+  await receive('ขอบคุณครับ')
+  assert.equal(conversation().botPaused, undefined)
+})
+
+test('a phone number already on file hands over right away when the estimate cannot be settled', async () => {
+  store.set('messenger_conversations/conv1', { pageId: 'P1', participantId: 'U1', pageName: 'เพจ', contact: { phone: '0899999999' } })
+  model(
+    [{ functionCall: { name: 'estimate_loan', args: { price: 2500000, downPayment: 300000, monthlyIncome: 20000, monthlyDebt: 2000 } } }],
+    [{ text: 'ผ่อนประมาณ 9,900 บาท/เดือนครับ ทีมงานกำลังดำเนินการให้ จะติดต่อกลับทางเบอร์ที่ให้ไว้ครับ' }],
+  )
+  await receive('รายได้ 20000 กู้ได้ไหม')
+  assert.equal(conversation().botPaused, true)
+  assert.match(conversation().handoffReason, /ประเมินสินเชื่อ/)
+})
