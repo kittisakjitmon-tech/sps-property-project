@@ -21,6 +21,8 @@ apply immediately. The on/off switch is also in the admin Messenger inbox
 | `maxRepliesPerHour` | number | Per conversation. Default 8 (property cards don't count). |
 | `maxReplyChars` | number | Longest reply, links not counted. Default 220, allowed 80-1000. A longer reply is rewritten shorter by the model before sending, and cut at a space if that fails. |
 | `replyDelaySeconds` | number | Wait this long after a customer message before answering, so several messages typed in a row get one answer (only the newest message's run replies, seeing them all). Default 15, allowed 0-30 (set in "คำแนะนำ AI"), 0 = off. A team retry never waits. |
+| `documentsEnabled` | boolean | `true` lets the AI read documents the customer sends in the chat (PDF, and pictures of documents) for the credit pre-check. Default off. Turns picture reading on too. |
+| `maxDocumentsPerMessage` | number | PDFs read per message, 1-3. Default 2. PDFs up to 10 MB. |
 | `creditChecklist` | string | What the AI asks for a credit pre-check and which documents customers should prepare. Empty = the company's standard list (`DEFAULT_CREDIT_CHECKLIST`). Edited in the inbox: **คำแนะนำ AI** (Super Admin). |
 | `requirePropertyForBot` | boolean | `true` = "property first": the AI answers a chat only when it has a property (set by the team in the inbox, named by the customer with a link or listing code) or house details written by the team. Otherwise it stays silent and the chat gets a "รอเลือกทรัพย์" badge. Switch in the inbox (Super Admin). Default off. |
 | `calendarEnabled` | boolean | `true` lets the bot book appointments in Google Calendar (needs `calendarId`). Default off: appointments stay "pending requests" for the team. |
@@ -233,6 +235,26 @@ the customer named a property (link or listing code). In such a chat:
 
 A property the AI only remembers from an earlier answer is not "attached". **เริ่มทดสอบใหม่** clears
 `attachedShownAt` and `othersRequestedAt`.
+
+## Documents in the chat
+
+With `documentsEnabled: true` the AI reads PDFs (and photographed documents) the customer sends: payslips,
+statements, salary certificate, ID copy, house registration, marriage certificate, NCB. It compares them with the
+company's checklist (`creditChecklist`), tells the customer briefly what was received, what is missing and what
+to fix (missing months, names that do not match, unreadable or password-protected file), and saves a review on the
+conversation (`documentReview`: type, readable, summary, issues, missing), shown read-only in the customer panel.
+When the set looks complete, or something needs a person, it hands the chat to the team.
+
+- It never repeats ID, account or phone numbers or full addresses in the chat; the saved review masks any run of
+  10+ digits to the last four. It does not ask customers to type those numbers.
+- It never says a document is genuine or fake and never says the loan is approved; it only reports what it read
+  and what does not agree. The team checks the originals.
+- Files are fetched from our own Storage copy (or Facebook's CDN) only, must really be PDFs (checked by content
+  type), and at most 10 MB; anything else is skipped without breaking the reply.
+- **Personal data:** documents go to Google (Vertex AI) for processing, and the files stay in our Storage
+  (`messenger/<chat>/...`). Before switching this on: update the privacy policy and the data-handling answers for
+  Meta, tell customers what is done with their documents, limit who can open the chat, and decide how long to keep
+  the files (there is no automatic deletion yet).
 
 ## Prices
 

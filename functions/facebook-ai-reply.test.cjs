@@ -1206,7 +1206,7 @@ test('each AI answer records what it was based on, so the team can see whether i
 test('an answer given with no house information says so', async () => {
   model([{ text: 'สวัสดีครับ' }])
   await receive('สวัสดี')
-  assert.deepEqual(stored[0].extra.aiContext, { properties: [], listings: 0, note: false, pictures: 0, tools: [] })
+  assert.deepEqual(stored[0].extra.aiContext, { properties: [], listings: 0, note: false, pictures: 0, documents: 0, tools: [] })
 })
 
 test('after a reset the AI does not see the earlier messages, greets again, and its limits start over', async () => {
@@ -1872,4 +1872,108 @@ test('a customer from the price-range post is asked the zone, and the post\'s pr
   assert.match(prompt, /ถามก่อนว่าสนใจโซนไหน[\s\S]*อมตะซิตี้ พานทอง/)
   assert.match(sent[0].message.text, /1\.3-1\.7 ล้าน/)
   assert.equal(conversation().needsHuman, undefined)
+})
+
+// ─── Documents the customer sends ────────────────────────────────────────────
+const PDF_URL = 'https://cdn.fbsbx.com/v/t59/payslip.pdf'
+const PDF_BYTES = Buffer.from('%PDF-1.4 test')
+const DOC_SETTINGS = { enabled: true, documentsEnabled: true }
+
+test('a PDF the customer sends is read together with the text, when documents are switched on', async () => {
+  store.set('messenger_settings/ai', DOC_SETTINGS)
+  const fetched = []
+  _test.setImageFetcher(async (url, maxBytes) => { fetched.push([url, maxBytes]); return { mimeType: 'application/pdf', buffer: PDF_BYTES } })
+  spyModel('ได้รับสลิปแล้วครับ')
+  await receiveWith({ text: 'ส่งสลิปเงินเดือนค่ะ', attachments: [{ type: 'file', url: PDF_URL }] })
+  assert.deepEqual(fetched, [[PDF_URL, 10 * 1024 * 1024]])
+  const last = seenContents.at(-1)
+  assert.equal(last.parts.at(-1).inlineData.mimeType, 'application/pdf')
+  assert.equal(last.parts.at(-1).inlineData.data, PDF_BYTES.toString('base64'))
+  assert.equal(stored[0].extra.aiContext.documents, 1)
+})
+
+test('a PDF on its own is answered, and photographed documents are read too', async () => {
+  store.set('messenger_settings/ai', DOC_SETTINGS) // pictures are not switched on separately
+  _test.setImageFetcher(async url => (url === PDF_URL
+    ? { mimeType: 'application/pdf', buffer: PDF_BYTES }
+    : { mimeType: 'image/jpeg', buffer: PDF_BYTES }))
+  spyModel('ได้รับแล้วครับ')
+  await receiveWith({ attachments: [{ type: 'file', url: PDF_URL }, { type: 'image', url: 'https://firebasestorage.googleapis.com/v0/b/x/o/p?alt=media' }] })
+  assert.equal(sent.length, 1)
+  assert.deepEqual(seenContents.at(-1).parts.slice(1).map(part => part.inlineData.mimeType), ['image/jpeg', 'application/pdf'])
+})
+
+test('with documents switched off a PDF is never fetched and a PDF alone gets no reply', async () => {
+  store.set('messenger_settings/ai', { enabled: true })
+  _test.setImageFetcher(async () => { throw new Error('must not fetch') })
+  spyModel('ส่งให้ทีมงานโดยตรงนะครับ')
+  await receiveWith({ attachments: [{ type: 'file', url: PDF_URL }] })
+  assert.equal(sent.length, 0)
+  await receiveWith({ text: 'ส่งสลิปค่ะ', attachments: [{ type: 'file', url: PDF_URL }] })
+  assert.equal(sent.length, 1)
+  assert.ok(!JSON.stringify(seenContents).includes('inlineData'))
+})
+
+test('a file that is not a PDF, too big, or cannot be fetched is skipped without breaking the reply', async () => {
+  store.set('messenger_settings/ai', { ...DOC_SETTINGS, maxDocumentsPerMessage: 3 })
+  const outcomes = [
+    async () => ({ mimeType: 'application/msword', buffer: PDF_BYTES }),
+    async () => ({ mimeType: 'application/pdf', buffer: Buffer.alloc(11 * 1024 * 1024) }),
+    async () => { throw new Error('boom') },
+  ]
+  let call = 0
+  _test.setImageFetcher(async () => outcomes[call++]())
+  spyModel('ช่วยส่งใหม่เป็น PDF ได้ไหมครับ')
+  await receiveWith({ text: 'ส่งเอกสารค่ะ', attachments: [1, 2, 3].map(n => ({ type: 'file', url: `https://cdn.fbsbx.com/${n}.pdf` })) })
+  assert.equal(call, 3)
+  assert.equal(sent.length, 1)
+  assert.ok(!JSON.stringify(seenContents).includes('inlineData'))
+})
+
+test('what the AI noticed in the documents is saved for the team with numbers masked, and merged over time', async () => {
+  store.set('messenger_settings/ai', DOC_SETTINGS)
+  _test.setImageFetcher(async () => ({ mimeType: 'application/pdf', buffer: PDF_BYTES }))
+  model(
+    [{ functionCall: { name: 'save_document_review', args: {
+      documents: [{ type: 'สลิปเงินเดือน', readable: true, summary: 'ก.ค.-ธ.ค. สุทธิ 42,000 บัตร 1-2345-67890-12-3', issues: ['ขาดเดือน ก.พ.'] }],
+      missing: ['สเตทเมนต์', 'สำเนาบัตร'],
+    } } }],
+    [{ text: 'ได้รับสลิปแล้วครับ ยังขาดสเตทเมนต์กับสำเนาบัตรครับ' }],
+  )
+  await receiveWith({ text: 'ส่งสลิปค่ะ', attachments: [{ type: 'file', url: PDF_URL }] })
+  const review = conversation().documentReview
+  assert.equal(review.documents[0].type, 'สลิปเงินเดือน')
+  assert.ok(!JSON.stringify(review).includes('1-2345-67890-12-3') && !JSON.stringify(review).includes('1234567890123'))
+  assert.match(review.documents[0].summary, /•+0123/)
+  assert.deepEqual(review.missing, ['สเตทเมนต์', 'สำเนาบัตร'])
+
+  model(
+    [{ functionCall: { name: 'save_document_review', args: { documents: [{ type: 'สเตทเมนต์', summary: '6 เดือน' }], missing: ['สำเนาบัตร'] } } }],
+    [{ text: 'ได้รับสเตทเมนต์แล้วครับ' }],
+  )
+  await receiveWith({ text: 'ส่งสเตทเมนต์ค่ะ', attachments: [{ type: 'file', url: PDF_URL }] })
+  const merged = conversation().documentReview
+  assert.deepEqual(merged.documents.map(item => item.type), ['สลิปเงินเดือน', 'สเตทเมนต์'])
+  assert.deepEqual(merged.missing, ['สำเนาบัตร'])
+})
+
+test('an empty document review is refused', async () => {
+  store.set('messenger_settings/ai', DOC_SETTINGS)
+  let answer
+  modelScript = [
+    async () => [{ functionCall: { name: 'save_document_review', args: {} } }],
+    async contents => { answer = contents.at(-1).parts[0].functionResponse.response; return [{ text: 'ครับ' }] },
+  ]
+  await receive('สวัสดี')
+  assert.equal(answer.ok, false)
+  assert.equal(conversation().documentReview, undefined)
+})
+
+test('the document prompt reaches the model only when switched on', async () => {
+  store.set('messenger_settings/ai', DOC_SETTINGS)
+  const on = await capturePrompt(async () => { model([{ text: 'ครับ' }]); await receive('สวัสดี') })
+  assert.match(on, /save_document_review/)
+  store.set('messenger_settings/ai', { enabled: true })
+  const off = await capturePrompt(async () => { model([{ text: 'ครับ' }]); await receive('สวัสดีอีกที') })
+  assert.ok(!off.includes('เอกสารที่ลูกค้าส่งมาในแชท'))
 })

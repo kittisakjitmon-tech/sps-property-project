@@ -885,6 +885,7 @@ const adminActions = {
       currentPropertySetAt: FieldValue.delete(),
       loanEstimate: FieldValue.delete(),
       creditProfile: FieldValue.delete(),
+      documentReview: FieldValue.delete(),
       leadCapturedAt: FieldValue.delete(),
     }, { merge: true })
     return { success: true }

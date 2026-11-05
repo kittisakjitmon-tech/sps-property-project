@@ -388,9 +388,9 @@ test('system prompt sets a human tone, the particle, masked-price rules, FAQ and
   assert.match(full, /2026-11-04/)
 })
 
-test('all eleven tools are declared', () => {
+test('all twelve tools are declared', () => {
   assert.deepEqual(TOOL_DECLARATIONS.map(t => t.name), [
-    'search_properties', 'get_property', 'show_attached_houses', 'show_property_cards', 'save_customer_info', 'check_availability', 'request_appointment', 'estimate_loan', 'save_credit_profile', 'send_house_images', 'request_human',
+    'search_properties', 'get_property', 'show_attached_houses', 'show_property_cards', 'save_customer_info', 'check_availability', 'request_appointment', 'estimate_loan', 'save_credit_profile', 'save_document_review', 'send_house_images', 'request_human',
   ])
 })
 
@@ -992,4 +992,81 @@ test('with no house yet, the AI is told to ask the zone first, from the team\'s 
   // a chat that already has a house does not get it
   assert.ok(!buildSystemPrompt({ openingGuide: guide, staffNote: 'บ้านแฝดมาบโป่ง' }).includes('ถามก่อนว่าสนใจโซนไหน'))
   assert.ok(!buildSystemPrompt({}).includes('ถามก่อนว่าสนใจโซนไหน'))
+})
+
+// ─── Documents the customer sends ────────────────────────────────────────────
+const { documentSettings, pickDocumentAttachments, maskSensitiveNumbers, sanitizeDocumentReview, mergeDocumentReview } = require('./facebook-ai-core.cjs')
+
+test('document reading is off unless switched on, with a clamped count', () => {
+  assert.deepEqual(documentSettings({}), { enabled: false, maxDocuments: 2, maxBytes: 10 * 1024 * 1024 })
+  assert.equal(documentSettings({ documentsEnabled: 'true' }).enabled, false)
+  assert.equal(documentSettings({ documentsEnabled: true, maxDocumentsPerMessage: 3 }).maxDocuments, 3)
+  assert.equal(documentSettings({ documentsEnabled: true, maxDocumentsPerMessage: 40 }).maxDocuments, 2)
+})
+
+test('only file attachments from known hosts are picked as documents', () => {
+  const urls = pickDocumentAttachments([
+    { type: 'file', url: 'https://firebasestorage.googleapis.com/v0/b/x/o/a?alt=media' },
+    { type: 'file', url: 'https://cdn.fbsbx.com/b.pdf' },
+    { type: 'file', url: 'https://evil.example/c.pdf' },
+    { type: 'file', url: 'http://cdn.fbsbx.com/d.pdf' },
+    { type: 'image', url: 'https://cdn.fbsbx.com/e.jpg' },
+    { type: 'video', url: 'https://cdn.fbsbx.com/f.mp4' },
+    { type: 'file' },
+  ], 5)
+  assert.deepEqual(urls, ['https://firebasestorage.googleapis.com/v0/b/x/o/a?alt=media', 'https://cdn.fbsbx.com/b.pdf'])
+  assert.equal(pickDocumentAttachments(Array.from({ length: 5 }, (_, n) => ({ type: 'file', url: `https://cdn.fbsbx.com/${n}.pdf` })), 2).length, 2)
+  assert.deepEqual(pickDocumentAttachments(undefined), [])
+})
+
+test('ID, account and phone numbers are masked down to the last four digits', () => {
+  assert.equal(maskSensitiveNumbers('บัตร 1-2345-67890-12-3 ของสมชาย'), 'บัตร •••••••••0123 ของสมชาย')
+  assert.equal(maskSensitiveNumbers('บัญชี 123-4-56789-0'), 'บัญชี ••••••7890')
+  assert.equal(maskSensitiveNumbers('โทร 081 234 5678'), 'โทร ••••••5678')
+  assert.equal(maskSensitiveNumbers('รายได้ 42,000 บาท ปี 2569 เลข 2500000'), 'รายได้ 42,000 บาท ปี 2569 เลข 2500000')
+  assert.equal(maskSensitiveNumbers(undefined), '')
+})
+
+test('a document review keeps type, readability, a masked summary and issues; junk is dropped', () => {
+  const review = sanitizeDocumentReview({
+    documents: [
+      { type: 'สลิปเงินเดือน', readable: true, summary: 'ก.ค.-ธ.ค. สุทธิ 42,000 บัญชี 123-4-56789-0', issues: ['ขาดเดือน ก.พ.', 'เลขบัตร 1234567890123'] },
+      { type: '', summary: 'no type' },
+      { type: 'สเตทเมนต์', readable: false },
+    ],
+    missing: ['สลิปโบนัส', 'ทะเบียนสมรส', '   '],
+    note: 'ติดต่อ 0812345678',
+  })
+  assert.equal(review.documents.length, 2)
+  assert.equal(review.documents[0].summary, 'ก.ค.-ธ.ค. สุทธิ 42,000 บัญชี ••••••7890')
+  assert.deepEqual(review.documents[0].issues, ['ขาดเดือน ก.พ.', 'เลขบัตร •••••••••0123'])
+  assert.equal(review.documents[1].readable, false)
+  assert.deepEqual(review.missing, ['สลิปโบนัส', 'ทะเบียนสมรส'])
+  assert.equal(review.note, 'ติดต่อ ••••••5678')
+  assert.deepEqual(sanitizeDocumentReview({}), {})
+  assert.deepEqual(sanitizeDocumentReview({ documents: 'x', missing: 5 }), {})
+  assert.equal(sanitizeDocumentReview({ documents: Array.from({ length: 30 }, () => ({ type: 't' })) }).documents.length, 10)
+})
+
+test('a later review replaces the same document type and the latest missing list wins', () => {
+  const first = mergeDocumentReview(undefined, { documents: [{ type: 'สลิป', summary: 'a', issues: [], readable: true }], missing: ['สเตทเมนต์', 'บัตร'] })
+  assert.deepEqual(first.missing, ['สเตทเมนต์', 'บัตร'])
+  const second = mergeDocumentReview(first, { documents: [{ type: 'สลิป', summary: 'b', issues: [], readable: true }, { type: 'บัตร', summary: 'c', issues: [], readable: true }], missing: ['สเตทเมนต์'] })
+  assert.deepEqual(second.documents.map(item => [item.type, item.summary]), [['สลิป', 'b'], ['บัตร', 'c']])
+  assert.deepEqual(second.missing, ['สเตทเมนต์'])
+  // no new "missing": the earlier one stays; nothing at all: no key
+  assert.deepEqual(mergeDocumentReview(second, { documents: [] }).missing, ['สเตทเมนต์'])
+  assert.equal('missing' in mergeDocumentReview(undefined, { documents: [] }), false)
+})
+
+test('the prompt allows reading documents only when switched on, and never repeating ID numbers', () => {
+  const on = buildSystemPrompt({ isFirstReply: false, documentsEnabled: true, imagesEnabled: true })
+  assert.match(on, /เอกสารที่ลูกค้าส่งมาในแชท/)
+  assert.match(on, /save_document_review/)
+  assert.match(on, /ห้ามพิมพ์ทวนเลขบัตรประชาชน/)
+  assert.match(on, /ห้ามยืนยันว่าเอกสารจริงหรือปลอม/)
+  assert.ok(!on.includes('ห้ามอ่านหรือทวนข้อมูลในรูป'), 'the old "refuse documents" rule is not applied')
+  const off = buildSystemPrompt({ isFirstReply: false, imagesEnabled: true })
+  assert.ok(!off.includes('เอกสารที่ลูกค้าส่งมาในแชท'))
+  assert.match(off, /ห้ามอ่านหรือทวนข้อมูลในรูป/)
 })

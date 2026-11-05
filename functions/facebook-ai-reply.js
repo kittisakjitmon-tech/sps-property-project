@@ -39,6 +39,11 @@ const {
   unansweredCustomerMessages,
   historyToContents,
   imageSettings,
+  documentSettings,
+  pickDocumentAttachments,
+  sanitizeDocumentReview,
+  mergeDocumentReview,
+  DOCUMENT_MIME_TYPES,
   pickImageAttachments,
   withImages,
   IMAGE_MIME_TYPES,
@@ -298,12 +303,13 @@ let imageFetcher = async (url, maxBytes) => {
 
 // Pictures the model can read. One that cannot be fetched, is too big or is not a
 // picture is skipped: the reply must never fail because of an image.
-async function loadImageParts(urls, maxBytes, logContext) {
+async function loadImageParts(urls, maxBytes, logContext, { allowDocuments = false } = {}) {
+  const accepted = allowDocuments ? [...IMAGE_MIME_TYPES, ...DOCUMENT_MIME_TYPES] : IMAGE_MIME_TYPES
   const parts = []
   for (const url of urls) {
     try {
       const { mimeType, buffer } = await imageFetcher(url, maxBytes)
-      if (!IMAGE_MIME_TYPES.includes(mimeType) || !buffer.length || buffer.length > maxBytes) {
+      if (!accepted.includes(mimeType) || !buffer.length || buffer.length > maxBytes) {
         functions.logger.warn('AI image skipped', { ...logContext, mimeType, bytes: buffer.length })
         continue
       }
@@ -359,6 +365,9 @@ async function answerCustomer({ conversationId, message, messageRef, retry = fal
       calendarClientInstance = calendarClientInstance || calendarClientFactory(calendarCfg, process.env.GCLOUD_PROJECT || admin.app().options.projectId)
       return calendarClientInstance
     }
+    const documentCfg = documentSettings(settings)
+    // Reading documents means reading pictures of them too (a photographed payslip).
+    const readPictures = imageCfg.enabled || documentCfg.enabled
 
     // "Start testing again" hides everything before the reset: the AI does not see it.
     const resetAtMs = conversation.contextResetAt?.toMillis?.() || 0
@@ -383,7 +392,8 @@ async function answerCustomer({ conversationId, message, messageRef, retry = fal
     // Pictures from every message the customer sent since the last reply, not only this one.
     const waiting = unansweredCustomerMessages(recent)
     const burstAttachments = (waiting.length ? waiting : [message]).flatMap(item => item.attachments || [])
-    const incomingImages = imageCfg.enabled && !followingUp ? pickImageAttachments(burstAttachments, imageCfg.maxImages) : []
+    const incomingImages = readPictures && !followingUp ? pickImageAttachments(burstAttachments, imageCfg.maxImages) : []
+    const incomingDocuments = documentCfg.enabled && !followingUp ? pickDocumentAttachments(burstAttachments, documentCfg.maxDocuments) : []
     if (retry && !followingUp && (!newest || newest.direction !== 'incoming')) {
       functions.logger.info('AI retry skipped', { ...logContext, reason: 'already-answered' })
       return null
@@ -396,7 +406,7 @@ async function answerCustomer({ conversationId, message, messageRef, retry = fal
       text: followingUp ? FOLLOW_UP_CUE : [...waiting.map(item => item.text || ''), message.text || ''].join('\n'),
       timestamp: message.timestamp?.toMillis?.() || Date.now(),
       recentMessages: recent,
-      hasImages: incomingImages.length > 0,
+      hasImages: incomingImages.length + incomingDocuments.length > 0,
       override: retry,
     })
     if (!decision.reply) {
@@ -442,6 +452,7 @@ async function answerCustomer({ conversationId, message, messageRef, retry = fal
     const contactUpdates = {}
     let loanRecord = null // set when estimate_loan ran in this reply
     let creditProfileUpdate = {} // what the customer said about their finances this reply
+    let documentReviewUpdate = null // what the AI noticed in the documents this reply
     const staffImages = (Array.isArray(conversation.staffImages) ? conversation.staffImages : [])
       .filter(image => typeof image?.url === 'string')
     let houseImagesToSend = []
@@ -752,6 +763,12 @@ async function answerCustomer({ conversationId, message, messageRef, retry = fal
         creditProfileUpdate = { ...creditProfileUpdate, ...profile }
         return { ok: true, saved: Object.keys(profile) }
       },
+      save_document_review: args => {
+        const review = sanitizeDocumentReview(args)
+        if (!Object.keys(review).length) return { ok: false, error: 'ไม่มีข้อมูลที่ใช้ได้ ใส่ชนิดเอกสาร ข้อสังเกต หรือเอกสารที่ยังขาด' }
+        documentReviewUpdate = documentReviewUpdate ? mergeDocumentReview(documentReviewUpdate, review) : review
+        return { ok: true, saved: Object.keys(review) }
+      },
       send_house_images: args => {
         const wantedId = typeof args?.listingId === 'string' ? args.listingId.trim() : ''
         let pictures
@@ -782,7 +799,11 @@ async function answerCustomer({ conversationId, message, messageRef, retry = fal
     }
 
     stage = 'images'
-    const imageParts = incomingImages.length ? await loadImageParts(incomingImages, imageCfg.maxBytes, logContext) : []
+    const pictureParts = incomingImages.length ? await loadImageParts(incomingImages, imageCfg.maxBytes, logContext) : []
+    const documentParts = incomingDocuments.length
+      ? await loadImageParts(incomingDocuments, documentCfg.maxBytes, logContext, { allowDocuments: true })
+      : []
+    const imageParts = [...pictureParts, ...documentParts]
 
     stage = 'gemini'
     // Several questions typed in a row are answered together, so the reply may be longer.
@@ -795,7 +816,8 @@ async function answerCustomer({ conversationId, message, messageRef, retry = fal
       faq,
       today,
       focus,
-      imagesEnabled: imageCfg.enabled,
+      imagesEnabled: readPictures,
+      documentsEnabled: documentCfg.enabled,
       staffNote,
       staffListings,
       attachedProperty: attachedProperties.length > 0,
@@ -883,6 +905,7 @@ async function answerCustomer({ conversationId, message, messageRef, retry = fal
           listings: staffListings.length,
           note: Boolean(staffNote),
           pictures: staffImages.length + staffListings.reduce((total, item) => total + (Array.isArray(item.images) ? item.images.length : 0), 0),
+          documents: documentParts.length,
           tools: [...new Set((toolCalls || []).map(call => call.name))],
         },
       },
@@ -998,6 +1021,12 @@ async function answerCustomer({ conversationId, message, messageRef, retry = fal
     if (Object.keys(contactUpdates).length) {
       update.contact = contactUpdates
       if (contactUpdates.phone || contactUpdates.email) update.leadCapturedAt = FieldValue.serverTimestamp()
+    }
+    if (documentReviewUpdate) {
+      update.documentReview = {
+        ...mergeDocumentReview(conversation.documentReview, documentReviewUpdate),
+        updatedAt: FieldValue.serverTimestamp(),
+      }
     }
     if (Object.keys(creditProfileUpdate).length) {
       update.creditProfile = { ...creditProfileUpdate, updatedAt: FieldValue.serverTimestamp() }

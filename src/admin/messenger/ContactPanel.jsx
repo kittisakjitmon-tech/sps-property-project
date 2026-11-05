@@ -84,6 +84,40 @@ function CreditProfile({ profile, loan }) {
   )
 }
 
+// What the AI noticed in the documents the customer sent, for the loan team. Read-only; numbers
+// that identify a person are already masked. The files themselves are in the chat.
+function DocumentReview({ review }) {
+  const documents = Array.isArray(review?.documents) ? review.documents : []
+  const missing = Array.isArray(review?.missing) ? review.missing : []
+  if (!documents.length && !missing.length && !review?.note) return null
+  return (
+    <section className="rounded-xl border border-amber-100 bg-amber-50/60 p-3 text-xs" aria-label="เอกสารที่ลูกค้าส่ง">
+      <h3 className="font-semibold text-amber-900">เอกสารที่ลูกค้าส่ง (AI อ่านเบื้องต้น)</h3>
+      {documents.length > 0 && (
+        <ul className="mt-2 space-y-2">
+          {documents.map(item => (
+            <li key={item.type} className="rounded-lg bg-white/70 p-2">
+              <p className="font-medium text-slate-800">
+                {item.type}
+                {item.readable === false && <span className="ml-1 font-normal text-red-700">· อ่านไม่ออก</span>}
+              </p>
+              {item.summary && <p className="text-slate-600">{item.summary}</p>}
+              {(item.issues || []).map(issue => (
+                <p key={issue} className="text-amber-800">⚠ {issue}</p>
+              ))}
+            </li>
+          ))}
+        </ul>
+      )}
+      {missing.length > 0 && (
+        <p className="mt-2 text-slate-700"><span className="font-medium">ยังขาด:</span> {missing.join(', ')}</p>
+      )}
+      {review?.note && <p className="mt-1 text-slate-600">{review.note}</p>}
+      <p className="mt-2 text-[11px] text-slate-500">AI อ่านจากไฟล์ที่ส่งมา ไม่ได้ยืนยันว่าเอกสารจริง ทีมงานต้องตรวจเอกสารต้นฉบับอีกครั้ง</p>
+    </section>
+  )
+}
+
 export default function ContactPanel({ conversation, onClose, callApi }) {
   const formId = useId()
   const [form, setForm] = useState(() => emptyForm(conversation.contact))
@@ -175,6 +209,7 @@ export default function ContactPanel({ conversation, onClose, callApi }) {
         </dl>
 
         <CreditProfile profile={conversation.creditProfile} loan={conversation.loanEstimate} />
+        <DocumentReview review={conversation.documentReview} />
 
         <DetectedList
           icon={<Phone className="h-4 w-4 shrink-0 text-emerald-600" aria-hidden="true" />}

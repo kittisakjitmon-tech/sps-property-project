@@ -93,6 +93,7 @@ function describeAiContext(context) {
     context.listings ? `บ้านที่กรอก ${context.listings} หลัง` : '',
     context.note ? 'โน้ตของทีม' : '',
     context.pictures ? `รูป ${context.pictures}` : '',
+    context.documents ? `อ่านเอกสาร ${context.documents} ไฟล์` : '',
   ].filter(Boolean)
   return parts.length ? `AI รู้: ${parts.join(' · ')}` : 'AI ไม่มีข้อมูลบ้านของแชทนี้ตอนตอบ'
 }
