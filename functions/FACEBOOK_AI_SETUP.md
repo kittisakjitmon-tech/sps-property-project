@@ -146,6 +146,7 @@ saved on the conversation as `staffListings` (`images` are managed by the server
 - "Allow the AI to tell this price" off: the AI gets only the masked approximation (like a hidden
   catalog price), and an exact number in its reply is blocked and the chat handed to the team.
 - They count as house details for "property first".
+- In the inbox the entry point is next to "ตั้งทรัพย์": **ไม่มีในระบบ? กรอกเอง** opens the form (pictures can be chosen in the same step and are uploaded when the house is saved).
 
 ## Appointments in Google Calendar
 

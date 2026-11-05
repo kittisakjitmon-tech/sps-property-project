@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { Loader2, Pencil, Plus, Trash2, X } from 'lucide-react'
 import ImageDropZone from './ImageDropZone'
 
@@ -45,18 +45,36 @@ function Field({ label, children, className = '' }) {
 // Houses the team types in for this chat, for example from a post that shows several houses
 // that are not in the property database. The AI answers from them, and sends the pictures
 // of one house when the customer asks for them.
-export default function ListingsEditor({ listings, busy, onSave, onRemove, onAddImages, onRemoveImage }) {
-  const [editingId, setEditingId] = useState(null) // 'new' | listing id | null
+export default function ListingsEditor({ listings, busy, creating, onCreatingChange, onSave, onRemove, onAddImages, onRemoveImage }) {
+  const [editingId, setEditingId] = useState(null) // a listing id | null (a new house is `creating`)
   const [draft, setDraft] = useState(EMPTY)
+  const [pending, setPending] = useState([]) // pictures chosen while filling in a new house
+
+  // Previews of the pending pictures; released when they change or the form goes away.
+  const previews = useMemo(() => pending.map(file => ({ file, url: URL.createObjectURL(file) })), [pending])
+  useEffect(() => () => previews.forEach(item => URL.revokeObjectURL(item.url)), [previews])
 
   function startNew() {
     setDraft(EMPTY)
-    setEditingId('new')
+    setPending([])
+    setEditingId(null)
+    onCreatingChange(true)
   }
 
   function startEdit(listing) {
     setDraft(toDraft(listing))
+    onCreatingChange(false)
     setEditingId(listing.id)
+  }
+
+  function closeForm() {
+    setEditingId(null)
+    setPending([])
+    onCreatingChange(false)
+  }
+
+  function addPending(files) {
+    setPending(current => [...current, ...files].slice(0, MAX_IMAGES))
   }
 
   const update = (key, value) => setDraft(current => ({ ...current, [key]: value }))
@@ -65,8 +83,12 @@ export default function ListingsEditor({ listings, busy, onSave, onRemove, onAdd
     event.preventDefault()
     if (busy) return
     const payload = { ...draft }
-    if (editingId === 'new') delete payload.id
-    if (await onSave(payload)) setEditingId(null)
+    if (creating) delete payload.id
+    const saved = await onSave(payload)
+    if (!saved) return
+    // Pictures chosen while filling in a new house go up now that it has an id.
+    if (creating && pending.length) await onAddImages(pending, saved.id)
+    closeForm()
   }
 
   const form = (
@@ -107,13 +129,37 @@ export default function ListingsEditor({ listings, busy, onSave, onRemove, onAdd
       <Field label="รายละเอียดเพิ่มเติม (ขนาด ที่จอดรถ โปรโมชัน เงื่อนไข)" className="col-span-2 sm:col-span-4">
         <textarea value={draft.details} onChange={event => update('details', event.target.value)} rows={3} maxLength={600} className={`${inputClass} resize-y leading-relaxed`} />
       </Field>
+      {creating && (
+        <div className="col-span-2 space-y-2 sm:col-span-4">
+          <p className="font-medium text-slate-600">รูปแบบบ้านของหลังนี้ <span className="font-normal text-slate-500">(ไม่บังคับ · จะอัปโหลดตอนกดบันทึก)</span></p>
+          {previews.length > 0 && (
+            <ul className="flex flex-wrap gap-2">
+              {previews.map((item, index) => (
+                <li key={item.url} className="relative">
+                  <img src={item.url} alt={item.file.name} className="h-16 w-20 rounded-lg border border-slate-200 object-cover" />
+                  <button
+                    type="button"
+                    onClick={() => setPending(current => current.filter((_, position) => position !== index))}
+                    className="absolute -right-1.5 -top-1.5 rounded-full bg-white p-1 text-slate-600 shadow ring-1 ring-slate-300 hover:bg-red-50 hover:text-red-700"
+                    aria-label={`เอารูป ${item.file.name} ออก`}
+                  >
+                    <X className="h-3 w-3" aria-hidden="true" />
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
+          {pending.length < MAX_IMAGES && (
+            <ImageDropZone busy={busy} onFiles={addPending} label={`ลากรูปแบบบ้านมาวาง (สูงสุด ${MAX_IMAGES} รูป)`} />
+          )}
+        </div>
+      )}
       <div className="col-span-2 flex flex-wrap items-center gap-2 sm:col-span-4">
         <button type="submit" disabled={busy} className="inline-flex items-center gap-1.5 rounded-lg bg-blue-700 px-3 py-1.5 font-medium text-white hover:bg-blue-800 disabled:opacity-50">
           {busy && <Loader2 className="h-3 w-3 animate-spin" aria-hidden="true" />}
-          บันทึกบ้านนี้
+          บันทึกบ้านนี้{creating && pending.length ? ` พร้อม ${pending.length} รูป` : ''}
         </button>
-        <button type="button" onClick={() => setEditingId(null)} className="rounded-lg px-3 py-1.5 font-medium text-slate-600 hover:bg-slate-100">ยกเลิก</button>
-        {editingId === 'new' && <span className="text-slate-500">บันทึกบ้านก่อน แล้วค่อยเพิ่มรูปแบบบ้านของหลังนี้ได้</span>}
+        <button type="button" onClick={closeForm} className="rounded-lg px-3 py-1.5 font-medium text-slate-600 hover:bg-slate-100">ยกเลิก</button>
       </div>
     </form>
   )
@@ -121,23 +167,23 @@ export default function ListingsEditor({ listings, busy, onSave, onRemove, onAdd
   return (
     <section className="space-y-2" aria-label="บ้านที่กรอกเอง">
       <div className="flex flex-wrap items-center gap-2">
-        <p className="font-medium">บ้านที่แอดมินกรอกเอง</p>
-        <span className="text-slate-500">(เช่น จากโพสต์ที่มีหลายหลัง ที่ไม่มีในฐานข้อมูล)</span>
-        {editingId !== 'new' && listings.length < MAX_LISTINGS && (
+        <p className="font-medium">ทรัพย์ที่แอดมินกรอกเอง</p>
+        <span className="text-slate-500">(ใช้เมื่อไม่มีในฐานข้อมูล เช่น จากโพสต์ที่มีหลายหลัง)</span>
+        {!creating && listings.length < MAX_LISTINGS && (
           <button type="button" onClick={startNew} disabled={busy} className="ml-auto inline-flex items-center gap-1 rounded-lg border border-slate-300 bg-white px-2.5 py-1 font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50">
             <Plus className="h-3.5 w-3.5" aria-hidden="true" />
-            เพิ่มบ้าน
+            เพิ่มทรัพย์ที่กรอกเอง
           </button>
         )}
       </div>
 
-      {editingId === 'new' && form}
+      {creating && form}
 
       <ul className="space-y-2">
         {listings.map(listing => (
           <li key={listing.id} className="rounded-xl border border-slate-200 bg-white p-2.5">
-            {editingId === listing.id ? form : (
-              <div className="space-y-2">
+            <div className="space-y-2">
+              {editingId === listing.id ? form : (
                 <div className="flex flex-wrap items-start gap-2">
                   <div className="min-w-0 flex-1">
                     <p className="font-semibold text-slate-800">{summary(listing)}</p>
@@ -157,7 +203,7 @@ export default function ListingsEditor({ listings, busy, onSave, onRemove, onAdd
                     ลบ
                   </button>
                 </div>
-
+              )}
                 {(listing.images || []).length > 0 && (
                   <ul className="flex flex-wrap gap-2">
                     {listing.images.map(image => (
@@ -185,13 +231,12 @@ export default function ListingsEditor({ listings, busy, onSave, onRemove, onAdd
                     label={`ลากรูปแบบบ้านของหลังนี้มาวาง (สูงสุด ${MAX_IMAGES} รูป)`}
                   />
                 )}
-              </div>
-            )}
+            </div>
           </li>
         ))}
       </ul>
-      {!listings.length && editingId !== 'new' && (
-        <p className="text-slate-500">ยังไม่มีบ้านที่กรอกเอง กด &quot;เพิ่มบ้าน&quot; เพื่อใส่ประเภท ราคา และรูปแบบบ้านทีละหลัง</p>
+      {!listings.length && !creating && (
+        <p className="text-slate-500">ยังไม่มีทรัพย์ที่กรอกเอง กด &quot;เพิ่มทรัพย์ที่กรอกเอง&quot; เพื่อใส่ประเภท ราคา รายละเอียด และรูปแบบบ้านทีละหลัง</p>
       )}
     </section>
   )

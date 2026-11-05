@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Check, ChevronDown, Home, Loader2, NotebookPen, X } from 'lucide-react'
+import { Check, ChevronDown, Home, Loader2, NotebookPen, PencilLine, X } from 'lucide-react'
 import ImageDropZone from './ImageDropZone'
 import ListingsEditor from './ListingsEditor'
 
@@ -24,6 +24,7 @@ export default function PropertyBar({
   const [note, setNote] = useState(savedNote)
   const [noteSaved, setNoteSaved] = useState(false)
   const [panelOpen, setPanelOpen] = useState(!hasInfo)
+  const [creating, setCreating] = useState(false)
 
   if (!conversation) return null
 
@@ -41,6 +42,11 @@ export default function PropertyBar({
     onSet(chosen.code)
     setEditing(false)
     setValue('')
+  }
+
+  function startManualEntry() {
+    setPanelOpen(true)
+    setCreating(true)
   }
 
   async function saveNote(event) {
@@ -102,6 +108,16 @@ export default function PropertyBar({
 
         <button
           type="button"
+          onClick={startManualEntry}
+          disabled={busy}
+          className="inline-flex items-center gap-1.5 rounded-lg border border-blue-300 bg-white px-2.5 py-1.5 font-medium text-blue-800 hover:bg-blue-50 disabled:opacity-50"
+        >
+          <PencilLine className="h-3.5 w-3.5" aria-hidden="true" />
+          ไม่มีในระบบ? กรอกเอง
+        </button>
+
+        <button
+          type="button"
           onClick={() => setPanelOpen(open => !open)}
           aria-expanded={panelOpen}
           className={`ml-auto inline-flex items-center gap-1.5 rounded-lg border px-2.5 py-1 font-medium ${hasInfo ? 'border-emerald-300 bg-emerald-50 text-emerald-800' : 'border-slate-300 bg-white text-slate-700'} hover:bg-slate-50`}
@@ -116,9 +132,15 @@ export default function PropertyBar({
           <ChevronDown className={`h-3.5 w-3.5 transition ${panelOpen ? 'rotate-180' : ''}`} aria-hidden="true" />
         </button>
 
+        {showForm && value.trim() && !chosen && (
+          <span className="basis-full text-amber-700">
+            ไม่พบรหัส &quot;{value.trim()}&quot; ในฐานข้อมูล (หรือทรัพย์นี้ขายแล้ว) กดปุ่ม &quot;ไม่มีในระบบ? กรอกเอง&quot; เพื่อใส่ข้อมูลและรูปเองได้
+          </span>
+        )}
+
         {waiting && (
           <span className="basis-full font-medium">
-            เปิด &quot;ต้องมีข้อมูลบ้านก่อน&quot; อยู่ · AI จะยังไม่ตอบแชทนี้ จนกว่าจะเลือกทรัพย์ เพิ่มบ้านที่กรอกเอง หรือกรอกรายละเอียดบ้าน (หรือลูกค้าส่งลิงก์/รหัสทรัพย์มาเอง)
+            เปิด &quot;ต้องมีข้อมูลบ้านก่อน&quot; อยู่ · AI จะยังไม่ตอบแชทนี้ จนกว่าจะเลือกทรัพย์จากฐานข้อมูล หรือกรอกทรัพย์เอง (ปุ่ม &quot;ไม่มีในระบบ? กรอกเอง&quot;) หรือกรอกรายละเอียดบ้าน (หรือลูกค้าส่งลิงก์/รหัสทรัพย์มาเอง)
           </span>
         )}
       </div>
@@ -128,6 +150,8 @@ export default function PropertyBar({
           <ListingsEditor
             listings={listings}
             busy={busy}
+            creating={creating}
+            onCreatingChange={setCreating}
             onSave={onSaveListing}
             onRemove={onRemoveListing}
             onAddImages={onAddImages}

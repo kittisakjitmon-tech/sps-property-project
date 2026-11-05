@@ -282,15 +282,15 @@ export default function MessengerInbox() {
   }
 
   async function saveListing(listing) {
-    if (!selectedId) return false
+    if (!selectedId) return null
     setPropertyBusy(true)
     setActionError('')
     try {
-      await callApi({ action: 'saveConversationListing', conversationId: selectedId, listing })
-      return true
+      const result = await callApi({ action: 'saveConversationListing', conversationId: selectedId, listing })
+      return result.listing || null
     } catch (listingError) {
       setActionError(listingError.message || 'บันทึกบ้านไม่สำเร็จ')
-      return false
+      return null
     } finally {
       setPropertyBusy(false)
     }
