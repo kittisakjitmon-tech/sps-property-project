@@ -970,3 +970,14 @@ test('the page\'s automatic reply is not a person answering, and answers nothing
   assert.equal(shouldReply({ settings: { enabled: true }, conversation: {}, text: 'x', timestamp: now - 1000, recentMessages: person, now }).reason, 'human-active')
   assert.deepEqual(unansweredCustomerMessages(recentMessages).map(m => m.text), ['สนใจบ้านค่ะ'])
 })
+
+test('the team\'s finance knowledge reaches the AI; unfilled outline lines do not', () => {
+  const outline = '# ธนาคารและ MOU\n- MOU กับ ธอส.: [ใส่ว่าคืออะไร]\n\n# ค่าใช้จ่ายวันโอน\n- ค่าโอน: [ใส่ใครจ่าย]'
+  assert.ok(!buildSystemPrompt({ financeKnowledge: outline }).includes('ความรู้การเงินและสินเชื่อของบริษัท'))
+  assert.ok(!buildSystemPrompt({}).includes('ความรู้การเงินและสินเชื่อของบริษัท'))
+  const filled = outline.replace('[ใส่ว่าคืออะไร]', 'พนักงานบริษัทที่มี MOU กู้ ธอส. ดอกเบี้ยพิเศษ')
+  const prompt = buildSystemPrompt({ financeKnowledge: filled })
+  assert.match(prompt, /ความรู้การเงินและสินเชื่อของบริษัท[\s\S]*ห้ามรับปากว่ากู้ผ่าน/)
+  assert.match(prompt, /\n- MOU กับ ธอส\.: พนักงานบริษัทที่มี MOU กู้ ธอส\. ดอกเบี้ยพิเศษ\n/) // its own line
+  assert.ok(!prompt.includes('[ใส่ใครจ่าย]'))
+})

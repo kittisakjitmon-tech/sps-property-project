@@ -1,6 +1,9 @@
 import { useId, useState } from 'react'
 import { Check, Loader2, X } from 'lucide-react'
 import { DEFAULT_CREDIT_CHECKLIST } from './defaultCreditChecklist'
+import { FINANCE_KNOWLEDGE_TEMPLATE } from './financeKnowledgeTemplate'
+
+const MAX_FINANCE = 6000 // same limit as the server
 
 // What the AI is told to ask for a credit check, and extra tone notes. Super admins only.
 // Changes apply to the next message; no deploy needed.
@@ -8,6 +11,7 @@ export default function AiGuidanceDialog({ settings, callApi, onClose }) {
   const id = useId()
   const [checklist, setChecklist] = useState(settings.creditChecklist || '')
   const [extra, setExtra] = useState(settings.extraInstructions || '')
+  const [finance, setFinance] = useState(settings.financeKnowledge || '')
   const [particle, setParticle] = useState(settings.particle === 'ค่ะ' ? 'ค่ะ' : 'ครับ')
   const savedDelay = Number(settings.replyDelaySeconds)
   const [delay, setDelay] = useState(Number.isInteger(savedDelay) && savedDelay >= 0 && savedDelay <= 30 ? savedDelay : 15)
@@ -21,7 +25,7 @@ export default function AiGuidanceDialog({ settings, callApi, onClose }) {
     setSaving(true)
     setStatus({ type: '', message: '' })
     try {
-      await callApi({ action: 'setAiGuidance', creditChecklist: checklist, extraInstructions: extra, particle, replyDelaySeconds: delay })
+      await callApi({ action: 'setAiGuidance', creditChecklist: checklist, extraInstructions: extra, financeKnowledge: finance, particle, replyDelaySeconds: delay })
       setStatus({ type: 'success', message: 'บันทึกแล้ว AI จะใช้ในข้อความถัดไป' })
     } catch (error) {
       setStatus({ type: 'error', message: error.message || 'บันทึกไม่สำเร็จ' })
@@ -94,6 +98,34 @@ export default function AiGuidanceDialog({ settings, callApi, onClose }) {
                 ล้าง (กลับไปใช้มาตรฐาน)
               </button>
               <span className="ml-auto text-slate-500">{checklist.length}/4000</span>
+            </div>
+          </div>
+
+          <div className="space-y-2">
+            <label htmlFor={`${id}-finance`} className="font-medium text-slate-800">ความรู้การเงินและสินเชื่อ</label>
+            <p className="text-xs text-slate-500">
+              สิ่งที่ทีมสินเชื่อรู้และอยากให้ AI ใช้อธิบายลูกค้า เช่น MOU กับธนาคาร รายได้ไม่ถึงทำอย่างไร ค่าใช้จ่ายวันโอน
+              เขียนเป็นข้อๆ ตัวเลขและเงื่อนไขต้องตรงความจริง AI จะบอกตามนี้ตรงตัว และยังไม่รับปากว่ากู้ผ่าน
+              บรรทัดที่ยังมี [ใส่ ...] จะถูกข้าม จึงกรอกทีละหัวข้อได้
+            </p>
+            <textarea
+              id={`${id}-finance`}
+              value={finance}
+              onChange={event => { setFinance(event.target.value); setStatus({ type: '', message: '' }) }}
+              rows={14}
+              maxLength={MAX_FINANCE}
+              placeholder="ว่างไว้ = AI ใช้แค่หลักทั่วไป (กดปุ่มด้านล่างเพื่อใส่หัวข้อให้กรอก)"
+              className="w-full resize-y rounded-lg border border-slate-300 px-3 py-2 text-xs leading-relaxed focus:border-blue-600 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-100"
+            />
+            <div className="flex flex-wrap items-center gap-2 text-xs">
+              <button
+                type="button"
+                onClick={() => { setFinance(current => (current.trim() ? `${current.trim()}\n\n${FINANCE_KNOWLEDGE_TEMPLATE}` : FINANCE_KNOWLEDGE_TEMPLATE)); setStatus({ type: '', message: '' }) }}
+                className="rounded-lg border border-slate-300 px-3 py-1.5 font-medium text-slate-700 hover:bg-slate-50"
+              >
+                ใส่หัวข้อให้กรอก
+              </button>
+              <span className="ml-auto text-slate-500">{finance.length}/{MAX_FINANCE}</span>
             </div>
           </div>
 

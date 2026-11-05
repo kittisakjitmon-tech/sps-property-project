@@ -1851,3 +1851,12 @@ test('the page\'s automatic reply does not stop the AI from answering', async ()
   await requestRetry('ri')
   assert.equal(sent.length, 1)
 })
+
+test('the finance knowledge from the settings is in what the AI is told', async () => {
+  store.set('messenger_settings/ai', { enabled: true, financeKnowledge: '# MOU\n- MOU กับ ธอส.: พนักงานบริษัทคู่สัญญากู้ได้ดอกเบี้ยพิเศษ' })
+  const prompt = await capturePrompt(async () => {
+    model([{ text: 'มี MOU ช่วยได้ค่ะ' }])
+    await receive('มี mou รอส.')
+  })
+  assert.match(prompt, /พนักงานบริษัทคู่สัญญากู้ได้ดอกเบี้ยพิเศษ/)
+})

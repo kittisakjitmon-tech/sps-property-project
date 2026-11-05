@@ -881,7 +881,7 @@ const adminActions = {
   },
 
   // What the AI is told to ask about credit, and the tone notes. Super admins only.
-  async setAiGuidance({ creditChecklist, extraInstructions, particle, replyDelaySeconds }, adminUser) {
+  async setAiGuidance({ creditChecklist, extraInstructions, financeKnowledge, particle, replyDelaySeconds }, adminUser) {
     if (adminUser.role !== 'super_admin') throw httpError(403, 'เฉพาะ Super Admin เท่านั้นที่แก้คำแนะนำ AI ได้')
     const update = {}
     const FieldValue = admin.firestore.FieldValue
@@ -896,7 +896,7 @@ const adminActions = {
       if (!Number.isInteger(seconds) || seconds < 0 || seconds > 30) throw httpError(400, 'เวลารอต้องเป็น 0-30 วินาที')
       update.replyDelaySeconds = seconds
     }
-    for (const [field, value, max] of [['creditChecklist', creditChecklist, 4000], ['extraInstructions', extraInstructions, 2000]]) {
+    for (const [field, value, max] of [['creditChecklist', creditChecklist, 4000], ['extraInstructions', extraInstructions, 2000], ['financeKnowledge', financeKnowledge, 6000]]) {
       if (value === undefined) continue
       if (typeof value !== 'string') throw httpError(400, 'ข้อความไม่ถูกต้อง')
       const text = value.trim()

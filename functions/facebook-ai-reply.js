@@ -801,6 +801,7 @@ async function answerCustomer({ conversationId, message, messageRef, retry = fal
       attachedProperty: attachedProperties.length > 0,
       followUp: followingUp,
       creditChecklist: settings.creditChecklist,
+      financeKnowledge: settings.financeKnowledge,
       staffImages,
       calendar: calendarCfg.enabled ? { scheduleText: calendarRules.describeSchedule(calendarCfg) } : null,
     })

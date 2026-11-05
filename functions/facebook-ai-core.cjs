@@ -1082,7 +1082,7 @@ function estimateLoan(args = {}, settings = {}) {
 
 // ─── Prompt & tools ──────────────────────────────────────────────────────────
 
-function buildSystemPrompt({ isFirstReply, maxChars = DEFAULT_MAX_REPLY_CHARS, particle = 'ครับ', extraInstructions = '', faq = [], today, focus = [], imagesEnabled = false, staffNote = '', creditChecklist = '', staffImages = [], staffListings = [], calendar = null, attachedProperty = false, followUp = false } = {}) {
+function buildSystemPrompt({ isFirstReply, maxChars = DEFAULT_MAX_REPLY_CHARS, particle = 'ครับ', extraInstructions = '', faq = [], today, focus = [], imagesEnabled = false, staffNote = '', creditChecklist = '', staffImages = [], staffListings = [], calendar = null, attachedProperty = false, followUp = false, financeKnowledge = '' } = {}) {
   const p = particle === 'ค่ะ' ? 'ค่ะ' : 'ครับ'
   const faqBlock = (faq || []).length
     ? [
@@ -1211,6 +1211,7 @@ function buildSystemPrompt({ isFirstReply, maxChars = DEFAULT_MAX_REPLY_CHARS, p
     '',
     'แนวทางเช็กเครดิตเบื้องต้นของบริษัท (ทำตามนี้):',
     clean(creditChecklist, 4000) || DEFAULT_CREDIT_CHECKLIST,
+    ...financeKnowledgeBlock(financeKnowledge),
     'รูปภาพที่ลูกค้าส่งมา:',
     imagesEnabled
       ? '- คุณมองเห็นรูปที่ลูกค้าส่งมาได้ ใช้รูปเพื่อดูว่าเป็นทรัพย์ของ SPS หรือไม่ (อ่านรหัสทรัพย์ ชื่อโครงการ จากภาพแคปหน้าเว็บหรือโพสต์) แล้วใช้ get_property หรือ search_properties ต่อ และถามลูกค้ายืนยันรหัสที่อ่านได้ก่อนพูดถึงราคา เพราะอ่านพลาดได้'
@@ -1233,6 +1234,25 @@ function buildSystemPrompt({ isFirstReply, maxChars = DEFAULT_MAX_REPLY_CHARS, p
     extraInstructions ? `\nคำแนะนำเพิ่มเติมจากทีมงาน:\n${clean(extraInstructions, 2000)}` : '',
     ...(followUp ? FOLLOW_UP_RULES(p) : []),
   ].filter(line => line !== '').join('\n')
+}
+
+// ─── What the team knows about money and home loans ──────────────────────────
+
+const MAX_FINANCE_KNOWLEDGE = 6000
+
+// Written by the team in "คำแนะนำ AI": loans, MOUs, costs, what to do when income is short.
+// Lines still showing the template's "[ใส่ ...]" were not filled in and are left out.
+function financeKnowledgeBlock(text) {
+  const lines = cleanPost(text, MAX_FINANCE_KNOWLEDGE)
+    .split('\n')
+    .filter(line => line.trim() && !/\[ใส่/.test(line))
+  // Only headings left: nothing was filled in.
+  if (!lines.some(line => !/^#|:\s*$/.test(line.trim()))) return []
+  return [
+    '',
+    'ความรู้การเงินและสินเชื่อของบริษัท (ข้อมูลจากทีมงาน ใช้ตอบและแนะนำลูกค้าได้ แต่ยังห้ามรับปากว่ากู้ผ่าน ตัวเลขและเงื่อนไขให้บอกตามที่เขียนไว้ตรงตัว เรื่องที่ไม่มีในนี้ห้ามเดา ให้บอกว่าเดี๋ยวทีมงานเช็กให้):',
+    ...lines,
+  ]
 }
 
 // ─── The team asks the AI to message first (follow-up) ───────────────────────
@@ -1617,6 +1637,7 @@ module.exports = {
   historyToContents,
   cleanReplyText,
   buildSystemPrompt,
+  MAX_FINANCE_KNOWLEDGE,
   withFollowUpCue,
   FOLLOW_UP_CUE,
   runConversation,

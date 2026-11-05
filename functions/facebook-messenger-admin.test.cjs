@@ -490,3 +490,12 @@ test('asking the AI to answer hands the chat back to it', async () => {
   await adminActions.askAiToReply({ conversationId: 'c1' }, ADMIN)
   assert.ok(conversation().botResumedAt, 'earlier replies by a person no longer stop the AI')
 })
+
+test('a super admin writes the finance knowledge, with its lines kept and a length limit', async () => {
+  await adminActions.setAiGuidance({ financeKnowledge: ' # MOU\n- ธอส. ดอกเบี้ยพิเศษ \n' }, SUPER)
+  assert.equal(store.get('messenger_settings/ai').financeKnowledge, '# MOU\n- ธอส. ดอกเบี้ยพิเศษ')
+  await reject(adminActions.setAiGuidance({ financeKnowledge: 'ก'.repeat(6001) }, SUPER), 400)
+  await reject(adminActions.setAiGuidance({ financeKnowledge: 'x' }, ADMIN), 403)
+  await adminActions.setAiGuidance({ financeKnowledge: '' }, SUPER)
+  assert.equal(store.get('messenger_settings/ai').financeKnowledge, undefined)
+})
