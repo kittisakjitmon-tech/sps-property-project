@@ -1070,7 +1070,7 @@ function estimateLoan(args = {}, settings = {}) {
 
 // ─── Prompt & tools ──────────────────────────────────────────────────────────
 
-function buildSystemPrompt({ isFirstReply, particle = 'ครับ', extraInstructions = '', faq = [], today, focus = [], imagesEnabled = false, staffNote = '', creditChecklist = '', staffImages = [], staffListings = [], calendar = null, attachedProperty = false } = {}) {
+function buildSystemPrompt({ isFirstReply, particle = 'ครับ', extraInstructions = '', faq = [], today, focus = [], imagesEnabled = false, staffNote = '', creditChecklist = '', staffImages = [], staffListings = [], calendar = null, attachedProperty = false, followUp = false } = {}) {
   const p = particle === 'ค่ะ' ? 'ค่ะ' : 'ครับ'
   const faqBlock = (faq || []).length
     ? [
@@ -1219,7 +1219,29 @@ function buildSystemPrompt({ isFirstReply, particle = 'ครับ', extraInstr
     ...imagesBlock,
     ...faqBlock,
     extraInstructions ? `\nคำแนะนำเพิ่มเติมจากทีมงาน:\n${clean(extraInstructions, 2000)}` : '',
+    ...(followUp ? FOLLOW_UP_RULES(p) : []),
   ].filter(line => line !== '').join('\n')
+}
+
+// ─── The team asks the AI to message first (follow-up) ───────────────────────
+
+// The customer has not written since the last reply; the team pressed "ให้ AI ทักต่อ".
+const FOLLOW_UP_RULES = p => [
+  '',
+  'ตอนนี้คุณเป็นฝ่ายทักลูกค้าก่อน (สำคัญที่สุดสำหรับข้อความนี้):',
+  '- ลูกค้ายังไม่ได้ตอบข้อความล่าสุด ทีมงานให้คุณส่งข้อความทักต่อจากบทสนทนาที่ผ่านมา 1 ข้อความ',
+  '- อ่านบทสนทนาว่าคุยค้างอยู่เรื่องอะไร แล้วชวนคุยต่อเรื่องนั้นด้วยคำถามเดียวที่ทำให้คืบหน้า เช่น ยังสนใจหลังนี้อยู่ไหม สะดวกมาดูบ้านวันไหน งบหรือเงินดาวน์ประมาณเท่าไหร่ อยากให้ช่วยเช็กสินเชื่อไหม',
+  `- สั้น สุภาพ ไม่กดดัน ไม่ทักทายใหม่ ไม่ทวนข้อมูลที่บอกไปแล้ว ไม่ขอโทษที่ทัก ลงท้ายด้วย "${p}"`,
+  '- ห้ามเสนอบ้านหลังอื่นหรือส่งการ์ดถ้าลูกค้าไม่เคยขอ ห้ามแต่งโปรโมชันหรือข้อเสนอใหม่ที่ไม่มีในข้อมูล',
+  '- ถ้าบทสนทนาจบไปแล้ว (เช่น ลูกค้าบอกไม่สนใจ หรือนัดเรียบร้อยแล้ว) ให้ส่งข้อความสั้นๆ ว่าถ้ามีอะไรสอบถามเพิ่มทักมาได้เลย',
+]
+
+// The last turn the model sees: it must be the "user" side, so the team's request is put there.
+const FOLLOW_UP_CUE = '[ข้อความจากระบบ ไม่ใช่ลูกค้า: ลูกค้ายังไม่ได้ตอบ ทีมงานให้คุณพิมพ์ข้อความทักลูกค้าต่อจากบทสนทนาข้างบน 1 ข้อความ ตามกฎ "ตอนนี้คุณเป็นฝ่ายทักลูกค้าก่อน"]'
+
+function withFollowUpCue(contents) {
+  const list = Array.isArray(contents) ? contents : []
+  return [...list, { role: 'user', parts: [{ text: FOLLOW_UP_CUE }] }]
 }
 
 // Options for the Vertex AI client. The SDK builds "<location>-aiplatform.googleapis.com",
@@ -1578,5 +1600,7 @@ module.exports = {
   historyToContents,
   cleanReplyText,
   buildSystemPrompt,
+  withFollowUpCue,
+  FOLLOW_UP_CUE,
   runConversation,
 }

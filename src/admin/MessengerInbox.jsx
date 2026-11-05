@@ -124,14 +124,22 @@ export default function MessengerInbox() {
   const millis = value => value?.toMillis?.() ?? (Number(value) || 0)
   const waitingForAnswer = Boolean(selectedConversation) && millis(selectedConversation.lastInboundAt) > millis(selectedConversation.lastOutboundAt)
   const outsideWindow = isOutsideMessagingWindow(selectedConversation)
-  // Why "ให้ AI ตอบที่ค้าง" cannot be used right now (shown on the disabled button), or null.
+  // One AI button: answer the customer's waiting message, or, when nothing is waiting, write
+  // first from the conversation so far (a follow-up). Why it cannot be used now, or null.
+  const followedUpAlready = millis(selectedConversation?.lastFollowUpAt) > millis(selectedConversation?.lastInboundAt)
   const askAiBlocked = !botSettings.enabled
     ? 'AI ถูกปิดทั้งระบบอยู่ เปิดสวิตช์ "AI ตอบอัตโนมัติ" ก่อน'
     : selectedConversation?.botPaused === true
       ? 'AI หยุดตอบแชทนี้อยู่ กด "AI หยุด · เปิดต่อ" ก่อน'
-      : !waitingForAnswer
-        ? 'ไม่มีข้อความของลูกค้าที่รอคำตอบ (ข้อความล่าสุดตอบไปแล้ว)'
-        : null
+      : !millis(selectedConversation?.lastInboundAt)
+        ? 'ลูกค้ายังไม่เคยทักมาในแชทนี้'
+        : waitingForAnswer
+          ? null
+          : outsideWindow
+            ? 'ลูกค้าทักมาล่าสุดเกิน 24 ชั่วโมง Facebook ไม่ให้เพจทักไปก่อน'
+            : followedUpAlready
+              ? 'AI ทักลูกค้าไปแล้ว รอให้ลูกค้าตอบก่อน'
+              : null
   const error = actionError || listError || messagesError
 
   const pageNames = useMemo(() => {
@@ -360,11 +368,14 @@ export default function MessengerInbox() {
 
   async function askAiToReply() {
     if (!selectedId) return
+    if (!waitingForAnswer && !window.confirm('ลูกค้ายังไม่ได้ตอบ ให้ AI พิมพ์ทักลูกค้าต่อจากบทสนทนาที่ผ่านมา 1 ข้อความ?')) return
     setBotBusy(true)
     setActionError('')
     try {
-      await callApi({ action: 'askAiToReply', conversationId: selectedId })
-      showNotice('ส่งคำขอแล้ว AI กำลังตอบข้อความที่ค้างอยู่ของลูกค้า (ใช้เวลาไม่กี่วินาที)')
+      const result = await callApi({ action: 'askAiToReply', conversationId: selectedId })
+      showNotice(result.mode === 'follow-up'
+        ? 'ส่งคำขอแล้ว AI กำลังพิมพ์ทักลูกค้าต่อจากบทสนทนา (ใช้เวลาไม่กี่วินาที)'
+        : 'ส่งคำขอแล้ว AI กำลังตอบข้อความที่ค้างอยู่ของลูกค้า (ใช้เวลาไม่กี่วินาที)')
     } catch (askError) {
       setActionError(askError.message || 'ให้ AI ตอบไม่สำเร็จ')
     } finally {
@@ -616,11 +627,11 @@ export default function MessengerInbox() {
                   type="button"
                   onClick={askAiToReply}
                   disabled={botBusy || Boolean(askAiBlocked)}
-                  title={askAiBlocked || 'ให้ AI ตอบข้อความของลูกค้าที่ยังไม่มีใครตอบ'}
+                  title={askAiBlocked || (waitingForAnswer ? 'ให้ AI ตอบข้อความของลูกค้าที่ยังไม่มีใครตอบ' : 'ให้ AI พิมพ์ทักลูกค้าต่อจากบทสนทนาที่ผ่านมา (ทักได้ครั้งเดียวจนกว่าลูกค้าจะตอบ)')}
                   className="inline-flex items-center gap-1.5 rounded-lg bg-indigo-50 px-3 py-2 text-xs font-medium text-indigo-800 hover:bg-indigo-100 disabled:cursor-not-allowed disabled:opacity-50"
                 >
                   <Sparkles className="h-4 w-4" aria-hidden="true" />
-                  <span className="hidden sm:inline">ให้ AI ตอบที่ค้าง</span>
+                  <span className="hidden sm:inline">{waitingForAnswer ? 'ให้ AI ตอบที่ค้าง' : 'ให้ AI ทักต่อ'}</span>
                 </button>
                 {isSuperAdmin() && (
                   <button

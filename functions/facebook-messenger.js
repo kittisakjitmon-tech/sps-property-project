@@ -17,6 +17,8 @@ const FACEBOOK_SECRETS = [
 const DEFAULT_FACEBOOK_APP_ID = '1688056122840915'
 const REQUIRED_SCOPES = ['pages_messaging', 'pages_manage_metadata', 'pages_read_engagement']
 const PROFILE_REFRESH_MS = 24 * 60 * 60 * 1000
+// Facebook's standard messaging window: a page may only send within 24 hours of the customer's last message.
+const MESSAGING_WINDOW_MS = 24 * 60 * 60 * 1000
 const PAGE_INFO_CACHE_MS = 10 * 60 * 1000
 const MAX_DOWNLOAD_BYTES = 25 * 1024 * 1024
 const MAX_OUTGOING_IMAGE_BYTES = 8 * 1024 * 1024
@@ -574,11 +576,13 @@ function cleanField(value, maxLength) {
 
 const toMillisValue = value => value?.toMillis?.() ?? (Number(value) || 0)
 
-// Ask the AI to answer the customer message that is still waiting (see facebookAiRetry).
-async function requestAiRetry(conversationId, adminUser, reason) {
+// Ask the AI to answer the customer message that is still waiting, or with followUp to write
+// first (see facebookAiRetry).
+async function requestAiRetry(conversationId, adminUser, reason, { followUp = false } = {}) {
   await admin.firestore().collection('ai_retry_requests').add({
     conversationId,
     reason,
+    ...(followUp ? { followUp: true } : {}),
     requestedBy: adminUser?.uid || null,
     createdAt: admin.firestore.FieldValue.serverTimestamp(),
   })
@@ -797,19 +801,28 @@ const adminActions = {
     return { success: true }
   },
 
-  // Answer the customer message that is still waiting, for example after the team added the
-  // house information. The AI answers as if the message had just arrived.
+  // One button for the AI: answer the customer's message that is still waiting (for example after
+  // the team added the house information), or, when nothing is waiting, write first: one message
+  // that carries on from the conversation (a follow-up). Facebook only allows this within 24 hours
+  // of the customer's last message, and there is one follow-up until the customer writes again.
   async askAiToReply({ conversationId: id }, adminUser) {
     const { data } = await loadConversation(id)
     const settings = (await admin.firestore().doc('messenger_settings/ai').get()).data() || {}
     if (settings.enabled !== true) throw httpError(409, 'AI ถูกปิดทั้งระบบอยู่ เปิดสวิตช์ "AI ตอบอัตโนมัติ" ก่อน')
     if (data.botPaused === true) throw httpError(409, 'AI หยุดตอบแชทนี้อยู่ กด "เปิดต่อ" ก่อน')
     const inbound = toMillisValue(data.lastInboundAt)
-    if (!(inbound > 0) || inbound <= toMillisValue(data.lastOutboundAt)) {
-      throw httpError(409, 'ไม่มีข้อความของลูกค้าที่รอคำตอบ')
+    if (!(inbound > 0)) throw httpError(409, 'ลูกค้ายังไม่เคยทักมาในแชทนี้')
+    if (inbound > toMillisValue(data.lastOutboundAt)) {
+      await requestAiRetry(id, adminUser, 'manual')
+      return { success: true, mode: 'answer' }
     }
-    await requestAiRetry(id, adminUser, 'manual')
-    return { success: true }
+    if (Date.now() - inbound > MESSAGING_WINDOW_MS) {
+      throw httpError(409, 'ลูกค้าทักมาล่าสุดเกิน 24 ชั่วโมง Facebook ไม่ให้เพจทักไปก่อน ต้องรอให้ลูกค้าทักมา')
+    }
+    if (toMillisValue(data.lastFollowUpAt) > inbound) throw httpError(409, 'AI ทักลูกค้าไปแล้ว รอให้ลูกค้าตอบก่อน')
+    if ((Number(data.aiRetryLockUntil) || 0) > Date.now()) throw httpError(409, 'AI เพิ่งตอบไป รอสักครู่แล้วลองใหม่')
+    await requestAiRetry(id, adminUser, 'follow-up', { followUp: true })
+    return { success: true, mode: 'follow-up' }
   },
 
   // For testing: make the AI forget this chat. Messages stay visible in the inbox but the AI

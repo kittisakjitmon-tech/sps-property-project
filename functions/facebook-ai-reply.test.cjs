@@ -1720,3 +1720,51 @@ test('questions followed by a picture are still answered (pictures off), by the 
   await requestRetry('rp')
   assert.equal(sent.length, 1)
 })
+
+// ─── The AI writes first ─────────────────────────────────────────────────────
+const followUpRequest = id => {
+  store.set(`ai_retry_requests/${id}`, { conversationId: CID, reason: 'follow-up', followUp: true })
+  return facebookAiRetry.run(new DocRef(`ai_retry_requests/${id}`).snap(), {})
+}
+
+test('a follow-up carries on from the conversation, once, without pushing house cards', async () => {
+  store.set('messenger_conversations/conv1', {
+    pageId: 'P1', participantId: 'U1', pageName: 'เพจ',
+    staffListings: [{ id: 'h1', type: 'บ้านแฝด', title: 'แยกมาบโป่ง', price: 2190000, priceVisible: true, details: TWIN_NOTE }],
+  })
+  addIncoming('f1', 'สนใจบ้านแฝดครับ ราคาเท่าไหร่', NOW - 40 * 60 * 1000)
+  store.set(`messenger_conversations/${CID}/messages/f2`, { direction: 'outgoing', sentBy: 'ai', text: 'ราคา 2.19 ล้านครับ สนใจนัดดูบ้านไหมครับ', attachments: [], timestamp: new Ts(NOW - 39 * 60 * 1000) })
+  let contents
+  const prompt = await capturePrompt(async () => {
+    modelScript = [async seen => { contents = seen; return [{ text: 'ยังสนใจบ้านแฝดมาบโป่งอยู่ไหมคะ สะดวกมาดูวันไหนคะ' }] }]
+    await followUpRequest('fu1')
+  })
+  assert.equal(sent.length, 1, 'one text message, no cards')
+  assert.match(sent[0].message.text, /สะดวกมาดู/)
+  assert.match(prompt, /ตอนนี้คุณเป็นฝ่ายทักลูกค้าก่อน/)
+  const last = contents.at(-1)
+  assert.equal(last.role, 'user')
+  assert.match(last.parts[0].text, /ข้อความจากระบบ ไม่ใช่ลูกค้า/)
+  assert.match(contents.map(item => item.parts.map(part => part.text || '').join('')).join('\n'), /ราคาเท่าไหร่[\s\S]*2\.19 ล้าน/)
+  assert.equal(stored[0].extra.followUp, true)
+  assert.ok(conversation().lastFollowUpAt)
+
+  // pressed again before the customer writes: nothing more is sent
+  store.set(`messenger_conversations/${CID}/messages/f3`, { direction: 'outgoing', sentBy: 'ai', followUp: true, text: sent[0].message.text, attachments: [], timestamp: new Ts(NOW - 1000) })
+  store.set('messenger_conversations/conv1', { ...conversation(), aiRetryLockUntil: undefined })
+  model([{ text: 'ต้องไม่ถูกส่ง' }])
+  await followUpRequest('fu2')
+  assert.equal(sent.length, 1)
+})
+
+test('a follow-up request answers normally when the customer wrote in the meantime', async () => {
+  addIncoming('g1', 'ขอพิกัดหน่อยครับ', NOW - 1000)
+  let prompt = ''
+  prompt = await capturePrompt(async () => {
+    model([{ text: 'ได้เลยครับ' }])
+    await followUpRequest('fu3')
+  })
+  assert.equal(sent.length, 1)
+  assert.ok(!prompt.includes('ตอนนี้คุณเป็นฝ่ายทักลูกค้าก่อน'))
+  assert.equal(stored[0].extra.followUp, undefined)
+})

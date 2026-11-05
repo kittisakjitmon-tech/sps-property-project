@@ -277,3 +277,12 @@ A price is only kept when the post itself says it. If the AI cannot be reached, 
 read from the text and the inbox says so. The customer-facing AI answers from the whole post.
 With "ให้ AI บอกราคาในโพสต์กับลูกค้าได้" unticked, the lines about money are removed before the
 AI sees the post, and it is given only the masked price (e.g. 2.1xxx ล้านบาท).
+
+## "ให้ AI ตอบที่ค้าง" / "ให้ AI ทักต่อ" (one button in the inbox)
+
+- When the customer's latest message has no reply, the button asks the AI to answer it.
+- When nothing is waiting, it becomes "ให้ AI ทักต่อ": after a confirmation the AI writes one
+  message that carries on from the conversation (one question that moves it forward, no new
+  houses or cards, no greeting). It is saved with `followUp: true`, and the chat gets
+  `lastFollowUpAt`. One follow-up until the customer writes again, and only within Facebook's
+  24 hours after the customer's last message.

@@ -451,3 +451,26 @@ test('a super admin chooses how the AI ends its sentences', async () => {
   await reject(adminActions.setAiGuidance({ particle: 'ครับ' }, ADMIN), 403)
   assert.equal(store.get('messenger_settings/ai').particle, 'ค่ะ')
 })
+
+test('with nothing waiting the button asks the AI to write first, within Facebook\'s 24 hours, once', async () => {
+  store.set('messenger_settings/ai', { enabled: true })
+  const now = Date.now()
+  store.set(CONV, { pageId: 'P1', participantId: 'U1', lastInboundAt: now - 60 * 60 * 1000, lastOutboundAt: now - 30 * 60 * 1000 })
+  const result = await adminActions.askAiToReply({ conversationId: 'c1' }, ADMIN)
+  assert.equal(result.mode, 'follow-up')
+  assert.deepEqual(retryRequests().map(request => [request.reason, request.followUp]), [['follow-up', true]])
+
+  // already followed up and the customer has not written since
+  store.set(CONV, { ...conversation(), lastFollowUpAt: now - 10 * 60 * 1000 })
+  await reject(adminActions.askAiToReply({ conversationId: 'c1' }, ADMIN), 409)
+  // the AI answered a moment ago
+  store.set(CONV, { pageId: 'P1', participantId: 'U1', lastInboundAt: now - 60000, lastOutboundAt: now - 30000, aiRetryLockUntil: now + 60000 })
+  await reject(adminActions.askAiToReply({ conversationId: 'c1' }, ADMIN), 409)
+  // outside the 24 hours
+  store.set(CONV, { pageId: 'P1', participantId: 'U1', lastInboundAt: now - 25 * 60 * 60 * 1000, lastOutboundAt: now - 24 * 60 * 60 * 1000 })
+  await reject(adminActions.askAiToReply({ conversationId: 'c1' }, ADMIN), 409)
+  // the customer never wrote
+  store.set(CONV, { pageId: 'P1', participantId: 'U1' })
+  await reject(adminActions.askAiToReply({ conversationId: 'c1' }, ADMIN), 409)
+  assert.equal(retryRequests().length, 1)
+})

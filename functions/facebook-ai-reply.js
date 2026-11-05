@@ -42,6 +42,8 @@ const {
   withImages,
   IMAGE_MIME_TYPES,
   buildSystemPrompt,
+  withFollowUpCue,
+  FOLLOW_UP_CUE,
   runConversation,
 } = require('./facebook-ai-core.cjs')
 const { createOpenRouterGenerate } = require('./facebook-ai-openrouter')
@@ -151,6 +153,7 @@ async function loadRecentMessages(conversationRef) {
       sentBy: data.sentBy || null,
       kind: data.kind || null,
       timestamp: data.timestamp?.toMillis?.() || 0,
+      followUp: data.followUp === true,
     }
   })
 }
@@ -303,7 +306,10 @@ async function loadImageParts(urls, maxBytes, logContext) {
 // the house information the AI was waiting for. A retry skips the "too old", "a person answered
 // recently" and hourly-limit rules, because the team asked for it, but never answers a chat
 // that is already answered.
-async function answerCustomer({ conversationId, message, messageRef, retry = false }) {
+// With followUp (only with retry), when the customer has not written since the last reply the AI
+// writes first: one message that carries on from the conversation. If the customer has written
+// in the meantime, it is an ordinary answer.
+async function answerCustomer({ conversationId, message, messageRef, retry = false, followUp = false }) {
   if (message?.direction !== 'incoming') return null
 
   const db = admin.firestore()
@@ -349,23 +355,30 @@ async function answerCustomer({ conversationId, message, messageRef, retry = fal
       functions.logger.info('AI reply skipped', { ...logContext, reason: 'newer-message' })
       return null
     }
+    const newest = [...recent].sort((first, second) => second.timestamp - first.timestamp)[0]
+    const followingUp = retry && followUp && newest?.direction === 'outgoing'
+    if (followingUp) {
+      logContext.followUp = true
+      // One nudge until the customer writes again (a second press, or two presses at once).
+      if (newest.followUp) {
+        functions.logger.info('AI follow-up skipped', { ...logContext, reason: 'already-followed-up' })
+        return null
+      }
+    }
     // Pictures from every message the customer sent since the last reply, not only this one.
     const waiting = unansweredCustomerMessages(recent)
     const burstAttachments = (waiting.length ? waiting : [message]).flatMap(item => item.attachments || [])
-    const incomingImages = imageCfg.enabled ? pickImageAttachments(burstAttachments, imageCfg.maxImages) : []
-    if (retry) {
-      const newest = [...recent].sort((first, second) => second.timestamp - first.timestamp)[0]
-      if (!newest || newest.direction !== 'incoming') {
-        functions.logger.info('AI retry skipped', { ...logContext, reason: 'already-answered' })
-        return null
-      }
+    const incomingImages = imageCfg.enabled && !followingUp ? pickImageAttachments(burstAttachments, imageCfg.maxImages) : []
+    if (retry && !followingUp && (!newest || newest.direction !== 'incoming')) {
+      functions.logger.info('AI retry skipped', { ...logContext, reason: 'already-answered' })
+      return null
     }
     const decision = shouldReply({
       settings,
       conversation: { ...conversation, botResumedAtMs: conversation.botResumedAt?.toMillis?.() || 0 },
       // Every message the customer sent since the last reply counts: questions followed by a
       // picture (which the AI may not be able to read) must still be answered.
-      text: [...waiting.map(item => item.text || ''), message.text || ''].join('\n'),
+      text: followingUp ? FOLLOW_UP_CUE : [...waiting.map(item => item.text || ''), message.text || ''].join('\n'),
       timestamp: message.timestamp?.toMillis?.() || Date.now(),
       recentMessages: recent,
       hasImages: incomingImages.length > 0,
@@ -767,13 +780,14 @@ async function answerCustomer({ conversationId, message, messageRef, retry = fal
       staffNote,
       staffListings,
       attachedProperty: attachedProperties.length > 0,
+      followUp: followingUp,
       creditChecklist: settings.creditChecklist,
       staffImages,
       calendar: calendarCfg.enabled ? { scheduleText: calendarRules.describeSchedule(calendarCfg) } : null,
     })
     const { text: rawText, calls: toolCalls } = await runConversation({
       generate: createGenerate({ settings, systemInstruction, info: servedBy }),
-      contents: withImages(historyToContents(recent), imageParts),
+      contents: followingUp ? withFollowUpCue(historyToContents(recent)) : withImages(historyToContents(recent), imageParts),
       handlers,
     })
 
@@ -839,6 +853,7 @@ async function answerCustomer({ conversationId, message, messageRef, retry = fal
       // What this answer was based on, so the team can see whether the AI had the house
       // information (shown under the AI message in the inbox).
       extra: {
+        ...(followingUp ? { followUp: true } : {}),
         aiContext: {
           properties: [...new Set(focus.map(property => property.code))],
           listings: staffListings.length,
@@ -853,7 +868,8 @@ async function answerCustomer({ conversationId, message, messageRef, retry = fal
     // model asks for them), before any other house. A failure here must not undo the reply.
     const shown = new Set(cardCodes)
     let attachedSent = false
-    if (hasAttached && !blockedByGuard) {
+    // A follow-up is one short message: the attached houses are not pushed with it.
+    if (hasAttached && !blockedByGuard && !followingUp) {
       const shownBefore = (conversation.attachedShownAt?.toMillis?.() || 0) > resetAtMs
       if (!attachedToSend && !shownBefore) attachedToSend = { properties: attachedProperties, listings: staffListings }
     }
@@ -944,6 +960,7 @@ async function answerCustomer({ conversationId, message, messageRef, retry = fal
     const update = {}
     if (shown.size) update.shownCodes = FieldValue.arrayUnion(...shown)
     if (attachedSent) update.attachedShownAt = FieldValue.serverTimestamp()
+    if (followingUp) update.lastFollowUpAt = admin.firestore.Timestamp.now()
     if (othersRequestedNow()) update.othersRequestedAt = FieldValue.serverTimestamp()
     if (focusCode && focusCode !== conversation.currentPropertyCode) {
       update.currentPropertyCode = focusCode
@@ -1041,12 +1058,16 @@ const facebookAiRetry = functions
       let result = null
       try {
         const latest = await conversationRef.collection('messages').orderBy('timestamp', 'desc').limit(20).get()
-        const newest = latest.docs[0]
-        if (!newest || newest.get('direction') !== 'incoming') {
-          functions.logger.info('AI retry skipped', { conversationId, reason: 'nothing-waiting' })
+        // A follow-up writes first, so it is based on the customer's latest message, not the newest one.
+        const followUp = request.followUp === true
+        const base = followUp
+          ? latest.docs.find(doc => doc.get('direction') === 'incoming')
+          : latest.docs[0]
+        if (!base || base.get('direction') !== 'incoming') {
+          functions.logger.info('AI retry skipped', { conversationId, reason: followUp ? 'no-customer-message' : 'nothing-waiting' })
           return null
         }
-        result = await answerCustomer({ conversationId, message: newest.data(), messageRef: newest.ref, retry: true })
+        result = await answerCustomer({ conversationId, message: base.data(), messageRef: base.ref, retry: true, followUp })
         return result
       } finally {
         // Not answered (skipped or failed): let the team's next "answer what is waiting" through
