@@ -290,6 +290,19 @@ test('links in a reply must come from the property results or be the site root',
   assert.equal(sanitizeUrls('ลิงก์ https://spspropertysolution.com/p/made-up.', allowed).includes('made-up'), false)
 })
 
+test('Thai typed right after a link is kept, and the link is kept too', () => {
+  const allowed = ['https://spspropertysolution.com/p/a1']
+  assert.equal(
+    sanitizeUrls('ดูได้ที่ https://spspropertysolution.com/p/a1นะครับ', allowed),
+    'ดูได้ที่ https://spspropertysolution.com/p/a1 นะครับ',
+  )
+  // A link that is not allowed is removed, but the Thai after it stays.
+  assert.equal(sanitizeUrls('ดู https://evil.example/xนะครับ', allowed), 'ดู นะครับ')
+  assert.equal(sanitizeUrls('(https://spspropertysolution.com/p/a1)', allowed), '(https://spspropertysolution.com/p/a1)')
+  // Thai after a link still counts towards the reply length.
+  assert.equal(isTooLong(`https://spspropertysolution.com/p/a1${'ก'.repeat(221)}`, 220), true)
+})
+
 test('replies are off unless explicitly enabled and honour pause, humans and rate limits', () => {
   const now = 10_000_000
   const ok = { settings: { enabled: true }, conversation: {}, text: 'สนใจค่ะ', timestamp: now - 1000, recentMessages: [], now }

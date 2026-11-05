@@ -1301,6 +1301,17 @@ test('one request is handled once, and two close together do not both answer', a
   assert.equal(sent.length, 1) // locked: another retry is running
 })
 
+test('a retry that did not answer does not block the next one', async () => {
+  waitingMessage('ราคาเท่าไหร่', NOW - 60000)
+  model([]) // the model gives no answer
+  await requestRetry('r1')
+  assert.equal(sent.length, 0)
+  assert.equal(conversation().aiRetryLockUntil, undefined)
+  model([{ text: 'ประมาณ 2.1xxx ล้านบาทครับ' }])
+  await requestRetry('r2')
+  assert.equal(sent.length, 1)
+})
+
 test('a retry for a conversation that does not exist or with nothing waiting does nothing', async () => {
   store.set('ai_retry_requests/rx', { conversationId: 'nope' })
   await facebookAiRetry.run(new DocRef('ai_retry_requests/rx').snap(), {})

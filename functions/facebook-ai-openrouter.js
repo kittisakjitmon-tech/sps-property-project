@@ -54,7 +54,7 @@ function createOpenRouterGenerate({ settings, systemInstruction, withTools = tru
             model,
             messages: toOpenAiMessages(contents, systemInstruction),
             temperature: 0.6,
-            max_tokens: 500,
+            max_tokens: 1024,
             ...(withTools ? { tools: toOpenAiTools(TOOL_DECLARATIONS), tool_choice: 'auto' } : {}),
             ...(settings.openrouterDataCollection === 'deny' ? { provider: { data_collection: 'deny' } } : {}),
           }),

@@ -47,6 +47,10 @@ const toNumber = value => {
 }
 const escapeRegExp = value => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
 
+// A link ends at whitespace, ")" or the first non-ASCII character: Thai text is often typed
+// right after a link ("…/p/abcนะครับ") and must not be treated as part of it.
+const URL_PATTERN = /https?:\/\/[!-(*-~]+/g
+
 const PRICE_LINE = /ราคา|บาท|ผ่อน|ดาวน์|เงินดาวน์|ค่างวด|\d+(?:\.\d+)?\s*(?:ล้าน|ลบ|k\b|พัน|หมื่น|แสน)/i
 
 // ─── Prices ──────────────────────────────────────────────────────────────────
@@ -579,9 +583,12 @@ function sanitizeUrls(text, allowedUrls) {
   if (typeof text !== 'string') return text
   const allowed = new Set([SITE_URL, `${SITE_URL}/`, ...(allowedUrls || [])])
   return text
-    .replace(/https?:\/\/[^\s)]+/g, match => {
+    .replace(URL_PATTERN, (match, offset, whole) => {
       const trimmed = match.replace(/[.,;!?]+$/, '')
-      return allowed.has(trimmed) ? match : ''
+      if (!allowed.has(trimmed)) return ''
+      // Thai is written without spaces; keep Messenger from reading "ครับ" as part of the link.
+      const next = whole[offset + match.length]
+      return next && next > '~' ? `${match} ` : match
     })
     .replace(/[ \t]{2,}/g, ' ')
     .replace(/\n{3,}/g, '\n\n')
@@ -683,7 +690,6 @@ function cleanReplyText(raw) {
 // A reply is one message. If it is longer than the limit (links don't count) it is
 // shortened by the model, and as a last resort cut at the last space before the limit.
 const DEFAULT_MAX_REPLY_CHARS = 220
-const URL_PATTERN = /https?:\/\/[^\s)]+/g
 
 function replyCharLimit(settings) {
   const n = Number(settings?.maxReplyChars)

@@ -63,6 +63,7 @@ const FAQ_COLLECTION = 'messenger_faq'
 const DEFAULT_MODEL = 'gemini-2.5-flash'
 const DEFAULT_LOCATION = 'us-central1'
 const CACHE_TTL_MS = 5 * 60 * 1000
+const OUTPUT_TOKENS = 2048
 const MAX_FAQ_ENTRIES = 40
 const MAX_HOUSE_IMAGES = 4
 const CATALOG_FIELDS = [
@@ -147,11 +148,18 @@ function createGenerate({ settings, systemInstruction, info }) {
     model: settings.model || DEFAULT_MODEL,
     systemInstruction: { role: 'system', parts: [{ text: systemInstruction }] },
     tools: [{ functionDeclarations: TOOL_DECLARATIONS }],
-    generationConfig: { temperature: 0.6, maxOutputTokens: 500 },
+    // Gemini 2.5 counts its "thinking" against maxOutputTokens, so a small budget can leave
+    // nothing for the answer. Reply length is enforced in code (replyCharLimit), not here.
+    generationConfig: { temperature: 0.6, maxOutputTokens: OUTPUT_TOKENS },
   })
   return async contents => {
     const result = await model.generateContent({ contents })
-    return result.response?.candidates?.[0]?.content?.parts || []
+    const candidate = result.response?.candidates?.[0]
+    const parts = candidate?.content?.parts || []
+    if (!parts.some(part => part.text || part.functionCall)) {
+      functions.logger.warn('Gemini returned no answer', { finishReason: candidate?.finishReason || null })
+    }
+    return parts
   }
 }
 
@@ -169,7 +177,7 @@ async function shortenReply(settings, text, maxChars) {
       const model = vertex.getGenerativeModel({
         model: settings.model || DEFAULT_MODEL,
         systemInstruction: { role: 'system', parts: [{ text: request.systemInstruction }] },
-        generationConfig: { temperature: 0.3, maxOutputTokens: 300 },
+        generationConfig: { temperature: 0.3, maxOutputTokens: OUTPUT_TOKENS },
       })
       const result = await model.generateContent({ contents: request.contents })
       parts = result.response?.candidates?.[0]?.content?.parts || []
@@ -289,6 +297,7 @@ async function answerCustomer({ conversationId, message, messageRef, retry = fal
   const logContext = { conversationId, ...(retry ? { retry: true } : {}) }
   // Which step we were in, so a failure says where it happened.
   let stage = 'settings'
+  let replied = false
 
   try {
     const settings = (await db.doc(SETTINGS_DOC).get()).data() || {}
@@ -713,6 +722,7 @@ async function answerCustomer({ conversationId, message, messageRef, retry = fal
 
     stage = 'send'
     const sent = await sendFacebookMessage(conversation.pageId, conversation.participantId, { text })
+    replied = true
     stage = 'store'
     await storeMessengerMessage({
       pageId: conversation.pageId,
@@ -846,7 +856,7 @@ async function answerCustomer({ conversationId, message, messageRef, retry = fal
       facebook: error.response?.data?.error,
     })
   }
-  return null
+  return replied ? { replied: true } : null
 }
 
 const AI_RUNTIME = { timeoutSeconds: 120, memory: '512MB', maxInstances: 5, secrets: [...FACEBOOK_SECRETS, 'OPENROUTER_API_KEY'] }
@@ -889,13 +899,22 @@ const facebookAiRetry = functions
         functions.logger.info('AI retry skipped', { conversationId, reason: 'already-running' })
         return null
       }
-      const latest = await conversationRef.collection('messages').orderBy('timestamp', 'desc').limit(20).get()
-      const newest = latest.docs[0]
-      if (!newest || newest.get('direction') !== 'incoming') {
-        functions.logger.info('AI retry skipped', { conversationId, reason: 'nothing-waiting' })
-        return null
+      let result = null
+      try {
+        const latest = await conversationRef.collection('messages').orderBy('timestamp', 'desc').limit(20).get()
+        const newest = latest.docs[0]
+        if (!newest || newest.get('direction') !== 'incoming') {
+          functions.logger.info('AI retry skipped', { conversationId, reason: 'nothing-waiting' })
+          return null
+        }
+        result = await answerCustomer({ conversationId, message: newest.data(), messageRef: newest.ref, retry: true })
+        return result
+      } finally {
+        // Not answered (skipped or failed): let the team's next "answer what is waiting" through
+        // instead of ignoring it for 90 seconds. After an answer the lock stays, so a second
+        // request close behind cannot answer the same message again.
+        if (!result?.replied) await conversationRef.set({ aiRetryLockUntil: admin.firestore.FieldValue.delete() }, { merge: true })
       }
-      return await answerCustomer({ conversationId, message: newest.data(), messageRef: newest.ref, retry: true })
     } catch (error) {
       functions.logger.error('AI retry failed', { conversationId, reason: error.message })
       return null

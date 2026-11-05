@@ -322,8 +322,10 @@ async function storeMessengerMessage({
   await db.runTransaction(async transaction => {
     const existingMessage = await transaction.get(messageRef)
     if (existingMessage.exists) {
-      // The echo of a message we just sent can arrive before we store it; keep the sender tag.
-      if (sentBy && !existingMessage.get('sentBy')) transaction.update(messageRef, { sentBy })
+      // The echo of a message we just sent can arrive before we store it; keep the sender tag
+      // and what we know about it (kind: 'cards' / 'images' keeps it out of the AI's hourly
+      // limit, aiContext is shown in the inbox).
+      if (sentBy && !existingMessage.get('sentBy')) transaction.update(messageRef, { ...(extra || {}), sentBy })
       return
     }
 
