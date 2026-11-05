@@ -1668,3 +1668,17 @@ test('a pasted post with the price marked "do not tell" never lets the real pric
   assert.ok(!sent[0].message.text.includes('2.19'), 'the guard replaced the answer')
   assert.ok(conversation().needsHuman)
 })
+
+test('a house saved before posts were read (no price stored) is still answered with the post\'s price', async () => {
+  store.set('messenger_conversations/conv1', {
+    pageId: 'P1', participantId: 'U1', pageName: 'เพจ', attachedShownAt: new Ts(NOW - 1000),
+    staffListings: [{ id: 'h1', type: 'บ้านเดี่ยว', title: '', price: null, priceVisible: true, details: TWIN_NOTE }],
+  })
+  const prompt = await capturePrompt(async () => {
+    model([{ text: 'ราคา 2.19 ล้านครับ' }])
+    await receive('ราคาเท่าไหร่')
+  })
+  assert.ok(!prompt.includes('ไม่ได้ระบุราคา'))
+  assert.match(prompt, /ราคา: 2,190,000 บาท/)
+  assert.match(sent[0].message.text, /2\.19 ล้าน/)
+})

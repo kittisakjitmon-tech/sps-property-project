@@ -360,12 +360,16 @@ const LISTING_TYPES = ['บ้านเดี่ยว', 'บ้านแฝด'
 
 // The post the team pasted, kept line by line (a post's lines are its structure, and a hidden
 // price is removed by line). Spaces inside a line are tidied, runs of blank lines shortened.
+// Text copied from a Messenger chat starts lines with "14:05 Kit84-บ้านชลบุรี ": the time and
+// the sender, which are not part of the post.
+const CHAT_STAMP = /^\d{1,2}:\d{2}\s+(?![-–—]|น\.|ถึง)\S+\s+/
+
 function cleanPost(value, max = MAX_LISTING_TEXT) {
   if (typeof value !== 'string') return ''
   return value
     .replace(/\r\n?/g, '\n')
     .split('\n')
-    .map(line => line.replace(/[ \t\u00a0]+/g, ' ').trim())
+    .map(line => line.replace(/[ \t\u00a0]+/g, ' ').trim().replace(CHAT_STAMP, ''))
     .join('\n')
     .replace(/\n{3,}/g, '\n\n')
     .trim()
@@ -461,6 +465,14 @@ function parseJsonObject(raw) {
   } catch {
     return null
   }
+}
+
+// A house saved without a price (for example before the post was read by the AI) still has the
+// price its post states, so the chatbot, the card and the price guard all know it.
+function completeStaffListing(item) {
+  if (!item || typeof item !== 'object' || item.price > 0) return item
+  const price = guessListingFields(item.details).price
+  return price > 0 ? { ...item, price } : item
 }
 
 // The post as the customer-facing AI may see it. With the price marked "do not tell", every
@@ -1526,6 +1538,7 @@ module.exports = {
   buildExtractRequest,
   parseJsonObject,
   publicListingText,
+  completeStaffListing,
   MAX_LISTING_TEXT,
   formatStaffListings,
   MAX_STAFF_LISTINGS,

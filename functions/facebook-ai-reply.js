@@ -31,6 +31,7 @@ const {
   buildShortenRequest,
   cleanReplyText,
   publicListingText,
+  completeStaffListing,
   shouldReply,
   replyDelayMs,
   hasNewerCustomerMessage,
@@ -386,6 +387,7 @@ async function answerCustomer({ conversationId, message, messageRef, retry = fal
     const staffNote = typeof conversation.staffNote === 'string' ? conversation.staffNote.trim() : ''
     const staffListings = (Array.isArray(conversation.staffListings) ? conversation.staffListings : [])
       .filter(item => item && typeof item.id === 'string')
+      .map(completeStaffListing)
     const hasTeamInfo = Boolean(staffNote || staffListings.length)
     // A property the AI itself remembered from an earlier answer must not push aside the house
     // the team wrote down for this chat; one the team picked in the inbox still counts.

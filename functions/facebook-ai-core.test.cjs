@@ -8,6 +8,7 @@ const {
   buildExtractRequest,
   parseJsonObject,
   publicListingText,
+  completeStaffListing,
   toIndexedProperty,
   searchProperties,
   shouldReply,
@@ -889,4 +890,41 @@ test('with the price marked "do not tell", the lines about money are left out of
   const lines = formatStaffListings([{ id: 'a1', type: 'บ้านแฝด', details: POST, price: 2190000, priceVisible: false }])
   assert.ok(!lines[0].includes('2.19 ล้าน') && !lines[0].includes('2,190,000'))
   assert.match(lines[0], /2\.1xxx ล้านบาท/)
+})
+
+// The post as copied out of a Messenger chat: lines start with the time and the sender.
+const COPIED_POST = `14:05 Kit84-บ้านชลบุรี 🏡 บ้านเเฝด 🗺️แยกมาบโป่ง เฟส8-10
+2 ห้องนอน 2 ห้องน้ำ 1 ครัว 2 จอดรถ
+พื้นที่เงียบสงบ เป็นส่วนตัว
+.
+✅โรงจอดรถ
+✅ลานซักล้างด้านหลัง
+✅เทพื้นรอบบ้าน
+✅โคมไฟสวยงาม สไตล์ค่าเฟ่ หรูหรา เข้ากับบ้าน
+✅เค้าเตอร์ครัว 
+✅ฝักบัว Rain Shower เพื่อสุนทรีในการอาบน้ำ
+✅สกิมโค้ททั้งภายใน และภายนอก 
+✅รั้วสูงพร้อมความเป็นส่วนตัว
+✅ฟรีค่ามิเตอร์น้ำ
+✅ฟรีค่ามิเตอร์ไฟฟ้า
+✅ฟรีปั๊มน้ำ
+✅ฟรีถังสำรองน้ำ 1,000 ลิตร  
+
+พิกัด 📍
+https://maps.app.goo.gl/38ManFKLBfZc8vE5A?g_st=ipc
+14:05 Kit84-บ้านชลบุรี ราคา 2.19 ล้าน`
+
+test('a post copied out of a chat loses the time and sender stamps, and its price is found', () => {
+  const text = cleanPost(COPIED_POST)
+  assert.ok(!text.includes('14:05') && !text.includes('Kit84'))
+  assert.equal(text.split('\n').at(-1), 'ราคา 2.19 ล้าน')
+  assert.equal(guessListingFields(COPIED_POST).price, 2190000)
+  assert.equal(guessListingFields(COPIED_POST).title, 'บ้านแฝด แยกมาบโป่ง เฟส8-10')
+  assert.equal(cleanPost('10:00 - 17:00 เปิดให้ชม\n9:30 น. นัดได้'), '10:00 - 17:00 เปิดให้ชม\n9:30 น. นัดได้') // opening hours stay
+})
+
+test('a house saved without a price gets the price its post states', () => {
+  assert.equal(completeStaffListing({ id: 'h', details: COPIED_POST, price: null }).price, 2190000)
+  assert.equal(completeStaffListing({ id: 'h', details: COPIED_POST, price: 2500000 }).price, 2500000) // the saved price wins
+  assert.equal(completeStaffListing({ id: 'h', details: 'บ้านสวย' }).price, undefined)
 })

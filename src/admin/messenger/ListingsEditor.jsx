@@ -31,6 +31,7 @@ function toDraft(listing) {
     bathrooms: listing.bathrooms ?? '',
     price: listing.price ? String(listing.price) : '',
     priceNote: listing.priceNote || '',
+    neverRead: !listing.readBy && Boolean(listing.details), // saved before posts were read by the AI
   }
 }
 
@@ -126,7 +127,7 @@ export default function ListingsEditor({ listings, busy, creating, onCreatingCha
     } else if (fieldsEdited) {
       // The team corrected what was read: keep their values, even if the post changed too.
       saved = await onSave({ ...draft, fieldsEdited: true }, { extract: false })
-    } else if (postChanged) {
+    } else if (postChanged || draft.neverRead) {
       saved = await onSave({ id: draft.id, details: draft.details, priceVisible: draft.priceVisible }, { extract: true })
     } else {
       saved = await onSave({ ...draft }, { extract: false })
@@ -137,7 +138,7 @@ export default function ListingsEditor({ listings, busy, creating, onCreatingCha
     closeForm()
   }
 
-  const willRead = creating || (!fieldsEdited && postChanged)
+  const willRead = creating || (!fieldsEdited && (postChanged || draft.neverRead))
 
   const form = (
     <form onSubmit={submit} className="space-y-2 rounded-xl border border-blue-200 bg-blue-50/50 p-3 text-xs">
@@ -280,7 +281,9 @@ export default function ListingsEditor({ listings, busy, creating, onCreatingCha
                         <span className={`font-medium ${readBy.className}`}>{readBy.label}:</span>{' '}
                         <span className="font-semibold">{readSummary(listing) || 'ยังอ่านข้อมูลไม่ได้'}</span>
                       </p>
-                      {!listing.price && (
+                      {!listing.readBy && listing.details ? (
+                        <p className="text-amber-700">บ้านนี้บันทึกก่อนระบบให้ AI อ่านโพสต์ กด &quot;แก้ไข&quot; แล้ว &quot;บันทึก&quot; เพื่อให้ AI อ่านประเภท ห้อง ทำเล ราคา</p>
+                      ) : !listing.price && (
                         <p className="text-amber-700">ไม่พบราคาในโพสต์ AI จะบอกลูกค้าว่าทีมงานจะแจ้งราคา (ใส่ราคาในโพสต์ หรือกด แก้ไข เพื่อใส่เอง)</p>
                       )}
                       {listing.details && (
