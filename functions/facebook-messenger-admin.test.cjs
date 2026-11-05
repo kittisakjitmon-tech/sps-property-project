@@ -313,6 +313,7 @@ const retryRequests = () => [...store.entries()].filter(([path]) => path.startsW
 const waiting = (extra = {}) => store.set(CONV, { pageId: 'P1', participantId: 'U1', needsProperty: true, lastInboundAt: 2000, lastOutboundAt: 1000, ...extra })
 
 test('house information added to a chat the AI was waiting on asks the AI to answer', async () => {
+  store.set('messenger_settings/ai', { enabled: true })
   waiting()
   const set = await adminActions.setConversationProperty({ conversationId: 'c1', propertyCode: 'SPS-TH-1' }, ADMIN)
   assert.equal(set.answering, true)
@@ -334,6 +335,25 @@ test('no retry when the AI was not waiting, when the note is cleared, or when no
   await reject(adminActions.saveConversationListing({ conversationId: 'c1', listing: {} }, ADMIN), 400)
   await reject(adminActions.setConversationProperty({ conversationId: 'c1', propertyCode: 'NOPE' }, ADMIN), 404)
   assert.equal(retryRequests().length, 0)
+})
+
+test('setting the property answers any unanswered customer message, and says why when the AI will not', async () => {
+  store.set('messenger_settings/ai', { enabled: true })
+  // The AI did not mark the chat as waiting (a person replied by hand earlier), but the
+  // customer's latest message has no answer yet.
+  waiting({ needsProperty: undefined })
+  const set = await adminActions.setConversationProperty({ conversationId: 'c1', propertyCode: 'SPS-TH-1' }, ADMIN)
+  assert.equal(set.answering, true)
+  assert.equal(retryRequests().length, 1)
+
+  waiting({ needsProperty: undefined, botPaused: true })
+  assert.equal((await adminActions.setConversationProperty({ conversationId: 'c1', propertyCode: 'SPS-TH-1' }, ADMIN)).notAnswering, 'paused')
+  store.set(CONV, { pageId: 'P1', participantId: 'U1', lastInboundAt: 2000, lastOutboundAt: 3000 })
+  assert.equal((await adminActions.setConversationProperty({ conversationId: 'c1', propertyCode: 'SPS-TH-1' }, ADMIN)).notAnswering, 'nothing-waiting')
+  store.set('messenger_settings/ai', { enabled: false })
+  waiting()
+  assert.equal((await adminActions.setConversationProperty({ conversationId: 'c1', propertyCode: 'SPS-TH-1' }, ADMIN)).notAnswering, 'disabled')
+  assert.equal(retryRequests().length, 1)
 })
 
 test('the button asks the AI to answer a waiting message, and says why when it cannot', async () => {

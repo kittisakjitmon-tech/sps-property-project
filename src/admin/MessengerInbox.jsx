@@ -231,7 +231,7 @@ export default function MessengerInbox() {
     setActionError('')
     try {
       const result = await callApi({ action: 'setConversationProperty', conversationId: selectedId, propertyCode })
-      if (result.answering) showNotice('บันทึกแล้ว AI กำลังตอบข้อความที่ค้างอยู่ของลูกค้า')
+      if (propertyCode) showAnswerNotice(result)
     } catch (propertyError) {
       setActionError(propertyError.message || 'ตั้งค่าทรัพย์ไม่สำเร็จ')
     } finally {
@@ -245,7 +245,7 @@ export default function MessengerInbox() {
     setActionError('')
     try {
       const result = await callApi({ action: 'setConversationNote', conversationId: selectedId, note })
-      if (result.answering) showNotice('บันทึกแล้ว AI กำลังตอบข้อความที่ค้างอยู่ของลูกค้า')
+      if (note) showAnswerNotice(result)
       return true
     } catch (noteError) {
       setActionError(noteError.message || 'บันทึกรายละเอียดไม่สำเร็จ')
@@ -294,8 +294,8 @@ export default function MessengerInbox() {
     setActionError('')
     try {
       const result = await callApi({ action: 'saveConversationListing', conversationId: selectedId, listing, extract })
-      if (result.answering) showNotice('บันทึกแล้ว AI กำลังตอบข้อความที่ค้างอยู่ของลูกค้า')
-      else if (extract && result.readBy === 'text') showNotice('บันทึกแล้ว แต่ AI อ่านโพสต์ไม่ได้ตอนนี้ ระบบอ่านจากข้อความแทน กรุณาตรวจข้อมูลที่อ่านได้')
+      if (extract && result.readBy === 'text' && !result.answering) showNotice('บันทึกแล้ว แต่ AI อ่านโพสต์ไม่ได้ตอนนี้ ระบบอ่านจากข้อความแทน กรุณาตรวจข้อมูลที่อ่านได้')
+      else showAnswerNotice(result)
       return result.listing || null
     } catch (listingError) {
       setActionError(listingError.message || 'บันทึกบ้านไม่สำเร็จ')
@@ -330,6 +330,19 @@ export default function MessengerInbox() {
     )
     if (!ok) return
     await runBotAction({ action: 'resetConversationContext', conversationId: selectedId })
+  }
+
+  // After the team gives a chat its house: say whether the AI is now answering the customer, and
+  // if not, why (the server's notAnswering).
+  function showAnswerNotice(result) {
+    if (result?.answering) return showNotice('บันทึกแล้ว AI กำลังตอบข้อความที่ค้างอยู่ของลูกค้า')
+    const why = {
+      paused: 'บันทึกแล้ว แต่ AI หยุดตอบแชทนี้อยู่ กด "เปิดต่อ" ที่ปุ่ม AI ด้านบน แล้วกด "ให้ AI ตอบข้อความที่ค้าง"',
+      disabled: 'บันทึกแล้ว แต่ AI ถูกปิดทั้งระบบอยู่ เปิดสวิตช์ "AI ตอบอัตโนมัติ" ก่อน',
+      'nothing-waiting': 'บันทึกแล้ว ลูกค้ายังไม่มีข้อความที่รอคำตอบ AI จะใช้ข้อมูลนี้ตอบข้อความถัดไปของลูกค้า',
+      error: 'บันทึกแล้ว แต่สั่งให้ AI ตอบไม่สำเร็จ กด "ให้ AI ตอบข้อความที่ค้าง" อีกครั้ง',
+    }[result?.notAnswering]
+    if (why) showNotice(why)
   }
 
   function showNotice(message) {

@@ -363,7 +363,9 @@ async function answerCustomer({ conversationId, message, messageRef, retry = fal
     const decision = shouldReply({
       settings,
       conversation: { ...conversation, botResumedAtMs: conversation.botResumedAt?.toMillis?.() || 0 },
-      text: message.text,
+      // Every message the customer sent since the last reply counts: questions followed by a
+      // picture (which the AI may not be able to read) must still be answered.
+      text: [...waiting.map(item => item.text || ''), message.text || ''].join('\n'),
       timestamp: message.timestamp?.toMillis?.() || Date.now(),
       recentMessages: recent,
       hasImages: incomingImages.length > 0,

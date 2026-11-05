@@ -584,16 +584,24 @@ async function requestAiRetry(conversationId, adminUser, reason) {
   })
 }
 
-// When the AI skipped a message only because the chat had no house information yet
-// (needsProperty), adding that information should not leave the customer waiting.
+// After the team gives the chat its house (a property, a typed-in house, a note), a customer who
+// is still waiting gets an answer: the AI skipped the message for lack of house information
+// (needsProperty), or the customer's latest message has no reply yet for any other reason (a
+// person replied by hand earlier, the hourly limit...). Returns { answering, notAnswering } so
+// the inbox can say why the AI is not answering.
 async function retryIfWaiting(conversationId, data, adminUser, reason) {
-  if (data?.needsProperty !== true) return false
+  const settings = (await admin.firestore().doc('messenger_settings/ai').get()).data() || {}
+  if (settings.enabled !== true) return { answering: false, notAnswering: 'disabled' }
+  if (data?.botPaused === true) return { answering: false, notAnswering: 'paused' }
+  const inbound = toMillisValue(data?.lastInboundAt)
+  const waiting = data?.needsProperty === true || (inbound > 0 && inbound > toMillisValue(data?.lastOutboundAt))
+  if (!waiting) return { answering: false, notAnswering: 'nothing-waiting' }
   try {
     await requestAiRetry(conversationId, adminUser, reason)
-    return true
+    return { answering: true }
   } catch (error) {
     functions.logger.warn('Could not request an AI retry', { conversationId, reason: error.message })
-    return false
+    return { answering: false, notAnswering: 'error' }
   }
 }
 
@@ -658,8 +666,8 @@ const adminActions = {
       currentPropertySetAt: FieldValue.serverTimestamp(),
       needsProperty: FieldValue.delete(),
     }, { merge: true })
-    const answering = await retryIfWaiting(id, before, adminUser, 'property-set')
-    return { success: true, code: property.displayId, title, answering }
+    const retry = await retryIfWaiting(id, before, adminUser, 'property-set')
+    return { success: true, code: property.displayId, title, ...retry }
   },
 
   // Free-text details the team wants the AI to use in this chat (house details, offers,
@@ -683,8 +691,8 @@ const adminActions = {
       staffNoteAt: FieldValue.serverTimestamp(),
       needsProperty: FieldValue.delete(),
     }, { merge: true })
-    const answering = await retryIfWaiting(id, before, adminUser, 'note-saved')
-    return { success: true, length: text.length, answering }
+    const retry = await retryIfWaiting(id, before, adminUser, 'note-saved')
+    return { success: true, length: text.length, ...retry }
   },
 
   // Houses the team adds for one chat (for example from a post with several houses that are not
@@ -725,8 +733,8 @@ const adminActions = {
       staffListings: next,
       needsProperty: admin.firestore.FieldValue.delete(),
     }, { merge: true })
-    const answering = await retryIfWaiting(id, data, adminUser, 'listing-saved')
-    return { success: true, listing: saved, answering, readBy }
+    const retry = await retryIfWaiting(id, data, adminUser, 'listing-saved')
+    return { success: true, listing: saved, ...retry, readBy }
   },
 
   async removeConversationListing({ conversationId: id, listingId }) {

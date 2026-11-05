@@ -1682,3 +1682,41 @@ test('a house saved before posts were read (no price stored) is still answered w
   assert.match(prompt, /ราคา: 2,190,000 บาท/)
   assert.match(sent[0].message.text, /2\.19 ล้าน/)
 })
+
+
+test('setting a database property answers the customer who was waiting for it', async () => {
+  store.set('messenger_settings/ai', { enabled: true, requirePropertyForBot: true })
+  model([{ text: 'ต้องไม่ถูกส่ง' }])
+  await receive('หลังนี้เท่าไหร่คะ')
+  assert.equal(conversation().needsProperty, true)
+  store.set('messenger_conversations/conv1', { ...conversation(), currentPropertyCode: 'SPS-CD-9', currentPropertyId: 'prop2', currentPropertySetBy: 'admin1', needsProperty: undefined })
+  model([{ text: 'คอนโดศรีราชา 1,500,000 บาทครับ' }])
+  await requestRetry()
+  assert.equal(sent[0].message.text, 'คอนโดศรีราชา 1,500,000 บาทครับ')
+  assert.equal(sent[1].message.attachment.payload.template_type, 'generic')
+})
+
+test('questions followed by a picture are still answered (pictures off), by the picture\'s run and by a retry', async () => {
+  store.set('messenger_conversations/conv1', {
+    pageId: 'P1', participantId: 'U1', pageName: 'เพจ', attachedShownAt: new Ts(NOW - 1000),
+    staffListings: [{ id: 'h1', type: 'บ้านแฝด', title: 'แยกมาบโป่ง', price: 2190000, priceVisible: true, details: TWIN_NOTE }],
+  })
+  addIncoming('q1', 'ราคาเท่าไหร่ครับ', NOW - 3000)
+  addIncoming('q2', 'ขอพิกัดหน่อย', NOW - 2000)
+  addIncoming('q3', '', NOW - 1000, [{ type: 'image', url: STORAGE_URL }])
+  spyModel('ราคา 2.19 ล้านครับ พิกัด https://maps.app.goo.gl/38ManFKLBfZc8vE5A?g_st=ipc')
+  await runFor('q1')
+  await runFor('q2')
+  assert.equal(sent.length, 0) // the picture is newer: its run answers
+  await runFor('q3')
+  assert.equal(sent.length, 1)
+  assert.match(seenContents.at(-1).parts[0].text, /ราคาเท่าไหร่[\s\S]*ขอพิกัด/)
+
+  // the team's button gives the same answer when it is pressed instead
+  sent.length = 0
+  store.delete(`messenger_conversations/${CID}/messages/q1`)
+  for (const id of ['q2', 'q3']) store.set(`messenger_conversations/${CID}/messages/${id}`, { ...store.get(`messenger_conversations/${CID}/messages/${id}`), aiHandledAt: 'TS' })
+  spyModel('ราคา 2.19 ล้านครับ')
+  await requestRetry('rp')
+  assert.equal(sent.length, 1)
+})
