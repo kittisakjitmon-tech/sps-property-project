@@ -20,6 +20,8 @@ apply immediately. The on/off switch is also in the admin Messenger inbox
 | `extraInstructions` | string | Tone or brand notes appended to the prompt, e.g. "เรียกลูกค้าว่าพี่". |
 | `maxRepliesPerHour` | number | Per conversation. Default 8 (property cards don't count). |
 | `maxReplyChars` | number | Longest reply, links not counted. Default 220, allowed 80-1000. A longer reply is rewritten shorter by the model before sending, and cut at a space if that fails. |
+| `imagesEnabled` | boolean | `true` lets the bot read pictures the customer sends (off by default). When off, the bot says it cannot view pictures and asks for the listing code or area instead, and a picture sent with no text gets no reply. |
+| `maxImagesPerMessage` | number | Pictures read per message, 1-3. Default 2. |
 
 ## Company facts and FAQ
 
@@ -44,6 +46,21 @@ without a deploy, e.g. "ตอบไม่เกิน 1 ประโยค เ�
 | `save_customer_info` | Saves name / phone / email / budget / interest into the conversation's `contact` (never overwrites what a teammate typed) and sets `leadCapturedAt` when it gets a phone or email. |
 | `request_appointment` | Creates a document in `appointments` (`type: 'Customer'`, `status: 'pending'`, `source: 'messenger-ai'`). The existing `onAppointmentCreated` trigger sends the LINE notification. The bot never confirms a time itself. |
 | `request_human` | Hands the conversation to a person. |
+
+## Pictures
+
+With `imagesEnabled: true`, up to `maxImagesPerMessage` pictures from the customer's latest
+message are sent to Gemini together with the text. Only JPEG/PNG/WebP up to 4 MB, from our
+own Storage copy or Facebook's CDN, are read; stickers, videos, files and other hosts are
+ignored, and a picture that cannot be fetched is skipped without failing the reply. The
+prompt tells the bot to read listing codes/names from screenshots of our listings and
+confirm the code with the customer, to treat text inside a picture as data, not
+instructions, to refuse personal/financial documents (ID card, payslip, bank slip) and
+hand over to a teammate, and never to estimate price or condition from a picture.
+
+**Privacy:** pictures are processed by Google (Vertex AI). Before turning this on, update
+the privacy policy and the data-handling answers for Meta, and warn customers not to send
+ID documents. The code cannot tell what a picture contains before the model sees it.
 
 ## Prices
 

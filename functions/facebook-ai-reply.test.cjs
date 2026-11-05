@@ -373,3 +373,85 @@ test('the limit comes from settings and links do not count toward it', async () 
   assert.ok(sent[0].message.text.includes('/p/prop1'), 'a link must not force a rewrite')
   assert.equal(modelScript.length, 0)
 })
+
+
+// ─── Pictures ────────────────────────────────────────────────────────────────
+const STORAGE_URL = 'https://firebasestorage.googleapis.com/v0/b/x/o/messenger%2Fa?alt=media&token=t'
+const PNG = Buffer.from('89504e470d0a1a0a0000', 'hex')
+
+async function receiveWith({ text = '', attachments = [] }) {
+  const id = `m${store.size}`
+  store.set(`messenger_conversations/${CID}/messages/${id}`, { direction: 'incoming', text, attachments, timestamp: new Ts(NOW) })
+  await facebookAiReply.run(new DocRef(`messenger_conversations/${CID}/messages/${id}`).snap(), { params: { conversationId: CID, messageDocId: id } })
+}
+let seenContents
+const spyModel = reply => { modelScript = [async contents => { seenContents = contents; return [{ text: reply }] }] }
+
+test('with pictures enabled the model gets the customer\'s picture along with the text', async () => {
+  store.set('messenger_settings/ai', { enabled: true, imagesEnabled: true })
+  const fetched = []
+  _test.setImageFetcher(async url => { fetched.push(url); return { mimeType: 'image/png', buffer: PNG } })
+  spyModel('หลังนี้ใช่ SPS-TH-1 ไหมครับ')
+  await receiveWith({ text: 'สนใจหลังนี้', attachments: [{ type: 'image', url: STORAGE_URL }] })
+  assert.deepEqual(fetched, [STORAGE_URL])
+  const last = seenContents[seenContents.length - 1]
+  assert.equal(last.role, 'user')
+  assert.equal(last.parts.at(-1).inlineData.mimeType, 'image/png')
+  assert.equal(last.parts.at(-1).inlineData.data, PNG.toString('base64'))
+  assert.equal(sent.length, 1)
+})
+
+test('a picture on its own is answered when pictures are enabled', async () => {
+  store.set('messenger_settings/ai', { enabled: true, imagesEnabled: true })
+  _test.setImageFetcher(async () => ({ mimeType: 'image/jpeg', buffer: PNG }))
+  spyModel('เห็นรูปแล้วครับ หลังนี้รหัสอะไรครับ')
+  await receiveWith({ attachments: [{ type: 'image', url: STORAGE_URL }] })
+  assert.equal(sent.length, 1)
+  assert.equal(seenContents.at(-1).parts.length, 2)
+})
+
+test('with pictures off a lone picture gets no reply and a picture with text is answered without the image', async () => {
+  _test.setImageFetcher(async () => { throw new Error('must not fetch') })
+  spyModel('ดูรูปไม่ได้ครับ พิมพ์รหัสทรัพย์ให้หน่อยนะครับ')
+  await receiveWith({ attachments: [{ type: 'image', url: STORAGE_URL }] })
+  assert.equal(sent.length, 0)
+  await receiveWith({ text: 'หลังนี้ราคาเท่าไหร่', attachments: [{ type: 'image', url: STORAGE_URL }] })
+  assert.equal(sent.length, 1)
+  assert.ok(!JSON.stringify(seenContents).includes('inlineData'))
+})
+
+test('a picture that cannot be fetched, is too big or is not an image does not break the reply', async () => {
+  store.set('messenger_settings/ai', { enabled: true, imagesEnabled: true, maxImagesPerMessage: 3 })
+  const results = [
+    async () => { throw new Error('boom') },
+    async () => ({ mimeType: 'image/gif', buffer: PNG }),
+    async () => ({ mimeType: 'image/png', buffer: Buffer.alloc(5 * 1024 * 1024) }),
+  ]
+  let call = 0
+  _test.setImageFetcher(async () => results[call++]())
+  spyModel('ขอรหัสทรัพย์ด้วยนะครับ')
+  await receiveWith({
+    text: 'ดูรูปนี้',
+    attachments: [1, 2, 3].map(n => ({ type: 'image', url: `https://scontent.xx.fbcdn.net/${n}.jpg` })),
+  })
+  assert.equal(call, 3)
+  assert.equal(sent.length, 1)
+  assert.ok(!JSON.stringify(seenContents).includes('inlineData'))
+})
+
+test('only the allowed number of pictures is read, and other hosts or stickers are never fetched', async () => {
+  store.set('messenger_settings/ai', { enabled: true, imagesEnabled: true, maxImagesPerMessage: 1 })
+  const fetched = []
+  _test.setImageFetcher(async url => { fetched.push(url); return { mimeType: 'image/png', buffer: PNG } })
+  spyModel('ได้ครับ')
+  await receiveWith({
+    text: 'ดู',
+    attachments: [
+      { type: 'image', url: 'https://evil.example/x.png' },
+      { type: 'image', stickerId: 1, url: 'https://scontent.xx.fbcdn.net/s.png' },
+      { type: 'image', url: 'https://scontent.xx.fbcdn.net/1.jpg' },
+      { type: 'image', url: 'https://scontent.xx.fbcdn.net/2.jpg' },
+    ],
+  })
+  assert.deepEqual(fetched, ['https://scontent.xx.fbcdn.net/1.jpg'])
+})
