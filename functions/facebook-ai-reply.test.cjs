@@ -450,3 +450,85 @@ test('a phone number already on file hands over right away when the estimate can
   assert.equal(conversation().botPaused, true)
   assert.match(conversation().handoffReason, /ประเมินสินเชื่อ/)
 })
+
+// ─── Which property is the customer talking about? ───────────────────────────
+async function capturePrompt(run) {
+  let prompt = ''
+  const { VertexAI } = fakes['@google-cloud/vertexai']
+  const original = VertexAI.prototype.getGenerativeModel
+  VertexAI.prototype.getGenerativeModel = function patched(options) {
+    prompt = options.systemInstruction.parts[0].text
+    return original.call(this, options)
+  }
+  try { await run() } finally { VertexAI.prototype.getGenerativeModel = original }
+  return prompt
+}
+
+test('a pasted link is turned into the listing the customer means', async () => {
+  const prompt = await capturePrompt(async () => {
+    model([{ text: 'ราคาประมาณ 2.1xxx ล้านบาทครับ' }])
+    await receive('สนใจหลังนี้ https://spspropertysolution.com/p/prop1 ราคาเท่าไหร่')
+  })
+  assert.match(prompt, /ทรัพย์ที่ลูกค้ากำลังพูดถึง/)
+  assert.match(prompt, /SPS-TH-1/)
+  assert.ok(!prompt.includes('2150000'))
+  assert.equal(conversation().currentPropertyCode, 'SPS-TH-1')
+  assert.match(sent[0].message.text, /2\.1xxx/)
+})
+
+test('a listing code in the message is recognised and the link to it is allowed in the reply', async () => {
+  const prompt = await capturePrompt(async () => {
+    model([{ text: 'หลังนี้ดูได้ที่ https://spspropertysolution.com/p/prop2 ครับ' }])
+    await receive('ขอดู sps-cd-9 หน่อย')
+  })
+  assert.match(prompt, /SPS-CD-9/)
+  assert.equal(conversation().currentPropertyCode, 'SPS-CD-9')
+  assert.ok(sent[0].message.text.includes('https://spspropertysolution.com/p/prop2'))
+})
+
+test('the property being discussed is remembered for the next message', async () => {
+  store.set('messenger_conversations/conv1', { pageId: 'P1', participantId: 'U1', pageName: 'เพจ', currentPropertyCode: 'SPS-CD-9' })
+  const prompt = await capturePrompt(async () => {
+    model([{ text: 'ได้ครับ' }])
+    await receive('มีสระว่ายน้ำไหม')
+  })
+  assert.match(prompt, /SPS-CD-9/)
+})
+
+test('an unknown code or link adds nothing and nothing is remembered', async () => {
+  const prompt = await capturePrompt(async () => {
+    model([{ text: 'ขอรหัสที่ถูกต้องอีกทีครับ' }])
+    await receive('สนใจ SPS-XX-999 และ https://spspropertysolution.com/p/nope0000')
+  })
+  assert.ok(!prompt.includes('ทรัพย์ที่ลูกค้ากำลังพูดถึง'))
+  assert.equal(conversation().currentPropertyCode, undefined)
+})
+
+test('get_property returns one listing with the price still masked and remembers it', async () => {
+  model(
+    [{ functionCall: { name: 'get_property', args: { code: 'SPS-TH-1' } } }],
+    [{ text: 'หลังนี้ราคาประมาณ 2.1xxx ล้านบาทครับ' }],
+  )
+  await receive('ขอรายละเอียด SPS-TH-1')
+  assert.equal(conversation().currentPropertyCode, 'SPS-TH-1')
+  assert.ok(!JSON.stringify(sent).includes('2150000'))
+})
+
+test('get_property for a code that does not exist is refused', async () => {
+  model(
+    [{ functionCall: { name: 'get_property', args: { code: 'NOPE-1' } } }],
+    [{ text: 'ไม่พบรหัสนี้ครับ ช่วยเช็กรหัสอีกทีนะครับ' }],
+  )
+  await receive('ขอดู NOPE-1')
+  assert.equal(conversation().currentPropertyCode, undefined)
+})
+
+test('showing a single card makes it the property being discussed', async () => {
+  model(
+    [{ functionCall: { name: 'search_properties', args: { location: 'ศรีราชา' } } }],
+    [{ functionCall: { name: 'show_property_cards', args: { codes: ['SPS-CD-9'] } } }],
+    [{ text: 'มีคอนโดศรีราชาครับ ดูการ์ดได้เลยครับ' }],
+  )
+  await receive('มีคอนโดศรีราชาไหม')
+  assert.equal(conversation().currentPropertyCode, 'SPS-CD-9')
+})

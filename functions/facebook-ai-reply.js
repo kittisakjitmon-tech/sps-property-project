@@ -12,6 +12,9 @@ const {
   sanitizeCustomerInfo,
   validateAppointment,
   estimateLoan,
+  findFocusProperties,
+  findPropertyByRef,
+  presentProperty,
   findPriceLeaks,
   sanitizeUrls,
   replyCharLimit,
@@ -223,6 +226,10 @@ const facebookAiReply = functions
 
       // Everything the model may reference in this reply.
       const seen = new Map() // code -> indexed property (from search results)
+      // Listings the customer named (link or code) or that we were already discussing.
+      const focus = findFocusProperties({ messages: recent, catalog, currentCode: conversation.currentPropertyCode })
+      for (const property of focus) seen.set(property.code, property)
+      let focusCode = focus[0]?.code || null
       let lastSearchCodes = []
       const cardCodes = []
       let handoffReason = null
@@ -241,10 +248,20 @@ const facebookAiReply = functions
           }
           return result
         },
+        get_property: args => {
+          const property = findPropertyByRef({ code: args?.code, url: args?.url }, catalog)
+          if (!property) {
+            return { ok: false, error: 'ไม่พบทรัพย์นี้ในรายการที่ยังว่าง (อาจรหัสผิดหรือขายแล้ว) ให้ถามลูกค้ายืนยันรหัสหรือเสนอค้นหาแบบอื่น' }
+          }
+          seen.set(property.code, property)
+          focusCode = property.code
+          return { ok: true, property: presentProperty(property) }
+        },
         show_property_cards: args => {
           const codes = (Array.isArray(args?.codes) ? args.codes : []).filter(code => catalogByCode.has(code))
           for (const code of codes) if (!cardCodes.includes(code)) cardCodes.push(code)
           cardCodes.splice(MAX_CARDS)
+          if (cardCodes.length === 1) focusCode = cardCodes[0]
           return { ok: cardCodes.length > 0, queued: cardCodes.length }
         },
         save_customer_info: args => {
@@ -334,6 +351,7 @@ const facebookAiReply = functions
         extraInstructions: settings.extraInstructions,
         faq,
         today,
+        focus,
       })
       const { text: rawText } = await runConversation({
         generate: createGenerate({ settings, systemInstruction, info: servedBy }),
@@ -422,6 +440,7 @@ const facebookAiReply = functions
       stage = 'update'
       const update = {}
       if (shown.size) update.shownCodes = FieldValue.arrayUnion(...shown)
+      if (focusCode && focusCode !== conversation.currentPropertyCode) update.currentPropertyCode = focusCode
       if (Object.keys(contactUpdates).length) {
         update.contact = contactUpdates
         if (contactUpdates.phone || contactUpdates.email) update.leadCapturedAt = FieldValue.serverTimestamp()
