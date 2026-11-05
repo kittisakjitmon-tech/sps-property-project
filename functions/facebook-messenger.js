@@ -268,18 +268,48 @@ async function refreshCustomerProfile(id, { force = false } = {}) {
   if (!data) return null
 
   const fetchedAt = data.profileFetchedAt?.toMillis?.() || 0
-  if (!force && Date.now() - fetchedAt < PROFILE_REFRESH_MS) return data
+  if (!force && Date.now() - fetchedAt < (data.profileError ? 5 * 60 * 1000 : PROFILE_REFRESH_MS)) return data
 
   let tokenInfo = null
   try {
     tokenInfo = await getPageTokenInfo(data.pageId)
     const token = tokenInfo.token
-    const response = await axios.get(graphUrl(data.participantId), {
-      params: { fields: 'first_name,last_name,profile_pic', access_token: token },
-      timeout: 15000,
-    })
-    const { first_name: firstName = '', last_name: lastName = '', profile_pic: profilePic } = response.data
-    const fullName = `${firstName} ${lastName}`.trim()
+    let profile = {}
+    let profileFailure = null
+    try {
+      const response = await axios.get(graphUrl(data.participantId), {
+        params: { fields: 'first_name,last_name,profile_pic', access_token: token },
+        timeout: 15000,
+      })
+      profile = response.data || {}
+    } catch (error) { profileFailure = error }
+    const firstName = profile.first_name || data.firstName || ''
+    const lastName = profile.last_name || data.lastName || ''
+    const profilePic = profile.profile_pic
+    let fullName = [profile.first_name, profile.last_name].filter(Boolean).join(' ').trim()
+      || (typeof profile.name === 'string' ? profile.name.trim() : '')
+    let profileNameSource = 'user-profile'
+    if (!fullName) {
+      // The Conversations API may expose the participant name even when /PSID is unavailable.
+      // Match the exact PSID: the Page itself and other participants must never be used.
+      try {
+        const response = await axios.get(graphUrl(`${data.pageId}/conversations`), {
+          params: { user_id: data.participantId, fields: 'participants{id,name}', limit: 10, access_token: token },
+          timeout: 15000,
+        })
+        const participant = (response.data?.data || []).flatMap(thread => thread.participants?.data || [])
+          .find(item => String(item.id) === String(data.participantId) && typeof item.name === 'string' && item.name.trim())
+        if (participant) {
+          fullName = participant.name.trim()
+          profileNameSource = 'conversation-participants'
+        }
+      } catch { /* Keep the original profile error if neither API can return a name. */ }
+    }
+    if (!fullName && !profilePic) throw profileFailure || new Error('Facebook ไม่ได้คืนชื่อหรือรูปผู้ทัก')
+    const partial = !fullName || !profilePic
+    const profileError = partial
+      ? fullName ? 'ดึงชื่อผู้ทักได้แล้ว แต่ Facebook ยังไม่คืนรูปโปรไฟล์ กรุณาตรวจสิทธิ์ Business Asset User Profile Access ใน Meta' : 'ดึงรูปได้แล้ว แต่ Facebook ยังไม่คืนชื่อผู้ทัก'
+      : admin.firestore.FieldValue.delete()
     const profilePicUrl = profilePic
       ? await copyRemoteToStorage(profilePic, `messenger/avatars/${id}.jpg`).catch(() => profilePic)
       : data.profilePicUrl || null
@@ -289,8 +319,9 @@ async function refreshCustomerProfile(id, { force = false } = {}) {
       lastName,
       displayName: fullName || data.displayName || fallbackDisplayName(data.participantId),
       profilePicUrl,
+      profileNameSource,
       profileFetchedAt: admin.firestore.FieldValue.serverTimestamp(),
-      profileError: admin.firestore.FieldValue.delete(),
+      profileError,
     }
     await conversationRef.set(update, { merge: true })
     return { ...data, ...update }
@@ -1054,8 +1085,8 @@ const adminActions = {
 
   async refreshProfile({ conversationId: id }) {
     await loadConversation(id)
-    await refreshCustomerProfile(id, { force: true })
-    return { success: true }
+    const profile = await refreshCustomerProfile(id, { force: true })
+    return { success: true, partial: Boolean(profile?.profileError && typeof profile.profileError === 'string') }
   },
 
   async addPage({ pageAccessToken }) {
@@ -1173,6 +1204,7 @@ module.exports = {
     extractContacts,
     describeGraphError,
     isAutomaticReply,
+    refreshCustomerProfile,
     adminActions,
   },
 }

@@ -338,3 +338,17 @@ leaves the text response intact and allows a later retry. Stored image bubbles h
 `kind: 'house-guide'` and do not count as an extra reply toward the hourly limit.
 
 Source artwork: `public/images/messenger/house-selection-guide.png` (provided by the owner).
+
+## Messenger participant names and profile photos
+
+The direct User Profile API remains the primary source for names and avatars. If it
+cannot return a name, the inbox reads `/{pageId}/conversations` filtered by the same
+participant ID and uses only the exact matching participant's name. It does not use
+the Page's name or another person's profile. Names recovered this way are marked
+`profileNameSource: 'conversation-participants'`.
+
+A recovered name without a newly returned avatar is reported as a partial profile;
+existing avatars are preserved and `profileError` explains what is still missing.
+Failed/partial profiles retry after five minutes rather than the normal 24-hour cache.
+This fallback does not grant Business Asset User Profile Access or bypass Meta's
+approval requirements for fields that Meta still refuses to return.
