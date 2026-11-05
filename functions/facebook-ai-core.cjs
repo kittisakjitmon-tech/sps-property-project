@@ -156,7 +156,7 @@ function toIndexedProperty(id, data) {
     _numericPrice: price > 0 ? price : null,
     _hidden: priceHidden,
     _featured: data.featured === true || data.hotDeal === true,
-    _search: [location, clean(data.project, 80), clean(data.title, 120), type, nearby, ...keywords, summary]
+    _search: [location, clean(data.project, 80), clean(data.title, 120), clean(data.displayId, 40), type, nearby, ...keywords, summary]
       .join(' ').toLowerCase(),
   }
 }
@@ -255,6 +255,77 @@ function searchProperties(index, query = {}, { excludeCodes = [] } = {}) {
       !fresh.length ? 'รายการเหล่านี้เคยเสนอลูกค้าไปแล้ว' : '',
     ].filter(Boolean).join(' ') || undefined,
   }
+}
+
+// ─── Which property is the customer talking about? ───────────────────────────
+
+const SITE_HOST = new URL(SITE_URL).host.replace(/^www\./, '')
+const PROPERTY_LINK = new RegExp(`https?://(?:www\\.)?${escapeRegExp(SITE_HOST)}/p/([A-Za-z0-9_-]{4,60})`, 'gi')
+
+// Properties named in one piece of text: by a link to our site or by the listing code.
+// Only listings that exist in the catalog count, so a made-up code or id is ignored.
+function extractPropertyMentions(text, catalog, { max = 3 } = {}) {
+  const value = typeof text === 'string' ? text.slice(0, 3000) : ''
+  if (!value || !Array.isArray(catalog) || !catalog.length) return []
+  const found = []
+  const add = property => { if (property && !found.includes(property)) found.push(property) }
+  const hits = [] // { index, property }
+
+  const byId = new Map(catalog.map(p => [p.id, p]))
+  for (const match of value.matchAll(PROPERTY_LINK)) {
+    const property = byId.get(match[1])
+    if (property) hits.push({ index: match.index, property })
+  }
+  for (const property of catalog) {
+    if (!property.code) continue
+    const pattern = new RegExp(`(?<![A-Za-z0-9-])${escapeRegExp(property.code)}(?![A-Za-z0-9-])`, 'i')
+    const match = pattern.exec(value)
+    if (match) hits.push({ index: match.index, property })
+  }
+  hits.sort((a, b) => a.index - b.index)
+  for (const hit of hits) add(hit.property)
+  return found.slice(0, max)
+}
+
+// The listings to keep in mind for this reply: what the customer named most recently
+// (links or codes in their latest messages), then the one we were already discussing.
+// messages: [{ direction, text, timestamp }]. Newest mention first.
+function findFocusProperties({ messages, catalog, currentCode, max = 3 }) {
+  const incoming = [...(messages || [])]
+    .filter(m => m.direction === 'incoming' && typeof m.text === 'string')
+    .sort((a, b) => b.timestamp - a.timestamp)
+    .slice(0, 6)
+  const focus = []
+  for (const message of incoming) {
+    for (const property of extractPropertyMentions(message.text, catalog)) {
+      if (!focus.includes(property)) focus.push(property)
+    }
+    if (focus.length >= max) break
+  }
+  if (currentCode && focus.length < max) {
+    const current = (catalog || []).find(p => p.code === currentCode)
+    if (current && !focus.includes(current)) focus.push(current)
+  }
+  return focus.slice(0, max)
+}
+
+// Look a listing up by its code or by a link to our site (for the get_property tool).
+function findPropertyByRef({ code, url }, catalog) {
+  const list = Array.isArray(catalog) ? catalog : []
+  const wanted = clean(code, 60).toLowerCase()
+  if (wanted) {
+    const hit = list.find(p => p.code && p.code.toLowerCase() === wanted)
+    if (hit) return hit
+  }
+  const link = clean(url, 300)
+  if (link) {
+    const [match] = [...link.matchAll(PROPERTY_LINK)]
+    if (match) {
+      const hit = list.find(p => p.id === match[1])
+      if (hit) return hit
+    }
+  }
+  return null
 }
 
 // ─── Cards (Messenger generic template) ──────────────────────────────────────
@@ -467,13 +538,21 @@ function buildShortenRequest(text, maxChars, particle = 'ครับ') {
 
 // ─── Prompt & tools ──────────────────────────────────────────────────────────
 
-function buildSystemPrompt({ isFirstReply, particle = 'ครับ', extraInstructions = '', faq = [], today } = {}) {
+function buildSystemPrompt({ isFirstReply, particle = 'ครับ', extraInstructions = '', faq = [], today, focus = [] } = {}) {
   const p = particle === 'ค่ะ' ? 'ค่ะ' : 'ครับ'
   const faqBlock = (faq || []).length
     ? [
       '',
       'ข้อมูลบริษัทและคำถามที่พบบ่อย (ตอบตามนี้เท่านั้น ห้ามเพิ่มเองนอกเหนือจากนี้):',
       ...faq.map(item => `ถาม: ${item.question}\nตอบ: ${item.answer}`),
+    ]
+    : []
+  const focusBlock = (focus || []).length
+    ? [
+      '',
+      'ทรัพย์ที่ลูกค้ากำลังพูดถึง (ข้อมูลจริงจากระบบ ใช้ตอบได้ทันทีโดยไม่ต้องค้นใหม่ ห้ามถามกลับว่าหลังไหน ถ้าตรงกับที่ลูกค้าถาม ถ้ามีหลายหลังให้ถือว่าอันแรกคือหลังล่าสุดที่ลูกค้าพูดถึง):',
+      ...focus.map(property => JSON.stringify(presentProperty(property))),
+      'ถ้าลูกค้าเปลี่ยนไปพูดถึงหลังอื่นหรือถามหาแบบอื่น ให้ใช้ get_property หรือ search_properties ตามปกติ',
     ]
     : []
   return [
@@ -498,6 +577,7 @@ function buildSystemPrompt({ isFirstReply, particle = 'ครับ', extraInstr
     'กฎด้านข้อมูล:',
     '- เรื่องทรัพย์สิน ใช้ข้อมูลจากเครื่องมือ search_properties เท่านั้น ห้ามแต่งหรือเดาข้อมูล ทั้งราคา ทำเล ขนาด สถานะ หรือโปรโมชัน',
     '- ถ้าไม่พบทรัพย์ตรงเงื่อนไข ให้บอกตรงๆ และเสนอตัวเลือกใกล้เคียงหรือถามว่าปรับเงื่อนไขได้ไหม ถ้าผลค้นหาบอกว่าผ่อนเงื่อนไข ให้บอกลูกค้าว่าเป็นตัวเลือกใกล้เคียง',
+    '- ถ้าลูกค้าบอกรหัสทรัพย์หรือวางลิงก์ของเว็บ SPS ให้ใช้ get_property ดึงข้อมูลของหลังนั้น ห้ามเดา',
     '- แนะนำไม่เกิน 3 รายการ พร้อมลิงก์ url ของแต่ละรายการ ห้ามสร้างลิงก์เอง และใช้ show_property_cards ส่งการ์ดรูปบ้านให้ลูกค้าดูเมื่อแนะนำทรัพย์',
     '- ราคา: ถ้า price เป็นตัวเลข บอกได้ตามนั้น ถ้า price เป็น null และมี priceApprox ให้บอกเป็นราคาโดยประมาณตาม priceApprox ตรงตัว (เช่น "ประมาณ 2.1xxx ล้านบาท") แล้วบอกว่าราคาจริงให้ทีมงานแจ้ง ห้ามเติมเลขแทน x ห้ามเดาหรือคำนวณเพิ่ม ห้ามยืนยันหรือปฏิเสธตัวเลขที่ลูกค้าเดา',
     '- ห้ามสัญญาเรื่องการอนุมัติสินเชื่อ ราคาสุดท้าย ส่วนลด หรือการนัดหมาย ให้ทีมงานเป็นผู้ยืนยัน',
@@ -515,6 +595,7 @@ function buildSystemPrompt({ isFirstReply, particle = 'ครับ', extraInstr
     isFirstReply
       ? `- นี่คือการตอบครั้งแรก ให้ทักทายสั้นๆ ประโยคเดียว แนะนำตัวว่าเป็นผู้ช่วย AI ของ SPS (เช่น "สวัสดี${p} ผมเป็นผู้ช่วย AI ของ SPS นะ${p}") แล้วตอบคำถามต่อเลย และให้ลูกค้ารู้ว่าขอคุยกับทีมงานได้`
       : '- ไม่ต้องแนะนำตัวซ้ำ',
+    ...focusBlock,
     ...faqBlock,
     extraInstructions ? `\nคำแนะนำเพิ่มเติมจากทีมงาน:\n${clean(extraInstructions, 2000)}` : '',
   ].filter(line => line !== '').join('\n')
@@ -544,6 +625,17 @@ const TOOL_DECLARATIONS = [
         maxPrice: { type: 'NUMBER', description: 'งบสูงสุดเป็นบาท เช่น 2000000' },
         minBedrooms: { type: 'NUMBER', description: 'จำนวนห้องนอนขั้นต่ำ' },
         keywords: { type: 'STRING', description: 'คำค้นอื่นๆ เช่น ใกล้โรงงาน, ผ่อนตรง' },
+      },
+    },
+  },
+  {
+    name: 'get_property',
+    description: 'ดึงข้อมูลทรัพย์หลังเดียวตามรหัสทรัพย์ (code) หรือลิงก์ของเว็บ SPS ที่ลูกค้าบอก ใช้เมื่อลูกค้าพูดถึงหลังใดหลังหนึ่งโดยเฉพาะ',
+    parameters: {
+      type: 'OBJECT',
+      properties: {
+        code: { type: 'STRING', description: 'รหัสทรัพย์ เช่น SPS-TH-1' },
+        url: { type: 'STRING', description: 'ลิงก์ทรัพย์จากเว็บ SPS' },
       },
     },
   },
@@ -651,6 +743,10 @@ module.exports = {
   normalizeEmail,
   sanitizeCustomerInfo,
   validateAppointment,
+  extractPropertyMentions,
+  presentProperty,
+  findFocusProperties,
+  findPropertyByRef,
   sanitizeUrls,
   DEFAULT_MAX_REPLY_CHARS,
   replyCharLimit,

@@ -282,9 +282,9 @@ test('system prompt sets a human tone, the particle, masked-price rules, FAQ and
   assert.match(full, /2026-11-04/)
 })
 
-test('all five tools are declared', () => {
+test('all six tools are declared', () => {
   assert.deepEqual(TOOL_DECLARATIONS.map(t => t.name), [
-    'search_properties', 'show_property_cards', 'save_customer_info', 'request_appointment', 'request_human',
+    'search_properties', 'get_property', 'show_property_cards', 'save_customer_info', 'request_appointment', 'request_human',
   ])
 })
 
@@ -384,4 +384,69 @@ test('the shorten request keeps facts, prices and links and states the limit', (
   assert.match(request.systemInstruction, /ลิงก์/)
   assert.match(request.contents[0].parts[0].text, /ไม่เกิน 180 ตัวอักษร/)
   assert.match(request.contents[0].parts[0].text, /2\.1xxx/)
+})
+
+
+// ─── Which property is the customer talking about? ───────────────────────────
+const { extractPropertyMentions, findFocusProperties, findPropertyByRef } = require('./facebook-ai-core.cjs')
+
+const mkProp = (id, displayId, extra = {}) => toIndexedProperty(id, {
+  status: 'available', displayId, title: `บ้าน ${displayId}`, type: 'SPS-TH-1CLASS-ID', listingType: 'sale',
+  bedrooms: 3, bathrooms: 2, locationDisplay: 'พานทอง, ชลบุรี', price: 2150000, showPrice: true, description: 'บ้านใหม่', ...extra,
+})
+const MENTION_CATALOG = [mkProp('abc123XYZ', 'SPS-TH-1'), mkProp('def456UVW', 'SPS-TH-10'), mkProp('ghi789RST', 'SPS-CD-9', { price: 1500000, showPrice: false })]
+
+test('a link to our site names the property', () => {
+  const found = extractPropertyMentions('สนใจหลังนี้ครับ https://spspropertysolution.com/p/abc123XYZ ราคาเท่าไหร่', MENTION_CATALOG)
+  assert.deepEqual(found.map(p => p.code), ['SPS-TH-1'])
+  assert.deepEqual(extractPropertyMentions('https://www.spspropertysolution.com/p/def456UVW?utm=x', MENTION_CATALOG).map(p => p.code), ['SPS-TH-10'])
+})
+
+test('a listing code names the property, ignoring case, and does not match a longer code', () => {
+  assert.deepEqual(extractPropertyMentions('ขอดู sps-th-1 หน่อย', MENTION_CATALOG).map(p => p.code), ['SPS-TH-1'])
+  assert.deepEqual(extractPropertyMentions('รหัส SPS-TH-10 ครับ', MENTION_CATALOG).map(p => p.code), ['SPS-TH-10'])
+  assert.deepEqual(extractPropertyMentions('SPS-TH-100', MENTION_CATALOG), [])
+})
+
+test('made-up ids, other sites and unknown codes are ignored; several mentions keep their order', () => {
+  assert.deepEqual(extractPropertyMentions('https://spspropertysolution.com/p/nope0000', MENTION_CATALOG), [])
+  assert.deepEqual(extractPropertyMentions('https://evil.example/p/abc123XYZ', MENTION_CATALOG), [])
+  assert.deepEqual(extractPropertyMentions('SPS-ZZ-9', MENTION_CATALOG), [])
+  assert.deepEqual(extractPropertyMentions('เทียบ SPS-CD-9 กับ https://spspropertysolution.com/p/abc123XYZ', MENTION_CATALOG).map(p => p.code), ['SPS-CD-9', 'SPS-TH-1'])
+  assert.deepEqual(extractPropertyMentions(undefined, MENTION_CATALOG), [])
+})
+
+test('focus: newest mention first, then the one already being discussed', () => {
+  const messages = [
+    { direction: 'incoming', text: 'SPS-TH-1 ราคาเท่าไหร่', timestamp: 1 },
+    { direction: 'outgoing', text: 'ประมาณ 2.15 ล้านครับ', timestamp: 2 },
+    { direction: 'incoming', text: 'แล้ว SPS-CD-9 ล่ะ', timestamp: 3 },
+  ]
+  assert.deepEqual(findFocusProperties({ messages, catalog: MENTION_CATALOG }).map(p => p.code), ['SPS-CD-9', 'SPS-TH-1'])
+  const none = [{ direction: 'incoming', text: 'ผ่อนเดือนละเท่าไหร่', timestamp: 1 }]
+  assert.deepEqual(findFocusProperties({ messages: none, catalog: MENTION_CATALOG, currentCode: 'SPS-TH-10' }).map(p => p.code), ['SPS-TH-10'])
+  assert.deepEqual(findFocusProperties({ messages: none, catalog: MENTION_CATALOG, currentCode: 'GONE-1' }), [])
+  // the bot's own text never counts as the customer's mention
+  assert.deepEqual(findFocusProperties({ messages: [{ direction: 'outgoing', text: 'SPS-TH-1', timestamp: 1 }], catalog: MENTION_CATALOG }), [])
+})
+
+test('findPropertyByRef finds by code or link and nothing else', () => {
+  assert.equal(findPropertyByRef({ code: 'sps-th-1' }, MENTION_CATALOG).id, 'abc123XYZ')
+  assert.equal(findPropertyByRef({ url: 'https://spspropertysolution.com/p/def456UVW' }, MENTION_CATALOG).code, 'SPS-TH-10')
+  assert.equal(findPropertyByRef({ code: 'nope' }, MENTION_CATALOG), null)
+  assert.equal(findPropertyByRef({}, MENTION_CATALOG), null)
+})
+
+test('the listing code can be searched', () => {
+  assert.equal(searchProperties(MENTION_CATALOG, { keywords: 'SPS-CD-9' }).results[0].code, 'SPS-CD-9')
+})
+
+test('the prompt names the focused listing with a masked price and offers get_property', () => {
+  const prompt = buildSystemPrompt({ isFirstReply: false, focus: [MENTION_CATALOG[2]] })
+  assert.match(prompt, /ทรัพย์ที่ลูกค้ากำลังพูดถึง/)
+  assert.match(prompt, /SPS-CD-9/)
+  assert.ok(!prompt.includes('1500000'))
+  assert.match(prompt, /1\.5xxx/)
+  assert.ok(TOOL_DECLARATIONS.some(tool => tool.name === 'get_property'))
+  assert.ok(!buildSystemPrompt({ isFirstReply: false }).includes('ทรัพย์ที่ลูกค้ากำลังพูดถึง'))
 })

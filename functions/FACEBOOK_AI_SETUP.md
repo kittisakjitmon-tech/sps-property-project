@@ -40,10 +40,23 @@ without a deploy, e.g. "ตอบไม่เกิน 1 ประโยค เ�
 | Tool | What happens |
 |---|---|
 | `search_properties` | Searches available listings: place (with synonyms like อมตะนคร/อมตะซิตี้), type, budget, bedrooms, keywords. If nothing matches it loosens filters and says so. Properties already shown in the chat are not offered again. |
+| `get_property` | Looks up one listing by its code (e.g. `SPS-TH-1`) or by a link to the website. Only available listings count; a wrong code is refused. Hidden prices stay masked. |
 | `show_property_cards` | Sends up to 3 Messenger cards (photo, place, rooms, price, "ดูรายละเอียด" button). A failure here never undoes the text reply. |
 | `save_customer_info` | Saves name / phone / email / budget / interest into the conversation's `contact` (never overwrites what a teammate typed) and sets `leadCapturedAt` when it gets a phone or email. |
 | `request_appointment` | Creates a document in `appointments` (`type: 'Customer'`, `status: 'pending'`, `source: 'messenger-ai'`). The existing `onAppointmentCreated` trigger sends the LINE notification. The bot never confirms a time itself. |
 | `request_human` | Hands the conversation to a person. |
+
+## Which property is the customer talking about?
+
+Before each reply the code looks at the customer's latest messages for a link to the
+website (`.../p/<id>`) or a listing code (case-insensitive, exact match, so `SPS-TH-1`
+does not match `SPS-TH-10`). Matching listings are put into the prompt as "the
+property the customer means", with the same price masking as search results, so the bot
+does not ask "which one?". The listing being discussed is remembered on the
+conversation as `currentPropertyCode` (set from a pasted link or code, `get_property`,
+or when exactly one card is shown) and reused on the next message. Codes and links that
+are not in the available catalog are ignored. Not covered yet: pictures/screenshots,
+and the website's "chat" button does not say which property the page was about.
 
 ## Prices
 
