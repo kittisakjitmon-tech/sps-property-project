@@ -1092,3 +1092,13 @@ test('a house guide attachment is part of an answer, not another hourly AI reply
     recentMessages: [{ direction: 'outgoing', sentBy: 'ai', kind: 'house-guide', timestamp: now - 1000 }] });
   assert.equal(result.reply, true);
 });
+
+test('explicit indecision about choosing a house is distinct from questions about a selected house', () => {
+  const { asksForHouseGuide } = require('./facebook-ai-core.cjs');
+  for (const text of ['คือผมยังไม่รู้ว่าจะเลือกบ้านแบบไหน', 'ยังไม่รู้จะเลือกบ้านแบบไหนดี', 'ยังเลือกบ้านไม่ถูก', 'เลือกแบบบ้านไม่ได้เลย', 'ยังไม่ได้เลือกบ้าน', 'ยังตัดสินใจไม่ได้ว่าจะเลือกบ้านแบบไหน']) {
+    assert.equal(asksForHouseGuide(text), true, text);
+  }
+  for (const text of ['สวัสดีครับ', 'ไม่รู้ว่าบ้านหลังนี้กี่ห้อง', 'บ้านหลังนี้อยู่ที่ไหน', 'ขอข้อมูล SPS-TH-1', 'ไม่รู้จะเลือกธนาคารไหนดี', 'ผมรู้แล้วว่าจะเลือกบ้านแบบไหน', 'ขอดูรูปบ้านหลังนี้']) {
+    assert.equal(asksForHouseGuide(text), false, text);
+  }
+});

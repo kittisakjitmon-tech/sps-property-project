@@ -2072,7 +2072,7 @@ test('price guard, a handoff, or choosing a real house later in the turn suppres
   for (const steps of scenarios) {
     store.set(`messenger_conversations/${CID}`, { pageId: 'P1', participantId: 'U1' });
     model(...steps);
-    await receive('ยังไม่รู้จะเลือกแบบไหน');
+    await receive('สนใจบ้านครับ');
   }
   assert.equal(guideImages().length, 0);
 });
@@ -2084,7 +2084,7 @@ test('a stored guide bubble also prevents another guide if its conversation mark
     attachments: [{ type: 'image', url: GUIDE_URL }],
   });
   model([guideCall], [{ text: 'สนใจทำเลไหนครับ' }]);
-  await receive('ยังเลือกบ้านไม่ถูก');
+  await receive('สนใจบ้านครับ');
   assert.equal(guideImages().length, 0);
 });
 
@@ -2132,4 +2132,89 @@ test('a delivered guide whose marker failed to persist keeps its lease instead o
   model([guideCall], [{ text: 'สนใจทำเลไหนครับ' }]);
   await receive('ขอดูแบบบ้านก่อน');
   assert.equal(guideImages().length, 1);
+});
+
+test('exact screenshot wording automatically sends the guide despite the remembered property and old code history', async () => {
+  configureGuide();
+  store.set(`messenger_conversations/${CID}`, { ...conversation(), currentPropertyCode: 'SPS-TH-1' });
+  store.set(`messenger_conversations/${CID}/messages/old-code`, { direction: 'incoming', text: 'ขอข้อมูล SPS-TH-1', timestamp: new Ts(NOW - 4000) });
+  store.set(`messenger_conversations/${CID}/messages/old-answer`, { direction: 'outgoing', sentBy: 'ai', text: 'บ้านพานทองครับ', timestamp: new Ts(NOW - 3000) });
+  model([{ text: 'แนบภาพตัวอย่างช่วยเลือกแบบบ้านครับ สนใจทำเลไหนครับ' }]);
+  await receive('คือผมยังไม่รู้ว่าจะเลือกบ้านแบบไหน');
+  assert.equal(guideImages().length, 1);
+  assert.equal(sent.filter(item => item.message.attachment?.type === 'template').length, 0);
+  assert.equal(conversation().currentPropertyCode, 'SPS-TH-1', 'keep the old reference without forcing it on this turn');
+});
+
+test('explicit uncertainty overrides a team-selected house without sending the attached house cards', async () => {
+  configureGuide();
+  store.set(`messenger_conversations/${CID}`, { ...conversation(), currentPropertyCode: 'SPS-TH-1', currentPropertySetBy: 'admin', staffNote: 'บ้านนี้อยู่พานทอง', staffListings: [{ id: 'team1', title: 'บ้านที่ทีมแนบ', type: 'บ้านเดี่ยว' }] });
+  model([{ text: 'แนบภาพตัวอย่างแบบบ้านครับ งบประมาณเท่าไหร่ครับ' }]);
+  await receive('คือผมยังไม่รู้ว่าจะเลือกบ้านแบบไหน');
+  assert.equal(guideImages().length, 1);
+  assert.equal(sent.filter(item => item.message.attachment?.type === 'template').length, 0);
+});
+
+test('the AI cannot select a house for an explicitly undecided customer', async () => {
+  configureGuide();
+  store.set(`messenger_conversations/${CID}`, { ...conversation(), currentPropertyCode: 'SPS-TH-1' });
+  model([{ functionCall: { name: 'get_property', args: { code: 'SPS-CD-9' } } }, { functionCall: { name: 'show_property_cards', args: { codes: ['SPS-CD-9'] } } }], [{ text: 'ภาพตัวอย่างช่วยเลือกแบบบ้านครับ' }]);
+  await receive('คือผมยังไม่รู้ว่าจะเลือกบ้านแบบไหน');
+  assert.equal(guideImages().length, 1);
+  assert.equal(conversation().currentPropertyCode, 'SPS-TH-1');
+  assert.equal(sent.filter(item => item.message.attachment?.type === 'template').length, 0);
+});
+
+test('an explicit property code in the same request still identifies that real house', async () => {
+  configureGuide();
+  model([{ functionCall: { name: 'get_property', args: { code: 'SPS-CD-9' } } }], [{ text: 'คอนโดศรีราชาครับ' }]);
+  await receive('ยังไม่รู้จะเลือกบ้านแบบไหน ขอข้อมูล SPS-CD-9 ก่อน');
+  assert.equal(guideImages().length, 0);
+  assert.equal(conversation().currentPropertyCode, 'SPS-CD-9');
+});
+
+test('an old indecision message does not hijack a new question about the selected house', async () => {
+  configureGuide();
+  store.set(`messenger_conversations/${CID}`, { ...conversation(), currentPropertyCode: 'SPS-TH-1' });
+  store.set(`messenger_conversations/${CID}/messages/old-choice`, { direction: 'incoming', text: 'ยังไม่รู้จะเลือกบ้านแบบไหน', timestamp: new Ts(NOW - 3000) });
+  model([{ text: 'บ้านพานทอง 3 ห้องนอนครับ' }]);
+  await receive('บ้านหลังนี้กี่ห้องนอน');
+  assert.equal(guideImages().length, 0);
+});
+
+
+test('explicit uncertainty bypasses property-first waiting when a guide is configured', async () => {
+  store.set('messenger_settings/ai', { enabled: true, requirePropertyForBot: true, houseGuideImageUrl: GUIDE_URL });
+  model([{ text: 'ภาพตัวอย่างช่วยเลือกแบบบ้านครับ' }]);
+  await receive('คือผมยังไม่รู้ว่าจะเลือกบ้านแบบไหน');
+  assert.equal(guideImages().length, 1);
+  assert.equal(conversation().needsProperty, undefined);
+});
+
+test('a newly assigned house while generating still blocks an explicit guide with stale context', async () => {
+  configureGuide();
+  store.set(`messenger_conversations/${CID}`, { ...conversation(), currentPropertyCode: 'SPS-TH-1' });
+  modelScript = [async () => {
+    store.set(`messenger_conversations/${CID}`, { ...conversation(), currentPropertyCode: 'SPS-CD-9' });
+    return [{ text: 'ภาพตัวอย่างแบบบ้านครับ' }];
+  }];
+  await receive('คือผมยังไม่รู้ว่าจะเลือกบ้านแบบไหน');
+  assert.equal(guideImages().length, 0);
+});
+
+
+test('a new explicit request can show the guide again, but the same customer message is not duplicated', async () => {
+  configureGuide();
+  model([{ text: 'ภาพตัวอย่างแบบบ้านครับ' }]);
+  const first = await receive('คือผมยังไม่รู้ว่าจะเลือกบ้านแบบไหน');
+  assert.equal(guideImages().length, 1);
+  assert.equal(conversation().houseGuideRequestId, first);
+  model([{ text: 'ภาพตัวอย่างแบบบ้านครับ' }]);
+  const second = await receive('ยังเลือกบ้านไม่ถูก', { at: NOW + 1000 });
+  assert.equal(guideImages().length, 2);
+  assert.equal(conversation().houseGuideRequestId, second);
+  // Re-delivery of the same incoming event is claimed only once.
+  const snapshot = new DocRef(`messenger_conversations/${CID}/messages/${second}`).snap();
+  await facebookAiReply.run(snapshot, { params: { conversationId: CID, messageDocId: second } });
+  assert.equal(guideImages().length, 2);
 });

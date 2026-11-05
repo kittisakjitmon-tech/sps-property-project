@@ -322,9 +322,17 @@ A greeting alone or a credit-only question does not call for this image. The gui
 is illustrative advertising with approximate budget ranges, not an available listing
 or an exact property price; replies describe it that way and ask one follow-up question.
 
-The server blocks the guide for property-focused/team-attached conversations, follow-ups,
+An explicit message such as “คือผมยังไม่รู้ว่าจะเลือกบ้านแบบไหน” automatically queues
+the guide even when an earlier house is remembered or attached by the team. For that turn,
+the old property is not treated as the customer’s choice, and real-house search/cards
+cannot replace the overview. A real property code in the same newest message takes priority.
+A new explicit request can send the guide again; the same incoming message is deduplicated.
+Earlier references remain saved for later questions. New property assignments during a run
+are checked again before sending.
+
+Otherwise, the server blocks the guide for property-focused/team-attached conversations, follow-ups,
 hand-offs, guarded replies, and replies already sending house cards or pictures. A
-transaction lease prevents concurrent sends and a delivery marker prevents later repeats.
+transaction lease prevents concurrent sends and a delivery marker prevents unsolicited repeats.
 Resetting the conversation context allows the guide once again. Failed image delivery
 leaves the text response intact and allows a later retry. Stored image bubbles have
 `kind: 'house-guide'` and do not count as an extra reply toward the hourly limit.

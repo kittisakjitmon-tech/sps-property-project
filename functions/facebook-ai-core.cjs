@@ -572,6 +572,16 @@ function asksForOtherHouses(text) {
   return value.length > 0 && OTHER_HOUSES.some(pattern => pattern.test(value))
 }
 
+// An explicit change of intent overrides a house remembered from an earlier turn.
+// Restrict this to choosing a house, not uncertainty about its rooms, location or a bank.
+function asksForHouseGuide(text) {
+  if (typeof text !== 'string') return false
+  const value = text.slice(0, 1500).normalize('NFKC').replace(/\s+/g, '')
+  return /(?:ไม่รู้|ไม่ทราบ|ไม่แน่ใจ|ตัดสินใจไม่ได้)(?:ว่า)?(?:จะ)?(?:เลือก|เอา|ชอบ|อยากได้|ต้องการ)(?:บ้าน|แบบบ้าน|แบบ|หลัง)?(?:แบบไหน|หลังไหน|อะไร|ไหนดี)/.test(value)
+    || /(?:เลือกบ้าน|เลือกแบบบ้าน|เลือกแบบ|เลือกหลัง)(?:ไม่ถูก|ไม่ได้|ไม่เป็น)/.test(value)
+    || /ยังไม่ได้เลือก(?:บ้าน|แบบบ้าน|หลังไหน)/.test(value)
+}
+
 // A card for a house the team typed in: picture, name, rooms, area and price (masked when the
 // team marked the price "do not tell"). No web link, because these houses have no page.
 function buildStaffListingElement(item) {
@@ -1159,7 +1169,7 @@ function estimateLoan(args = {}, settings = {}) {
 
 // ─── Prompt & tools ──────────────────────────────────────────────────────────
 
-function buildSystemPrompt({ isFirstReply, maxChars = DEFAULT_MAX_REPLY_CHARS, particle = 'ครับ', extraInstructions = '', faq = [], today, focus = [], imagesEnabled = false, staffNote = '', creditChecklist = '', staffImages = [], staffListings = [], calendar = null, attachedProperty = false, followUp = false, financeKnowledge = '', openingGuide = '', documentsEnabled = false, houseGuideAvailable = false } = {}) {
+function buildSystemPrompt({ isFirstReply, maxChars = DEFAULT_MAX_REPLY_CHARS, particle = 'ครับ', extraInstructions = '', faq = [], today, focus = [], imagesEnabled = false, staffNote = '', creditChecklist = '', staffImages = [], staffListings = [], calendar = null, attachedProperty = false, followUp = false, financeKnowledge = '', openingGuide = '', documentsEnabled = false, houseGuideAvailable = false, houseGuideRequested = false } = {}) {
   const p = particle === 'ค่ะ' ? 'ค่ะ' : 'ครับ'
   const faqBlock = (faq || []).length
     ? [
@@ -1237,6 +1247,7 @@ function buildSystemPrompt({ isFirstReply, maxChars = DEFAULT_MAX_REPLY_CHARS, p
     ...(houseGuideAvailable && !teamInfo && !(focus || []).length && !(staffListings || []).length && !attachedProperty && !followUp ? [
       '',
       'ภาพแนะนำประเภทบ้านสำหรับลูกค้าที่ยังเลือกไม่ถูก:',
+      ...(houseGuideRequested ? ['- ข้อความล่าสุดของลูกค้าบอกชัดว่ายังไม่รู้ว่าจะเลือกบ้านแบบไหน ระบบเตรียมแนบภาพตัวอย่างให้แล้ว ตอบประกอบภาพและถามงบหรือทำเลเพียงข้อเดียว ห้ามถือว่าลูกค้าเลือกบ้านที่เคยคุยไว้ ห้ามเลือกบ้านหลังใดหรือส่งการ์ดบ้านแทนภาพนี้'] : []),
       '- เมื่อลูกค้ายังไม่รู้ว่าต้องการบ้านหลังไหน ยังเลือกแบบบ้านไม่ได้ สนใจบ้านแต่ยังไม่มีหลังที่เลือก หรือขอดูประเภทบ้านเบื้องต้น ให้เรียก send_house_guide เพื่อแนบภาพรวมประเภทบ้านของบริษัท แล้วถามงบหรือทำเลทีละเรื่อง',
       '- ภาพนี้เป็นภาพตัวอย่างประกอบโฆษณา ช่วงราคาบนภาพเป็นงบประมาณคร่าวๆ เท่านั้น ห้ามยืนยันว่ามีบ้านตรงภาพขายอยู่ ห้ามนำราคาในภาพไปผูกกับบ้านหลังใดหรือใช้คำนวณสินเชื่อ ต้องค้นทรัพย์จริงก่อน',
       '- บอกลูกค้าสั้นๆ ว่าเป็นภาพตัวอย่างช่วยเลือกแบบบ้าน และถามว่ามีงบประมาณหรือสนใจทำเลไหน โดยถามครั้งละหนึ่งเรื่อง',
@@ -1726,6 +1737,7 @@ module.exports = {
   MAX_CARDS,
   DEFAULT_CARDS,
   asksForOtherHouses,
+  asksForHouseGuide,
   buildStaffListingElement,
   buildAttachedElements,
   TYPE_LABELS,
