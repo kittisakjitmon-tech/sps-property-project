@@ -124,6 +124,14 @@ export default function MessengerInbox() {
   const millis = value => value?.toMillis?.() ?? (Number(value) || 0)
   const waitingForAnswer = Boolean(selectedConversation) && millis(selectedConversation.lastInboundAt) > millis(selectedConversation.lastOutboundAt)
   const outsideWindow = isOutsideMessagingWindow(selectedConversation)
+  // Why "ให้ AI ตอบที่ค้าง" cannot be used right now (shown on the disabled button), or null.
+  const askAiBlocked = !botSettings.enabled
+    ? 'AI ถูกปิดทั้งระบบอยู่ เปิดสวิตช์ "AI ตอบอัตโนมัติ" ก่อน'
+    : selectedConversation?.botPaused === true
+      ? 'AI หยุดตอบแชทนี้อยู่ กด "AI หยุด · เปิดต่อ" ก่อน'
+      : !waitingForAnswer
+        ? 'ไม่มีข้อความของลูกค้าที่รอคำตอบ (ข้อความล่าสุดตอบไปแล้ว)'
+        : null
   const error = actionError || listError || messagesError
 
   const pageNames = useMemo(() => {
@@ -603,18 +611,17 @@ export default function MessengerInbox() {
                   <Bot className="h-4 w-4" aria-hidden="true" />
                   <span className="hidden sm:inline">{selectedConversation.botPaused === true ? 'AI หยุด · เปิดต่อ' : (botSettings.requirePropertyForBot === true && !selectedConversation.currentPropertyCode && !selectedConversation.staffNote && !selectedConversation.staffListings?.length) ? 'AI รอรายละเอียดบ้าน · หยุด' : 'AI ตอบอยู่ · หยุด'}</span>
                 </button>
-                {waitingForAnswer && botSettings.enabled && selectedConversation.botPaused !== true && (
-                  <button
-                    type="button"
-                    onClick={askAiToReply}
-                    disabled={botBusy}
-                    title="ให้ AI ตอบข้อความล่าสุดของลูกค้าที่ยังไม่มีใครตอบ"
-                    className="inline-flex items-center gap-1.5 rounded-lg bg-indigo-50 px-3 py-2 text-xs font-medium text-indigo-800 hover:bg-indigo-100 disabled:opacity-50"
-                  >
-                    <Sparkles className="h-4 w-4" aria-hidden="true" />
-                    <span className="hidden lg:inline">ให้ AI ตอบข้อความที่ค้าง</span>
-                  </button>
-                )}
+                {/* Always there, so it is never "gone": disabled with the reason when it cannot answer. */}
+                <button
+                  type="button"
+                  onClick={askAiToReply}
+                  disabled={botBusy || Boolean(askAiBlocked)}
+                  title={askAiBlocked || 'ให้ AI ตอบข้อความของลูกค้าที่ยังไม่มีใครตอบ'}
+                  className="inline-flex items-center gap-1.5 rounded-lg bg-indigo-50 px-3 py-2 text-xs font-medium text-indigo-800 hover:bg-indigo-100 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  <Sparkles className="h-4 w-4" aria-hidden="true" />
+                  <span className="hidden sm:inline">ให้ AI ตอบที่ค้าง</span>
+                </button>
                 {isSuperAdmin() && (
                   <button
                     type="button"
