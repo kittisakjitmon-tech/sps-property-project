@@ -572,8 +572,15 @@ const adminActions = {
   // "needs a human" flag and tells the bot to ignore earlier human replies.
   async setBotPaused({ conversationId: id, paused }) {
     if (typeof paused !== 'boolean') throw httpError(400, 'ค่าสถานะบอทไม่ถูกต้อง')
-    const { conversationRef } = await loadConversation(id)
+    const { conversationRef, data } = await loadConversation(id)
     const FieldValue = admin.firestore.FieldValue
+    if (!paused) {
+      // When the team asks for it, the AI only answers chats that have a property set.
+      const aiSettings = (await admin.firestore().doc('messenger_settings/ai').get()).data() || {}
+      if (aiSettings.requirePropertyForBot === true && !data.currentPropertyCode) {
+        throw httpError(409, 'ต้องเลือกทรัพย์ที่ลูกค้าสนใจก่อน จึงจะเปิดให้ AI ตอบแชทนี้ได้')
+      }
+    }
     await conversationRef.set(paused
       ? { botPaused: true }
       : {
@@ -582,6 +589,50 @@ const adminActions = {
         handoffReason: FieldValue.delete(),
         botResumedAt: admin.firestore.Timestamp.now(),
       }, { merge: true })
+    return { success: true }
+  },
+
+  // Tell the AI which property this customer is asking about (by listing code),
+  // or clear it with an empty code.
+  async setConversationProperty({ conversationId: id, propertyCode }, adminUser) {
+    const { conversationRef } = await loadConversation(id)
+    const FieldValue = admin.firestore.FieldValue
+    const code = cleanField(propertyCode, 60)
+    if (!code) {
+      await conversationRef.set({
+        currentPropertyCode: FieldValue.delete(),
+        currentPropertyId: FieldValue.delete(),
+        currentPropertyTitle: FieldValue.delete(),
+        currentPropertySetBy: FieldValue.delete(),
+        currentPropertySetAt: FieldValue.delete(),
+      }, { merge: true })
+      return { success: true, cleared: true }
+    }
+    const found = await admin.firestore().collection('properties').where('displayId', '==', code).limit(1).get()
+    if (found.empty) throw httpError(404, 'ไม่พบทรัพย์รหัสนี้ กรุณาเลือกจากรายการ')
+    const property = found.docs[0].data()
+    if (property.status !== 'available') throw httpError(409, 'ทรัพย์นี้ไม่ว่างแล้ว AI จะไม่เสนอ กรุณาเลือกทรัพย์อื่น')
+    const title = cleanField(property.title, 120)
+    await conversationRef.set({
+      currentPropertyCode: property.displayId,
+      currentPropertyId: found.docs[0].id,
+      currentPropertyTitle: title,
+      currentPropertySetBy: adminUser.uid,
+      currentPropertySetAt: FieldValue.serverTimestamp(),
+      needsProperty: FieldValue.delete(),
+    }, { merge: true })
+    return { success: true, code: property.displayId, title }
+  },
+
+  // Whether the AI may answer only chats that have a property set. Super admins only.
+  async setRequireProperty({ required }, adminUser) {
+    if (adminUser.role !== 'super_admin') throw httpError(403, 'เฉพาะ Super Admin เท่านั้นที่ตั้งค่านี้ได้')
+    if (typeof required !== 'boolean') throw httpError(400, 'ค่าที่ส่งมาไม่ถูกต้อง')
+    await admin.firestore().doc('messenger_settings/ai').set({
+      requirePropertyForBot: required,
+      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      updatedBy: adminUser.uid,
+    }, { merge: true })
     return { success: true }
   },
 
@@ -811,5 +862,6 @@ module.exports = {
     messagePreview,
     extractContacts,
     describeGraphError,
+    adminActions,
   },
 }

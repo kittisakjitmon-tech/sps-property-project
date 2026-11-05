@@ -272,6 +272,14 @@ const facebookAiReply = functions
       const focus = findFocusProperties({ messages: recent, catalog, currentCode: conversation.currentPropertyCode })
       for (const property of focus) seen.set(property.code, property)
       let focusCode = focus[0]?.code || null
+
+      // "Property first" mode: the AI waits until the chat has a property (set by the team,
+      // or named by the customer with a link or code). The inbox shows a badge meanwhile.
+      if (settings.requirePropertyForBot === true && !focus.length) {
+        functions.logger.info('AI reply skipped', { ...logContext, reason: 'no-property' })
+        await conversationRef.set({ needsProperty: true }, { merge: true })
+        return null
+      }
       let lastSearchCodes = []
       const cardCodes = []
       let handoffReason = null
@@ -486,7 +494,14 @@ const facebookAiReply = functions
       stage = 'update'
       const update = {}
       if (shown.size) update.shownCodes = FieldValue.arrayUnion(...shown)
-      if (focusCode && focusCode !== conversation.currentPropertyCode) update.currentPropertyCode = focusCode
+      if (focusCode && focusCode !== conversation.currentPropertyCode) {
+        update.currentPropertyCode = focusCode
+        // The saved title/owner belonged to the previous property.
+        update.currentPropertyId = FieldValue.delete()
+        update.currentPropertyTitle = FieldValue.delete()
+        update.currentPropertySetBy = FieldValue.delete()
+      }
+      if (conversation.needsProperty) update.needsProperty = FieldValue.delete()
       if (Object.keys(contactUpdates).length) {
         update.contact = contactUpdates
         if (contactUpdates.phone || contactUpdates.email) update.leadCapturedAt = FieldValue.serverTimestamp()

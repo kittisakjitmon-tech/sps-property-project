@@ -613,3 +613,61 @@ test('only the allowed number of pictures is read, and other hosts or stickers a
   })
   assert.deepEqual(fetched, ['https://scontent.xx.fbcdn.net/1.jpg'])
 })
+
+// ─── "Property first" mode ───────────────────────────────────────────────────
+
+test('with "property first" on and no property, the AI stays silent and the chat is flagged', async () => {
+  store.set('messenger_settings/ai', { enabled: true, requirePropertyForBot: true })
+  model([{ text: 'ต้องไม่ถูกส่ง' }])
+  await receive('ราคาเท่าไหร่ครับ')
+  assert.equal(sent.length, 0)
+  assert.equal(conversation().needsProperty, true)
+  assert.equal(modelScript.length, 1) // the model was never called
+})
+
+test('a property set by the team lets the AI answer, and clears the flag', async () => {
+  store.set('messenger_settings/ai', { enabled: true, requirePropertyForBot: true })
+  store.set('messenger_conversations/conv1', { pageId: 'P1', participantId: 'U1', pageName: 'เพจ', currentPropertyCode: 'SPS-CD-9', needsProperty: true })
+  const prompt = await capturePrompt(async () => {
+    model([{ text: 'ราคา 1,500,000 บาทครับ' }])
+    await receive('ราคาเท่าไหร่ครับ')
+  })
+  assert.equal(sent.length, 1)
+  assert.match(prompt, /SPS-CD-9/)
+  assert.equal(conversation().needsProperty, undefined)
+})
+
+test('a customer who names the property with a code or link also lets the AI answer', async () => {
+  store.set('messenger_settings/ai', { enabled: true, requirePropertyForBot: true })
+  model([{ text: 'ได้ครับ' }])
+  await receive('สนใจ SPS-CD-9')
+  assert.equal(sent.length, 1)
+  assert.equal(conversation().currentPropertyCode, 'SPS-CD-9')
+})
+
+test('a property that is no longer available does not count', async () => {
+  store.set('messenger_settings/ai', { enabled: true, requirePropertyForBot: true })
+  store.set('messenger_conversations/conv1', { pageId: 'P1', participantId: 'U1', pageName: 'เพจ', currentPropertyCode: 'SOLD-1' })
+  model([{ text: 'ต้องไม่ถูกส่ง' }])
+  await receive('ราคาเท่าไหร่ครับ')
+  assert.equal(sent.length, 0)
+})
+
+test('without "property first" the AI answers as before', async () => {
+  model([{ text: 'สวัสดีครับ' }])
+  await receive('สวัสดี')
+  assert.equal(sent.length, 1)
+  assert.equal(conversation().needsProperty, undefined)
+})
+
+test('when the AI moves to another property it drops the saved title of the old one', async () => {
+  store.set('messenger_conversations/conv1', {
+    pageId: 'P1', participantId: 'U1', pageName: 'เพจ',
+    currentPropertyCode: 'SPS-TH-1', currentPropertyId: 'prop1', currentPropertyTitle: 'ทาวน์โฮมสวย', currentPropertySetBy: 'u1',
+  })
+  model([{ text: 'ได้ครับ' }])
+  await receive('แล้ว SPS-CD-9 ล่ะ')
+  assert.equal(conversation().currentPropertyCode, 'SPS-CD-9')
+  assert.equal(conversation().currentPropertyTitle, undefined)
+  assert.equal(conversation().currentPropertySetBy, undefined)
+})

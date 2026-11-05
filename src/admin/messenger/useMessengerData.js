@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import {
   collection,
   doc,
@@ -7,6 +7,7 @@ import {
   onSnapshot,
   orderBy,
   query,
+  where,
 } from 'firebase/firestore'
 import { adminDb } from '../../lib/firebase'
 import { useAdminAuth } from '../../context/AdminAuthContext'
@@ -77,6 +78,22 @@ export function useMessengerPages() {
   )
 }
 
+// Available listings the team can attach to a chat: [{ code, title }].
+export function usePropertyOptions() {
+  const { items } = useCollectionSnapshot(
+    () => query(collection(adminDb, 'properties'), where('status', '==', 'available')),
+    [],
+    'โหลดรายการทรัพย์ไม่สำเร็จ',
+  )
+  return useMemo(
+    () => items
+      .filter(item => item.displayId)
+      .map(item => ({ code: item.displayId, title: item.title || '' }))
+      .sort((a, b) => a.code.localeCompare(b.code)),
+    [items],
+  )
+}
+
 export function useMessages(conversationId) {
   return useCollectionSnapshot(
     () => conversationId
@@ -91,13 +108,13 @@ export function useMessages(conversationId) {
   )
 }
 
-// Global AI assistant switch (messenger_settings/ai). Missing document means off.
+// Global AI assistant settings (messenger_settings/ai). Missing document means off.
 export function useBotSettings() {
-  const [settings, setSettings] = useState({ enabled: false })
+  const [settings, setSettings] = useState({ enabled: false, requirePropertyForBot: false })
   const [loading, setLoading] = useState(true)
 
   useEffect(() => onSnapshot(doc(adminDb, 'messenger_settings', 'ai'), snapshot => {
-    setSettings({ enabled: false, ...snapshot.data() })
+    setSettings({ enabled: false, requirePropertyForBot: false, ...snapshot.data() })
     setLoading(false)
   }, snapshotError => {
     console.error('โหลดสถานะบอทไม่สำเร็จ', snapshotError)

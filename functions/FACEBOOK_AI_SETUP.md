@@ -20,6 +20,7 @@ apply immediately. The on/off switch is also in the admin Messenger inbox
 | `extraInstructions` | string | Tone or brand notes appended to the prompt, e.g. "เรียกลูกค้าว่าพี่". |
 | `maxRepliesPerHour` | number | Per conversation. Default 8 (property cards don't count). |
 | `maxReplyChars` | number | Longest reply, links not counted. Default 220, allowed 80-1000. A longer reply is rewritten shorter by the model before sending, and cut at a space if that fails. |
+| `requirePropertyForBot` | boolean | `true` = "property first": the AI answers a chat only when it has a property (set by the team in the inbox, or named by the customer with a link or listing code). Otherwise it stays silent and the chat gets a "รอเลือกทรัพย์" badge. Switch in the inbox (Super Admin). Default off. |
 | `loanBankRate` | number | Loan estimate: bank interest, % per year. Default 3.5 (same as the website calculator). |
 | `loanDirectRate` | number | Loan estimate: direct installment (ผ่อนตรง) interest, % per year. Default 2.5. |
 | `loanDefaultDownPercent` | number | Down payment used when the customer does not say one. Default 20. |
@@ -80,6 +81,20 @@ hand over to a teammate, and never to estimate price or condition from a picture
 **Privacy:** pictures are processed by Google (Vertex AI). Before turning this on, update
 the privacy policy and the data-handling answers for Meta, and warn customers not to send
 ID documents. The code cannot tell what a picture contains before the model sees it.
+
+## Property per chat and "property first"
+
+In the inbox each chat has a **ทรัพย์ที่ลูกค้าสนใจ** bar: pick an available listing by code
+(saved as `currentPropertyCode`, with `currentPropertyId`/`currentPropertyTitle`) or clear it.
+The AI uses it exactly like a property the customer named. Each chat also has its own
+AI on/off button (`botPaused`), and Super Admins have the global AI switch plus the
+**ต้องเลือกทรัพย์ก่อน** switch (`requirePropertyForBot`).
+
+With "property first" on: a chat without a property gets no AI reply (the model is not
+called) and shows **รอเลือกทรัพย์**; the AI cannot be switched on for that chat (the server
+refuses with 409) until a property is set. If the customer sends a link or listing code
+of an available property, that counts too. A property that is no longer available does not
+count. Customer-named properties replace the team's choice (the saved title is dropped).
 
 ## Prices
 

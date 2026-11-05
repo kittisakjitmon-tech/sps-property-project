@@ -4,6 +4,7 @@ import {
   AlertTriangle,
   ArrowLeft,
   Bot,
+  Home,
   ImagePlus,
   Loader2,
   MessageCircle,
@@ -19,12 +20,14 @@ import { useAdminAuth } from '../context/AdminAuthContext'
 import Avatar from './messenger/Avatar'
 import ContactPanel from './messenger/ContactPanel'
 import PageManager from './messenger/PageManager'
+import PropertyBar from './messenger/PropertyBar'
 import {
   useBotSettings,
   useConversations,
   useMessages,
   useMessengerApi,
   useMessengerPages,
+  usePropertyOptions,
 } from './messenger/useMessengerData'
 import {
   customerName,
@@ -84,6 +87,8 @@ export default function MessengerInbox() {
   const [botBusy, setBotBusy] = useState(false)
   const { items: conversations, loading: listLoading, error: listError } = useConversations()
   const { items: pages } = useMessengerPages()
+  const propertyOptions = usePropertyOptions()
+  const [propertyBusy, setPropertyBusy] = useState(false)
   const [selectedId, setSelectedId] = useState(null)
   const { items: messages, loading: messagesLoading, error: messagesError } = useMessages(selectedId)
   const [search, setSearch] = useState('')
@@ -192,6 +197,28 @@ export default function MessengerInbox() {
     runBotAction({ action: 'setBotEnabled', enabled: turningOn })
   }
 
+  function toggleRequireProperty() {
+    const turningOn = botSettings.requirePropertyForBot !== true
+    const message = turningOn
+      ? 'ให้ AI ตอบเฉพาะแชทที่เลือกทรัพย์ไว้แล้ว (หรือลูกค้าส่งลิงก์/รหัสทรัพย์มาเอง)? แชทที่ยังไม่มีทรัพย์ AI จะไม่ตอบ'
+      : 'ให้ AI ตอบได้ทุกแชทโดยไม่ต้องเลือกทรัพย์ก่อน?'
+    if (!window.confirm(message)) return
+    runBotAction({ action: 'setRequireProperty', required: turningOn })
+  }
+
+  async function changeConversationProperty(propertyCode) {
+    if (!selectedId) return
+    setPropertyBusy(true)
+    setActionError('')
+    try {
+      await callApi({ action: 'setConversationProperty', conversationId: selectedId, propertyCode })
+    } catch (propertyError) {
+      setActionError(propertyError.message || 'ตั้งค่าทรัพย์ไม่สำเร็จ')
+    } finally {
+      setPropertyBusy(false)
+    }
+  }
+
   function toggleConversationBot() {
     if (!selectedId) return
     runBotAction({
@@ -245,6 +272,24 @@ export default function MessengerInbox() {
             <span className={`inline-flex items-center gap-2 rounded-xl border px-3 py-2 text-sm font-medium ${botSettings.enabled ? 'border-emerald-300 bg-emerald-50 text-emerald-800' : 'border-slate-300 bg-white text-slate-500'}`}>
               <Bot className="h-4 w-4" aria-hidden="true" />
               AI ตอบอัตโนมัติ: {botLoading ? '…' : botSettings.enabled ? 'เปิด' : 'ปิด'}
+            </span>
+          )}
+          {isSuperAdmin() ? (
+            <button
+              type="button"
+              onClick={toggleRequireProperty}
+              disabled={botBusy || botLoading}
+              aria-pressed={botSettings.requirePropertyForBot === true}
+              title="เมื่อเปิด AI จะตอบเฉพาะแชทที่เลือกทรัพย์ไว้แล้ว"
+              className={`inline-flex items-center gap-2 rounded-xl border px-3 py-2 text-sm font-medium disabled:opacity-50 ${botSettings.requirePropertyForBot === true ? 'border-blue-300 bg-blue-50 text-blue-800 hover:bg-blue-100' : 'border-slate-300 bg-white text-slate-700 hover:bg-slate-50'}`}
+            >
+              <Home className="h-4 w-4" aria-hidden="true" />
+              ต้องเลือกทรัพย์ก่อน: {botLoading ? '…' : botSettings.requirePropertyForBot === true ? 'เปิด' : 'ปิด'}
+            </button>
+          ) : botSettings.requirePropertyForBot === true && (
+            <span className="inline-flex items-center gap-2 rounded-xl border border-blue-300 bg-blue-50 px-3 py-2 text-sm font-medium text-blue-800">
+              <Home className="h-4 w-4" aria-hidden="true" />
+              ต้องเลือกทรัพย์ก่อน: เปิด
             </span>
           )}
           <label className="sr-only" htmlFor="messenger-page-filter">กรองตามเพจ</label>
@@ -345,6 +390,11 @@ export default function MessengerInbox() {
                           รอเจ้าหน้าที่
                         </span>
                       )}
+                      {conversation.needsProperty && !conversation.currentPropertyCode && (
+                        <span className="inline-flex items-center rounded-full bg-blue-100 px-2 py-0.5 text-[10px] font-semibold text-blue-800">
+                          รอเลือกทรัพย์
+                        </span>
+                      )}
                     </div>
                   </div>
                 </button>
@@ -383,13 +433,13 @@ export default function MessengerInbox() {
                 <button
                   type="button"
                   onClick={toggleConversationBot}
-                  disabled={botBusy}
+                  disabled={botBusy || (selectedConversation.botPaused === true && botSettings.requirePropertyForBot === true && !selectedConversation.currentPropertyCode)}
                   aria-pressed={selectedConversation.botPaused !== true}
-                  title={selectedConversation.botPaused === true ? 'AI หยุดตอบแชทนี้อยู่ กดเพื่อให้ AI ตอบต่อ' : 'AI ตอบแชทนี้ได้ กดเพื่อหยุด AI แล้วตอบเอง'}
+                  title={selectedConversation.botPaused === true ? (botSettings.requirePropertyForBot === true && !selectedConversation.currentPropertyCode ? 'เลือกทรัพย์ที่ลูกค้าสนใจก่อน จึงจะเปิดให้ AI ตอบได้' : 'AI หยุดตอบแชทนี้อยู่ กดเพื่อให้ AI ตอบต่อ') : 'AI ตอบแชทนี้ได้ กดเพื่อหยุด AI แล้วตอบเอง'}
                   className={`inline-flex items-center gap-1.5 rounded-lg px-3 py-2 text-xs font-medium disabled:opacity-50 ${selectedConversation.botPaused === true ? 'bg-amber-50 text-amber-800 hover:bg-amber-100' : 'bg-emerald-50 text-emerald-800 hover:bg-emerald-100'}`}
                 >
                   <Bot className="h-4 w-4" aria-hidden="true" />
-                  <span className="hidden sm:inline">{selectedConversation.botPaused === true ? 'AI หยุด · เปิดต่อ' : 'AI ตอบอยู่ · หยุด'}</span>
+                  <span className="hidden sm:inline">{selectedConversation.botPaused === true ? 'AI หยุด · เปิดต่อ' : (botSettings.requirePropertyForBot === true && !selectedConversation.currentPropertyCode) ? 'AI รอเลือกทรัพย์ · หยุด' : 'AI ตอบอยู่ · หยุด'}</span>
                 </button>
                 <button
                   type="button"
@@ -401,6 +451,16 @@ export default function MessengerInbox() {
                   <span className="hidden sm:inline">ข้อมูลลูกค้า</span>
                 </button>
               </div>
+
+              <PropertyBar
+                key={selectedConversation.id}
+                conversation={selectedConversation}
+                options={propertyOptions}
+                required={botSettings.requirePropertyForBot === true}
+                busy={propertyBusy}
+                onSet={changeConversationProperty}
+                onClear={() => changeConversationProperty('')}
+              />
 
               {selectedConversation.needsHuman && (
                 <div className="flex gap-2 border-b border-amber-200 bg-amber-50 px-4 py-2 text-xs text-amber-800" role="status">
