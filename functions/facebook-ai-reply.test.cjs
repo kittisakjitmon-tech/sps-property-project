@@ -14,6 +14,7 @@ class ArrayUnion { constructor(items) { this.items = items } }
 const DELETE = Symbol('delete')
 
 let store
+let guideMarkerWriteError
 // structuredClone would strip Ts's methods; real Firestore keeps Timestamp objects.
 function cloneData(value) {
   if (value instanceof Ts) return new Ts(value.ms)
@@ -47,7 +48,7 @@ class DocRef {
     return { id: this.id, ref: this, exists: data !== undefined, data: () => (data ? cloneData(data) : undefined), get: field => data?.[field] }
   }
   async get() { return this.snap() }
-  async set(data, options = {}) { store.set(this.path, applyData(store.get(this.path), data, options.merge === true)) }
+  async set(data, options = {}) { if (data.houseGuideSentAt && guideMarkerWriteError) throw guideMarkerWriteError; store.set(this.path, applyData(store.get(this.path), data, options.merge === true)) }
   async update(data) { store.set(this.path, applyData(store.get(this.path), data, true)) }
   collection(name) { return new Query(`${this.path}/${name}`) }
 }
@@ -104,6 +105,7 @@ firestore.Timestamp = { fromMillis: ms => new Ts(ms), now: () => new Ts(Date.now
 let modelScript
 let sent
 let stored
+let imageSendError
 
 const fakes = {
   'firebase-admin': { firestore, app: () => ({ options: { projectId: 'test' } }) },
@@ -124,6 +126,7 @@ Module._load = function patched(request, parent, isMain) {
       CONVERSATIONS: 'messenger_conversations',
       FACEBOOK_SECRETS: [],
       sendFacebookMessage: async (pageId, recipientId, message) => {
+        if (imageSendError && message.attachment?.type === 'image') throw imageSendError
         sent.push({ pageId, recipientId, message })
         return { message_id: `mid${sent.length}` }
       },
@@ -152,6 +155,8 @@ beforeEach(() => {
   store = new Map()
   sent = []
   stored = []
+  imageSendError = null
+  guideMarkerWriteError = null
   modelScript = []
   store.set('messenger_settings/ai', { enabled: true })
   store.set(`messenger_conversations/${CID}`, { pageId: 'P1', participantId: 'U1', pageName: 'เพจ' })
@@ -1977,3 +1982,154 @@ test('the document prompt reaches the model only when switched on', async () => 
   const off = await capturePrompt(async () => { model([{ text: 'ครับ' }]); await receive('สวัสดีอีกที') })
   assert.ok(!off.includes('เอกสารที่ลูกค้าส่งมาในแชท'))
 })
+
+
+// ─── Introductory guide for customers who have not chosen a house ────────────
+const GUIDE_URL = 'https://firebasestorage.googleapis.com/v0/b/sps-property.firebasestorage.app/o/house-guide.png?alt=media&token=guide';
+const configureGuide = () => store.set('messenger_settings/ai', { enabled: true, houseGuideImageUrl: GUIDE_URL });
+const guideCall = { functionCall: { name: 'send_house_guide', args: {} } };
+const guideImages = () => sent.filter(item => item.message.attachment?.type === 'image' && item.message.attachment.payload.url === GUIDE_URL);
+
+test('sends the configured illustrative house guide once and records it separately from real houses', async () => {
+  configureGuide();
+  let result;
+  modelScript = [async () => [guideCall, guideCall], async contents => { result = contents.at(-1).parts[0].functionResponse.response; return [{ text: 'ภาพตัวอย่างแบบบ้านครับ สนใจทำเลไหนครับ' }]; }];
+  await receive('ยังไม่รู้จะเลือกบ้านแบบไหนดี');
+  assert.equal(guideImages().length, 1);
+  assert.equal(result.ok, true);
+  assert.equal(result.illustrative, true);
+  assert.ok(conversation().houseGuideSentAt instanceof Ts);
+  assert.equal(stored.find(item => item.extra?.kind === 'house-guide').attachments[0].url, GUIDE_URL);
+  assert.equal(conversation().houseGuideLockUntil, undefined);
+});
+
+test('the guide is not sent again after it has already been shown in this conversation', async () => {
+  configureGuide();
+  store.set(`messenger_conversations/${CID}`, { ...conversation(), houseGuideSentAt: new Ts(NOW - 1000) });
+  model([guideCall], [{ text: 'สนใจทำเลไหนครับ' }]);
+  await receive('ขอดูแบบบ้านก่อน');
+  assert.equal(guideImages().length, 0);
+});
+
+test('a context reset allows the introductory guide again', async () => {
+  configureGuide();
+  store.set(`messenger_conversations/${CID}`, { ...conversation(), houseGuideSentAt: new Ts(NOW - 10000), contextResetAt: new Ts(NOW - 1000) });
+  model([guideCall], [{ text: 'ภาพตัวอย่างแบบบ้านครับ สนใจทำเลไหนครับ' }]);
+  await receive('ยังไม่ได้เลือกบ้าน');
+  assert.equal(guideImages().length, 1);
+});
+
+test('configured guide is refused for a focused property or a team-attached listing', async () => {
+  configureGuide();
+  for (const context of [{ currentPropertyCode: 'SPS-TH-1' }, { staffNote: 'บ้านหลังนี้อยู่พานทอง' }, { staffListings: [{ id: 'a1', title: 'บ้านของทีม', type: 'บ้านเดี่ยว' }] }]) {
+    store.set(`messenger_conversations/${CID}`, { pageId: 'P1', participantId: 'U1', ...context });
+    model([guideCall], [{ text: 'มีรายละเอียดบ้านนี้ครับ' }]);
+    await receive('ขอดูแบบบ้าน');
+  }
+  assert.equal(guideImages().length, 0);
+});
+
+test('the guide is refused without a configured HTTPS image URL', async () => {
+  for (const houseGuideImageUrl of [undefined, 'http://example.test/guide.png', 'https://untrusted.test/guide.png']) {
+    store.set('messenger_settings/ai', { enabled: true, ...(houseGuideImageUrl ? { houseGuideImageUrl } : {}) });
+    model([guideCall], [{ text: 'สนใจทำเลไหนครับ' }]);
+    await receive('ไม่รู้จะเลือกบ้านแบบไหน');
+  }
+  assert.equal(guideImages().length, 0);
+});
+
+test('the guide is not sent on an AI follow-up', async () => {
+  configureGuide();
+  store.set(`messenger_conversations/${CID}/messages/old-in`, { direction: 'incoming', text: 'ยังไม่รู้จะเลือกแบบไหน', timestamp: new Ts(NOW - 3000) });
+  store.set(`messenger_conversations/${CID}/messages/old-out`, { direction: 'outgoing', text: 'สนใจทำเลไหนครับ', sentBy: 'ai', timestamp: new Ts(NOW - 2000) });
+  model([guideCall], [{ text: 'ยังสนใจอยู่ไหมครับ' }]);
+  await followUpRequest('guide-followup');
+  assert.equal(guideImages().length, 0);
+});
+
+test('failed guide delivery does not mark it as sent and can be attempted on a later message', async () => {
+  configureGuide();
+  imageSendError = new Error('Messenger unavailable');
+  model([guideCall], [{ text: 'ภาพตัวอย่างแบบบ้านครับ สนใจทำเลไหนครับ' }]);
+  await receive('ยังไม่ได้เลือกบ้าน');
+  assert.equal(sent.length, 1, 'the text reply still succeeds');
+  assert.equal(conversation().houseGuideSentAt, undefined);
+  assert.equal(conversation().houseGuideLockUntil, undefined);
+  imageSendError = null;
+  model([guideCall], [{ text: 'ส่งภาพตัวอย่างให้ครับ' }]);
+  await receive('ขอดูแบบบ้านก่อน');
+  assert.equal(guideImages().length, 1);
+});
+
+test('price guard, a handoff, or choosing a real house later in the turn suppress the guide', async () => {
+  configureGuide();
+  const scenarios = [
+    [[guideCall], [{ text: 'บ้านราคา 2,150,000 บาทครับ' }]],
+    [[guideCall, { functionCall: { name: 'request_human', args: { reason: 'ทีมงานช่วยตอบ' } } }], [{ text: 'ทีมงานจะติดต่อครับ' }]],
+    [[guideCall, { functionCall: { name: 'get_property', args: { code: 'SPS-CD-9' } } }], [{ text: 'มีคอนโดศรีราชาครับ' }]],
+    [[guideCall, { functionCall: { name: 'show_property_cards', args: { codes: ['SPS-CD-9'] } } }], [{ text: 'ส่งบ้านให้ดูครับ' }]],
+  ];
+  for (const steps of scenarios) {
+    store.set(`messenger_conversations/${CID}`, { pageId: 'P1', participantId: 'U1' });
+    model(...steps);
+    await receive('ยังไม่รู้จะเลือกแบบไหน');
+  }
+  assert.equal(guideImages().length, 0);
+});
+
+test('a stored guide bubble also prevents another guide if its conversation marker is missing', async () => {
+  configureGuide();
+  store.set(`messenger_conversations/${CID}/messages/guide-before`, {
+    direction: 'outgoing', text: '', sentBy: 'ai', kind: 'house-guide', timestamp: new Ts(NOW - 1000),
+    attachments: [{ type: 'image', url: GUIDE_URL }],
+  });
+  model([guideCall], [{ text: 'สนใจทำเลไหนครับ' }]);
+  await receive('ยังเลือกบ้านไม่ถูก');
+  assert.equal(guideImages().length, 0);
+});
+
+test('an active delivery lease prevents concurrent guide sends', async () => {
+  configureGuide();
+  store.set(`messenger_conversations/${CID}`, {
+    ...conversation(), houseGuideLockUntil: Date.now() + 60000, houseGuideLockToken: 'other-run',
+  });
+  model([guideCall], [{ text: 'สนใจทำเลไหนครับ' }]);
+  await receive('ยังเลือกบ้านไม่ถูก');
+  assert.equal(guideImages().length, 0);
+  assert.equal(conversation().houseGuideLockToken, 'other-run');
+});
+
+test('a guide queued before the team assigns a house is stopped by the final live-context check', async () => {
+  configureGuide();
+  modelScript = [async () => [guideCall], async () => {
+    store.set(`messenger_conversations/${CID}`, { ...conversation(), staffNote: 'บ้านแชทนี้อยู่พานทอง' });
+    return [{ text: 'สนใจทำเลไหนครับ' }];
+  }];
+  await receive('ยังเลือกบ้านไม่ถูก');
+  assert.equal(guideImages().length, 0);
+  assert.equal(conversation().houseGuideLockUntil, undefined);
+});
+
+
+test('real house images queued after the guide take priority over the illustrative guide', async () => {
+  configureGuide();
+  store.set(`messenger_conversations/${CID}`, { ...conversation(), staffImages: [{ url: 'https://img.example/real-house.jpg' }] });
+  model([guideCall, { functionCall: { name: 'send_house_images', args: {} } }], [{ text: 'ส่งรูปบ้านให้ดูครับ' }]);
+  await receive('ขอดูแบบบ้าน');
+  assert.equal(guideImages().length, 0);
+  assert.equal(sent.filter(item => item.message.attachment?.type === 'image').length, 1);
+});
+
+test('a delivered guide whose marker failed to persist keeps its lease instead of being resent immediately', async () => {
+  configureGuide();
+  guideMarkerWriteError = new Error('temporary storage failure');
+  model([guideCall], [{ text: 'ภาพตัวอย่างแบบบ้านครับ' }]);
+  await receive('ยังเลือกบ้านไม่ถูก');
+  assert.equal(guideImages().length, 1);
+  assert.equal(conversation().houseGuideSentAt, undefined);
+  assert.ok(conversation().houseGuideLockUntil > Date.now());
+  guideMarkerWriteError = null;
+  model([guideCall], [{ text: 'สนใจทำเลไหนครับ' }]);
+  await receive('ขอดูแบบบ้านก่อน');
+  assert.equal(guideImages().length, 1);
+});

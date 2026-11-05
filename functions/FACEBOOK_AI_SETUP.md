@@ -308,3 +308,25 @@ AI sees the post, and it is given only the masked price (e.g. 2.1xxx ล้า�
   houses or cards, no greeting). It is saved with `followUp: true`, and the chat gets
   `lastFollowUpAt`. One follow-up until the customer writes again, and only within Facebook's
   24 hours after the customer's last message.
+
+## House selection guide image
+
+`messenger_settings/ai.houseGuideImageUrl` configures the company-approved advertising
+image used by `send_house_guide`. Only HTTPS Firebase Storage URLs for the
+`sps-property.firebasestorage.app` bucket (or its `storage.googleapis.com` URL) are accepted.
+Unset the field to disable the guide without deploying again.
+
+The AI is instructed to offer the guide when a customer is interested in houses but
+has not chosen one, is unsure which type to choose, or asks for a general overview.
+A greeting alone or a credit-only question does not call for this image. The guide
+is illustrative advertising with approximate budget ranges, not an available listing
+or an exact property price; replies describe it that way and ask one follow-up question.
+
+The server blocks the guide for property-focused/team-attached conversations, follow-ups,
+hand-offs, guarded replies, and replies already sending house cards or pictures. A
+transaction lease prevents concurrent sends and a delivery marker prevents later repeats.
+Resetting the conversation context allows the guide once again. Failed image delivery
+leaves the text response intact and allows a later retry. Stored image bubbles have
+`kind: 'house-guide'` and do not count as an extra reply toward the hourly limit.
+
+Source artwork: `public/images/messenger/house-selection-guide.png` (provided by the owner).

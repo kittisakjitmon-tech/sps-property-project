@@ -1,4 +1,5 @@
 const functions = require('firebase-functions')
+const { randomUUID } = require('node:crypto')
 const admin = require('firebase-admin')
 const axios = require('axios')
 const calendarRules = require('./facebook-ai-calendar.cjs')
@@ -140,6 +141,46 @@ async function claimMessage(ref) {
     if (!current.exists || current.get('aiHandledAt')) return false
     transaction.update(ref, { aiHandledAt: admin.firestore.FieldValue.serverTimestamp() })
     return true
+  })
+}
+
+// The guide is company-owned artwork, never an AI-supplied URL or an arbitrary host.
+function houseGuideImageUrl(value) {
+  if (typeof value !== 'string') return null
+  try {
+    const url = new URL(value)
+    if (url.protocol !== 'https:' || url.username || url.password || url.port) return null
+    const firebase = url.hostname === 'firebasestorage.googleapis.com'
+      && url.pathname.startsWith('/v0/b/sps-property.firebasestorage.app/o/')
+    const storage = url.hostname === 'storage.googleapis.com'
+      && url.pathname.startsWith('/sps-property.firebasestorage.app/')
+    return firebase || storage ? url.href : null
+  } catch { return null }
+}
+
+async function claimHouseGuide(conversationRef, resetAtMs, token) {
+  return admin.firestore().runTransaction(async transaction => {
+    const snapshot = await transaction.get(conversationRef)
+    if (!snapshot.exists) return false
+    const current = snapshot.data()
+    const currentReset = current.contextResetAt?.toMillis?.() || 0
+    if (currentReset !== resetAtMs || current.botPaused || current.currentPropertyCode
+      || current.staffNote?.trim() || current.staffListings?.length
+      || (current.houseGuideSentAt?.toMillis?.() || 0) > resetAtMs
+      || (current.houseGuideLockUntil || 0) > Date.now()) return false
+    transaction.update(conversationRef, { houseGuideLockUntil: Date.now() + 90_000, houseGuideLockToken: token })
+    return true
+  })
+}
+
+async function releaseHouseGuide(conversationRef, token) {
+  await admin.firestore().runTransaction(async transaction => {
+    const snapshot = await transaction.get(conversationRef)
+    if (snapshot.get('houseGuideLockToken') !== token) return
+    transaction.update(conversationRef, {
+      houseGuideLockUntil: admin.firestore.FieldValue.delete(),
+      houseGuideLockToken: admin.firestore.FieldValue.delete(),
+    })
   })
 }
 
@@ -456,6 +497,12 @@ async function answerCustomer({ conversationId, message, messageRef, retry = fal
     const staffImages = (Array.isArray(conversation.staffImages) ? conversation.staffImages : [])
       .filter(image => typeof image?.url === 'string')
     let houseImagesToSend = []
+    const guideImageUrl = houseGuideImageUrl(settings.houseGuideImageUrl)
+    const guideShownBefore = (conversation.houseGuideSentAt?.toMillis?.() || 0) > resetAtMs
+      || recent.some(item => item.direction === 'outgoing' && item.kind === 'house-guide')
+    const houseGuideAvailable = Boolean(guideImageUrl && !followingUp && !focus.length && !hasTeamInfo && !guideShownBefore)
+    let houseGuideQueued = false
+    let houseGuideSent = false
 
     // Which houses are "attached" to this chat: set by the team, typed in by the team, or named by
     // the customer (link or code). A property the AI only remembers from earlier does not count.
@@ -489,6 +536,18 @@ async function answerCustomer({ conversationId, message, messageRef, retry = fal
     })
 
     const handlers = {
+      send_house_guide: () => {
+        if (!houseGuideAvailable || focusCode || cardCodes.length || attachedToSend || houseImagesToSend.length) {
+          return { ok: false, error: 'ภาพแนะนำแบบบ้านใช้เฉพาะลูกค้าที่ยังไม่ได้เลือกบ้าน และส่งได้ครั้งเดียวต่อบทสนทนา ถ้ามีบ้านที่คุยอยู่ให้ตอบจากบ้านนั้น' }
+        }
+        houseGuideQueued = true
+        return {
+          ok: true,
+          queued: 1,
+          illustrative: true,
+          message: 'เตรียมส่งภาพตัวอย่างแบบบ้านประกอบโฆษณาและช่วงงบประมาณคร่าวๆ ไม่ใช่รูปทรัพย์ที่ยืนยันว่างหรือราคาขายจริง ให้ถามงบหรือทำเลต่อเพียงข้อเดียว',
+        }
+      },
       search_properties: args => {
         // The model says the customer asked for other houses; the customer's own words count too.
         if (args?.customerAskedForOtherHouses === true) othersUnlocked = true
@@ -818,6 +877,7 @@ async function answerCustomer({ conversationId, message, messageRef, retry = fal
       focus,
       imagesEnabled: readPictures,
       documentsEnabled: documentCfg.enabled,
+      houseGuideAvailable,
       staffNote,
       staffListings,
       attachedProperty: attachedProperties.length > 0,
@@ -910,6 +970,46 @@ async function answerCustomer({ conversationId, message, messageRef, retry = fal
         },
       },
     })
+
+    // A guide is an alternative to concrete house cards, not an extra sales push.
+    // Claim after generation so a property chosen later in the same turn suppresses it.
+    if (houseGuideQueued && !blockedByGuard && !handoffReason && !focusCode && !cardCodes.length && !attachedToSend && !houseImagesToSend.length) {
+      const token = randomUUID()
+      let claimed = false
+      let deliveryRecorded = false
+      try {
+        stage = 'house-guide'
+        claimed = await claimHouseGuide(conversationRef, resetAtMs, token)
+        if (claimed) {
+          const guide = await sendFacebookMessage(conversation.pageId, conversation.participantId, {
+            attachment: { type: 'image', payload: { url: guideImageUrl, is_reusable: true } },
+          })
+          houseGuideSent = true
+          // Mark delivery before recording the bubble: a storage failure must not resend an image already delivered.
+          await conversationRef.set({ houseGuideSentAt: FieldValue.serverTimestamp() }, { merge: true })
+          deliveryRecorded = true
+          await storeMessengerMessage({
+            pageId: conversation.pageId,
+            pageName: conversation.pageName,
+            participantId: conversation.participantId,
+            externalId: guide.message_id,
+            direction: 'outgoing',
+            text: '',
+            attachments: [{ type: 'image', url: guideImageUrl }],
+            timestamp: Date.now(),
+            sentBy: 'ai',
+            extra: { kind: 'house-guide' },
+          })
+        }
+      } catch (error) {
+        functions.logger.warn('AI house guide failed', { ...logContext, reason: error.message })
+      } finally {
+        // If Messenger delivered but persisting the marker failed, keep the short lease to avoid an immediate duplicate.
+        if (claimed && (!houseGuideSent || deliveryRecorded)) await releaseHouseGuide(conversationRef, token).catch(error => {
+          functions.logger.warn('AI house guide lock release failed', { ...logContext, reason: error.message })
+        })
+      }
+    }
 
     // The houses the team attached come first: shown on the first answer of the chat (or when the
     // model asks for them), before any other house. A failure here must not undo the reply.
@@ -1054,6 +1154,7 @@ async function answerCustomer({ conversationId, message, messageRef, retry = fal
       cards: sendCards ? cardCodes.length : 0,
       handoff: Boolean(handoffReason),
       appointment: appointmentRequested,
+      houseGuide: houseGuideSent,
     })
   } catch (error) {
     if (!replied) await noteAiStatus(conversationRef, { result: 'failed', reason: stage })

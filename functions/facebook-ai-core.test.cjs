@@ -388,9 +388,9 @@ test('system prompt sets a human tone, the particle, masked-price rules, FAQ and
   assert.match(full, /2026-11-04/)
 })
 
-test('all twelve tools are declared', () => {
+test('all thirteen tools are declared', () => {
   assert.deepEqual(TOOL_DECLARATIONS.map(t => t.name), [
-    'search_properties', 'get_property', 'show_attached_houses', 'show_property_cards', 'save_customer_info', 'check_availability', 'request_appointment', 'estimate_loan', 'save_credit_profile', 'save_document_review', 'send_house_images', 'request_human',
+    'search_properties', 'get_property', 'show_attached_houses', 'show_property_cards', 'save_customer_info', 'check_availability', 'request_appointment', 'estimate_loan', 'save_credit_profile', 'save_document_review', 'send_house_guide', 'send_house_images', 'request_human',
   ])
 })
 
@@ -1070,3 +1070,25 @@ test('the prompt allows reading documents only when switched on, and never repea
   assert.ok(!off.includes('เอกสารที่ลูกค้าส่งมาในแชท'))
   assert.match(off, /ห้ามอ่านหรือทวนข้อมูลในรูป/)
 })
+
+
+test('house guide is offered only when configured and no house is selected', () => {
+  const prompt = buildSystemPrompt({ houseGuideAvailable: true });
+  assert.match(prompt, /send_house_guide/);
+  assert.match(prompt, /ภาพตัวอย่าง/);
+  assert.match(prompt, /งบประมาณคร่าวๆ/);
+  assert.match(prompt, /ห้ามยืนยัน/);
+  assert.doesNotMatch(buildSystemPrompt({}), /send_house_guide/);
+  assert.doesNotMatch(buildSystemPrompt({ houseGuideAvailable: true, focus: [toIndexedProperty('a', base)] }), /send_house_guide/);
+  assert.doesNotMatch(buildSystemPrompt({ houseGuideAvailable: true, staffNote: 'บ้านพานทอง 2 ห้องนอน' }), /send_house_guide/);
+  assert.doesNotMatch(buildSystemPrompt({ houseGuideAvailable: true, staffListings: [{ id: 'one', text: 'บ้านพานทอง' }] }), /send_house_guide/);
+  assert.doesNotMatch(buildSystemPrompt({ houseGuideAvailable: true, attachedProperty: true }), /send_house_guide/);
+  assert.doesNotMatch(buildSystemPrompt({ houseGuideAvailable: true, followUp: true }), /send_house_guide/);
+});
+
+test('a house guide attachment is part of an answer, not another hourly AI reply', () => {
+  const now = Date.now();
+  const result = shouldReply({ settings: { enabled: true, maxRepliesPerHour: 1 }, conversation: {}, text: 'สนใจบ้าน', timestamp: now, now,
+    recentMessages: [{ direction: 'outgoing', sentBy: 'ai', kind: 'house-guide', timestamp: now - 1000 }] });
+  assert.equal(result.reply, true);
+});
