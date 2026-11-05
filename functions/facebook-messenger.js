@@ -595,6 +595,16 @@ function cleanField(value, maxLength) {
   return typeof value === 'string' ? value.trim().slice(0, maxLength) : ''
 }
 
+// [input key, settings field, min, max, label] for the loan estimate figures.
+const LOAN_FIELDS = [
+  ['bankRate', 'loanBankRate', 0, 20, 'ดอกเบี้ยกู้ธนาคาร'],
+  ['directRate', 'loanDirectRate', 0, 20, 'ดอกเบี้ยผ่อนตรง'],
+  ['maxDsrPercent', 'loanMaxDsrPercent', 10, 80, 'สัดส่วนหนี้ต่อรายได้'],
+  ['maxYears', 'loanMaxYears', 1, 40, 'จำนวนปีผ่อนสูงสุด'],
+  ['defaultYears', 'loanDefaultYears', 1, 40, 'จำนวนปีผ่อนตั้งต้น'],
+  ['defaultDownPercent', 'loanDefaultDownPercent', 0, 90, 'เงินดาวน์ตั้งต้น'],
+]
+
 const toMillisValue = value => value?.toMillis?.() ?? (Number(value) || 0)
 
 // Ask the AI to answer the customer message that is still waiting, or with followUp to write
@@ -881,7 +891,7 @@ const adminActions = {
   },
 
   // What the AI is told to ask about credit, and the tone notes. Super admins only.
-  async setAiGuidance({ creditChecklist, extraInstructions, financeKnowledge, particle, replyDelaySeconds }, adminUser) {
+  async setAiGuidance({ creditChecklist, extraInstructions, financeKnowledge, particle, replyDelaySeconds, loan }, adminUser) {
     if (adminUser.role !== 'super_admin') throw httpError(403, 'เฉพาะ Super Admin เท่านั้นที่แก้คำแนะนำ AI ได้')
     const update = {}
     const FieldValue = admin.firestore.FieldValue
@@ -889,6 +899,16 @@ const adminActions = {
     if (particle !== undefined) {
       if (particle !== 'ครับ' && particle !== 'ค่ะ') throw httpError(400, 'คำลงท้ายต้องเป็น ครับ หรือ ค่ะ')
       update.particle = particle
+    }
+    // The figures the AI's loan estimate uses (estimate_loan); same ranges as loanSettings in the core.
+    if (loan !== undefined) {
+      if (!loan || typeof loan !== 'object') throw httpError(400, 'ค่าสินเชื่อไม่ถูกต้อง')
+      for (const [key, field, min, max, label] of LOAN_FIELDS) {
+        if (loan[key] === undefined) continue
+        const value = Number(loan[key])
+        if (!Number.isFinite(value) || value < min || value > max) throw httpError(400, `${label} ต้องอยู่ระหว่าง ${min}-${max}`)
+        update[field] = value
+      }
     }
     // Seconds to wait for more messages typed in a row before answering them all (0 = answer at once).
     if (replyDelaySeconds !== undefined) {

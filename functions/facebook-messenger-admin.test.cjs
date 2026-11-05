@@ -499,3 +499,16 @@ test('a super admin writes the finance knowledge, with its lines kept and a leng
   await adminActions.setAiGuidance({ financeKnowledge: '' }, SUPER)
   assert.equal(store.get('messenger_settings/ai').financeKnowledge, undefined)
 })
+
+test('a super admin sets the loan estimate figures, within sane ranges', async () => {
+  await adminActions.setAiGuidance({ loan: { bankRate: 2.95, directRate: 6, maxDsrPercent: 50, maxYears: 35, defaultYears: 30, defaultDownPercent: 5 } }, SUPER)
+  const saved = store.get('messenger_settings/ai')
+  assert.deepEqual(
+    [saved.loanBankRate, saved.loanDirectRate, saved.loanMaxDsrPercent, saved.loanMaxYears, saved.loanDefaultYears, saved.loanDefaultDownPercent],
+    [2.95, 6, 50, 35, 30, 5],
+  )
+  await reject(adminActions.setAiGuidance({ loan: { bankRate: 25 } }, SUPER), 400)
+  await reject(adminActions.setAiGuidance({ loan: { maxDsrPercent: 'มาก' } }, SUPER), 400)
+  await reject(adminActions.setAiGuidance({ loan: { bankRate: 3 } }, ADMIN), 403)
+  assert.equal(store.get('messenger_settings/ai').loanBankRate, 2.95)
+})

@@ -9,6 +9,7 @@ import {
   Loader2,
   NotebookPen,
   MessageCircle,
+  MessageCircleQuestion,
   Paperclip,
   RotateCcw,
   Search,
@@ -24,6 +25,7 @@ import Avatar from './messenger/Avatar'
 import AiGuidanceDialog from './messenger/AiGuidanceDialog'
 import ContactPanel from './messenger/ContactPanel'
 import PageManager from './messenger/PageManager'
+import FaqDialog from './messenger/FaqDialog'
 import PropertyBar from './messenger/PropertyBar'
 import {
   useBotSettings,
@@ -116,6 +118,7 @@ export default function MessengerInbox() {
   const [contactOpen, setContactOpen] = useState(false)
   const [pageManagerOpen, setPageManagerOpen] = useState(false)
   const [guidanceOpen, setGuidanceOpen] = useState(false)
+  const [faqOpen, setFaqOpen] = useState(false)
   const bottomRef = useRef(null)
   const fileInputRef = useRef(null)
 
@@ -477,6 +480,14 @@ export default function MessengerInbox() {
               คำแนะนำ AI
             </button>
           )}
+          <button
+            type="button"
+            onClick={() => setFaqOpen(true)}
+            className="inline-flex items-center gap-2 rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
+          >
+            <MessageCircleQuestion className="h-4 w-4" aria-hidden="true" />
+            คำถามที่พบบ่อย
+          </button>
           <label className="sr-only" htmlFor="messenger-page-filter">กรองตามเพจ</label>
           <select
             id="messenger-page-filter"
@@ -825,6 +836,7 @@ export default function MessengerInbox() {
           </aside>
         )}
       </div>
+      {faqOpen && <FaqDialog onClose={() => setFaqOpen(false)} />}
       {guidanceOpen && (
         <AiGuidanceDialog
           settings={botSettings}

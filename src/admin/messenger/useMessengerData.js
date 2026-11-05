@@ -102,6 +102,15 @@ export function usePropertyOptions() {
   )
 }
 
+// Company facts and FAQs the AI answers from (messenger_faq: { question, answer, active }).
+export function useFaqItems() {
+  return useCollectionSnapshot(
+    () => collection(adminDb, 'messenger_faq'),
+    [],
+    'โหลดคำถามที่พบบ่อยไม่สำเร็จ',
+  )
+}
+
 export function useMessages(conversationId) {
   return useCollectionSnapshot(
     () => conversationId

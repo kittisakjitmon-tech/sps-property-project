@@ -5,6 +5,23 @@ import { FINANCE_KNOWLEDGE_TEMPLATE } from './financeKnowledgeTemplate'
 
 const MAX_FINANCE = 6000 // same limit as the server
 
+// The figures the AI's loan estimate uses. Defaults and ranges are the server's (loanSettings).
+const LOAN_FIELDS = [
+  { key: 'bankRate', field: 'loanBankRate', label: 'ดอกเบี้ยกู้ธนาคาร (% ต่อปี)', min: 0, max: 20, step: 0.01, fallback: 3.5 },
+  { key: 'directRate', field: 'loanDirectRate', label: 'ดอกเบี้ยผ่อนตรง (% ต่อปี)', min: 0, max: 20, step: 0.01, fallback: 2.5 },
+  { key: 'maxDsrPercent', field: 'loanMaxDsrPercent', label: 'ค่างวดรวมหนี้อื่นได้ไม่เกิน (% ของรายได้)', min: 10, max: 80, step: 1, fallback: 40 },
+  { key: 'defaultDownPercent', field: 'loanDefaultDownPercent', label: 'เงินดาวน์ตั้งต้น (% ของราคา)', min: 0, max: 90, step: 1, fallback: 20 },
+  { key: 'defaultYears', field: 'loanDefaultYears', label: 'ผ่อนกี่ปี (ตั้งต้น)', min: 1, max: 40, step: 1, fallback: 30 },
+  { key: 'maxYears', field: 'loanMaxYears', label: 'ผ่อนได้นานสุดกี่ปี', min: 1, max: 40, step: 1, fallback: 30 },
+]
+
+function initialLoan(settings) {
+  return Object.fromEntries(LOAN_FIELDS.map(({ key, field, min, max, fallback }) => {
+    const value = Number(settings[field])
+    return [key, String(Number.isFinite(value) && value >= min && value <= max ? value : fallback)]
+  }))
+}
+
 // What the AI is told to ask for a credit check, and extra tone notes. Super admins only.
 // Changes apply to the next message; no deploy needed.
 export default function AiGuidanceDialog({ settings, callApi, onClose }) {
@@ -12,6 +29,11 @@ export default function AiGuidanceDialog({ settings, callApi, onClose }) {
   const [checklist, setChecklist] = useState(settings.creditChecklist || '')
   const [extra, setExtra] = useState(settings.extraInstructions || '')
   const [finance, setFinance] = useState(settings.financeKnowledge || '')
+  const [loan, setLoan] = useState(() => initialLoan(settings))
+  const loanError = LOAN_FIELDS.find(({ key, min, max }) => {
+    const value = Number(loan[key])
+    return loan[key] === '' || !Number.isFinite(value) || value < min || value > max
+  })
   const [particle, setParticle] = useState(settings.particle === 'ค่ะ' ? 'ค่ะ' : 'ครับ')
   const savedDelay = Number(settings.replyDelaySeconds)
   const [delay, setDelay] = useState(Number.isInteger(savedDelay) && savedDelay >= 0 && savedDelay <= 30 ? savedDelay : 15)
@@ -25,7 +47,7 @@ export default function AiGuidanceDialog({ settings, callApi, onClose }) {
     setSaving(true)
     setStatus({ type: '', message: '' })
     try {
-      await callApi({ action: 'setAiGuidance', creditChecklist: checklist, extraInstructions: extra, financeKnowledge: finance, particle, replyDelaySeconds: delay })
+      await callApi({ action: 'setAiGuidance', creditChecklist: checklist, extraInstructions: extra, financeKnowledge: finance, particle, loan: Object.fromEntries(LOAN_FIELDS.map(({ key }) => [key, Number(loan[key])])), replyDelaySeconds: delay })
       setStatus({ type: 'success', message: 'บันทึกแล้ว AI จะใช้ในข้อความถัดไป' })
     } catch (error) {
       setStatus({ type: 'error', message: error.message || 'บันทึกไม่สำเร็จ' })
@@ -129,6 +151,29 @@ export default function AiGuidanceDialog({ settings, callApi, onClose }) {
             </div>
           </div>
 
+          <fieldset className="space-y-2">
+            <legend className="font-medium text-slate-800">ตัวเลขที่ AI ใช้ประเมินค่างวดและโอกาสกู้</legend>
+            <p className="text-xs text-slate-500">ใส่ให้ตรงกับธนาคารหรือโปรที่ใช้จริง AI บอกลูกค้าว่าเป็นประมาณการเสมอ ไม่ใช่ผลอนุมัติ</p>
+            <div className="grid gap-2 sm:grid-cols-2">
+              {LOAN_FIELDS.map(({ key, label, min, max, step }) => (
+                <label key={key} className="flex flex-col gap-1 text-xs">
+                  <span className="text-slate-600">{label}</span>
+                  <input
+                    type="number"
+                    inputMode="decimal"
+                    min={min}
+                    max={max}
+                    step={step}
+                    value={loan[key]}
+                    onChange={event => { setLoan(current => ({ ...current, [key]: event.target.value })); setStatus({ type: '', message: '' }) }}
+                    className="rounded-lg border border-slate-300 px-3 py-1.5 focus:border-blue-600 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-100"
+                  />
+                </label>
+              ))}
+            </div>
+            {loanError && <p className="text-xs text-red-600">{loanError.label} ต้องอยู่ระหว่าง {loanError.min}-{loanError.max}</p>}
+          </fieldset>
+
           <div className="space-y-2">
             <label htmlFor={`${id}-extra`} className="font-medium text-slate-800">คำแนะนำเพิ่มเติมเรื่องน้ำเสียงและวิธีตอบ</label>
             <textarea
@@ -157,7 +202,7 @@ export default function AiGuidanceDialog({ settings, callApi, onClose }) {
           <button type="button" onClick={onClose} className="ml-auto rounded-lg px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-100">ปิด</button>
           <button
             type="submit"
-            disabled={saving}
+            disabled={saving || Boolean(loanError)}
             className="inline-flex items-center gap-2 rounded-lg bg-blue-700 px-4 py-2 text-sm font-medium text-white hover:bg-blue-800 disabled:opacity-50"
           >
             {saving && <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />}
