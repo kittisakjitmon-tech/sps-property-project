@@ -743,7 +743,7 @@ export default function MessengerInbox() {
                                   </button>
                                 </span>
                               )}
-                              <span>{message.sentBy === 'ai' ? 'AI · ' : ''}{formatDateTime(message.timestamp)}</span>
+                              <span>{message.sentBy === 'ai' ? 'AI · ' : message.automated ? 'ตอบอัตโนมัติของเพจ · ' : ''}{formatDateTime(message.timestamp)}</span>
                             </div>
                           </div>
                         </div>

@@ -483,3 +483,10 @@ test('a super admin sets how long the AI waits for more messages', async () => {
   await reject(adminActions.setAiGuidance({ replyDelaySeconds: 31 }, SUPER), 400)
   await reject(adminActions.setAiGuidance({ replyDelaySeconds: 'x' }, SUPER), 400)
 })
+
+test('asking the AI to answer hands the chat back to it', async () => {
+  store.set('messenger_settings/ai', { enabled: true })
+  waiting({ needsProperty: undefined })
+  await adminActions.askAiToReply({ conversationId: 'c1' }, ADMIN)
+  assert.ok(conversation().botResumedAt, 'earlier replies by a person no longer stop the AI')
+})

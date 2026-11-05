@@ -12,6 +12,7 @@ const {
   toIndexedProperty,
   searchProperties,
   shouldReply,
+  unansweredCustomerMessages,
   historyToContents,
   cleanReplyText,
   buildSystemPrompt,
@@ -956,4 +957,16 @@ test('the reply may be longer when it answers several questions, within limits',
   assert.equal(countQuestions([{ direction: 'incoming', text: 'ราคา' }, { direction: 'incoming', text: '' }, { direction: 'incoming', text: 'พิกัด' }]), 2)
   assert.equal(countQuestions([]), 1)
   assert.match(buildSystemPrompt({ maxChars: 352 }), /ห้ามเกิน 352 ตัวอักษร/)
+})
+
+test('the page\'s automatic reply is not a person answering, and answers nothing', () => {
+  const now = 10_000_000
+  const recentMessages = [
+    { direction: 'incoming', text: 'สนใจบ้านค่ะ', timestamp: now - 20_000 },
+    { direction: 'outgoing', sentBy: null, automated: true, text: 'สวัสดี ขอบคุณที่ติดต่อเรา', timestamp: now - 18_000 },
+  ]
+  assert.equal(shouldReply({ settings: { enabled: true }, conversation: {}, text: 'สนใจบ้านค่ะ', timestamp: now - 20_000, recentMessages, now }).reply, true)
+  const person = recentMessages.map(m => (m.automated ? { ...m, automated: false } : m))
+  assert.equal(shouldReply({ settings: { enabled: true }, conversation: {}, text: 'x', timestamp: now - 1000, recentMessages: person, now }).reason, 'human-active')
+  assert.deepEqual(unansweredCustomerMessages(recentMessages).map(m => m.text), ['สนใจบ้านค่ะ'])
 })

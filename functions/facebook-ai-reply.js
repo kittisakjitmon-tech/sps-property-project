@@ -155,6 +155,7 @@ async function loadRecentMessages(conversationRef) {
       kind: data.kind || null,
       timestamp: data.timestamp?.toMillis?.() || 0,
       followUp: data.followUp === true,
+      automated: data.automated === true,
     }
   })
 }
@@ -368,7 +369,8 @@ async function answerCustomer({ conversationId, message, messageRef, retry = fal
       functions.logger.info('AI reply skipped', { ...logContext, reason: 'newer-message' })
       return null
     }
-    const newest = [...recent].sort((first, second) => second.timestamp - first.timestamp)[0]
+    // The page's automatic reply (Instant Reply) does not count as having answered the customer.
+    const newest = [...recent].filter(item => !item.automated).sort((first, second) => second.timestamp - first.timestamp)[0]
     const followingUp = retry && followUp && newest?.direction === 'outgoing'
     if (followingUp) {
       logContext.followUp = true
@@ -1084,7 +1086,7 @@ const facebookAiRetry = functions
         const followUp = request.followUp === true
         const base = followUp
           ? latest.docs.find(doc => doc.get('direction') === 'incoming')
-          : latest.docs[0]
+          : latest.docs.find(doc => doc.get('automated') !== true) // the page's automatic reply answers nothing
         if (!base || base.get('direction') !== 'incoming') {
           functions.logger.info('AI retry skipped', { conversationId, reason: followUp ? 'no-customer-message' : 'nothing-waiting' })
           return null

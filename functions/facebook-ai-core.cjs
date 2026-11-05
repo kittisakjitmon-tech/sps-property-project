@@ -786,7 +786,8 @@ function shouldReply({ settings, conversation, text, timestamp, recentMessages, 
   const outgoing = (recentMessages || []).filter(m => m.direction === 'outgoing')
   // An admin who resumes the bot overrides earlier human replies.
   const resumedAt = Number(conversation?.botResumedAtMs) || 0
-  if (outgoing.some(m => m.sentBy !== 'ai' && m.timestamp > resumedAt && now - m.timestamp < HUMAN_ACTIVE_MS)) {
+  // The page's automatic replies (Instant Reply, away message) are not a person answering.
+  if (outgoing.some(m => m.sentBy !== 'ai' && !m.automated && m.timestamp > resumedAt && now - m.timestamp < HUMAN_ACTIVE_MS)) {
     return { reply: false, reason: 'human-active' }
   }
   const limit = Number(settings?.maxRepliesPerHour) > 0 ? Number(settings.maxRepliesPerHour) : DEFAULT_MAX_REPLIES_PER_HOUR
@@ -829,7 +830,8 @@ function hasNewerCustomerMessage(messages, { id, timestamp }) {
 function unansweredCustomerMessages(messages) {
   const sorted = [...(messages || [])].sort((a, b) => a.timestamp - b.timestamp)
   let start = 0
-  sorted.forEach((m, index) => { if (m.direction === 'outgoing') start = index + 1 })
+  // The page's automatic reply does not answer anything.
+  sorted.forEach((m, index) => { if (m.direction === 'outgoing' && !m.automated) start = index + 1 })
   return sorted.slice(start).filter(m => m.direction === 'incoming')
 }
 

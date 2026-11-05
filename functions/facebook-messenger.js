@@ -17,6 +17,10 @@ const FACEBOOK_SECRETS = [
 const DEFAULT_FACEBOOK_APP_ID = '1688056122840915'
 const REQUIRED_SCOPES = ['pages_messaging', 'pages_manage_metadata', 'pages_read_engagement']
 const PROFILE_REFRESH_MS = 24 * 60 * 60 * 1000
+// The page's own automatic replies (Instant Reply, away message set in Meta Business Suite) come
+// back as echoes from outside this system within a few seconds of the customer's message.
+// Nobody types a reply that fast, so such an echo is treated as automatic, not as a person.
+const AUTO_REPLY_WINDOW_MS = 10 * 1000
 // Facebook's standard messaging window: a page may only send within 24 hours of the customer's last message.
 const MESSAGING_WINDOW_MS = 24 * 60 * 60 * 1000
 const PAGE_INFO_CACHE_MS = 10 * 60 * 1000
@@ -81,6 +85,12 @@ function extractContacts(text) {
   const emails = [...new Set((text.match(EMAIL_PATTERN) || []).map(item => item.toLowerCase()))]
   const phones = [...new Set((text.match(PHONE_PATTERN) || []).map(normalizePhone))]
   return { emails, phones }
+}
+
+// An echo from outside this system sent within seconds of the customer's message is the page's
+// automatic reply, not a person (see AUTO_REPLY_WINDOW_MS).
+function isAutomaticReply({ timestamp, lastInboundAt }) {
+  return lastInboundAt > 0 && timestamp >= lastInboundAt && timestamp - lastInboundAt <= AUTO_REPLY_WINDOW_MS
 }
 
 function httpError(status, message) {
@@ -362,7 +372,7 @@ async function storeMessengerMessage({
       ...(pageName ? { pageName } : {}),
       ...(direction === 'incoming'
         ? { lastInboundAt: messageTimestamp }
-        : { lastOutboundAt: messageTimestamp }),
+        : (extra?.automated ? {} : { lastOutboundAt: messageTimestamp })),
     }
     if (contacts.emails.length) {
       conversationData.detectedEmails = admin.firestore.FieldValue.arrayUnion(...contacts.emails)
@@ -458,6 +468,16 @@ async function handleMessagingEvent(pageId, pageName, event) {
     ...(item.payload?.sticker_id ? { stickerId: item.payload.sticker_id } : {}),
   }))
   const attachments = await persistIncomingAttachments(id, message.mid, rawAttachments)
+  const timestamp = Number(event.timestamp) || Date.now()
+
+  // An echo of a message not sent by this system: a person replying in Meta Business Suite or
+  // the Messenger app, or the page's automatic reply (see AUTO_REPLY_WINDOW_MS).
+  let automated = false
+  const ourAppId = String(process.env.FACEBOOK_APP_ID || DEFAULT_FACEBOOK_APP_ID)
+  if (isEcho && String(message.app_id || '') !== ourAppId) {
+    const conversation = (await admin.firestore().collection(CONVERSATIONS).doc(id).get()).data() || {}
+    automated = isAutomaticReply({ timestamp, lastInboundAt: conversation.lastInboundAt?.toMillis?.() || 0 })
+  }
 
   await storeMessengerMessage({
     pageId,
@@ -467,7 +487,8 @@ async function handleMessagingEvent(pageId, pageName, event) {
     direction: isEcho ? 'outgoing' : 'incoming',
     text: message.text || '',
     attachments,
-    timestamp: Number(event.timestamp) || Date.now(),
+    timestamp,
+    ...(automated ? { extra: { automated: true } } : {}),
   })
 
   if (!isEcho) await refreshCustomerProfile(id)
@@ -577,8 +598,11 @@ function cleanField(value, maxLength) {
 const toMillisValue = value => value?.toMillis?.() ?? (Number(value) || 0)
 
 // Ask the AI to answer the customer message that is still waiting, or with followUp to write
-// first (see facebookAiRetry).
+// first (see facebookAiRetry). The team asking the AI to answer hands the chat back to it: like
+// "เปิดต่อ", earlier replies typed by a person no longer stop it answering the next messages.
 async function requestAiRetry(conversationId, adminUser, reason, { followUp = false } = {}) {
+  await admin.firestore().collection(CONVERSATIONS).doc(conversationId)
+    .set({ botResumedAt: admin.firestore.Timestamp.now() }, { merge: true })
   await admin.firestore().collection('ai_retry_requests').add({
     conversationId,
     reason,
@@ -1127,6 +1151,7 @@ module.exports = {
     messagePreview,
     extractContacts,
     describeGraphError,
+    isAutomaticReply,
     adminActions,
   },
 }

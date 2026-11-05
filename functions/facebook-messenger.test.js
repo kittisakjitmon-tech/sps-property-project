@@ -95,3 +95,12 @@ test('describeGraphError explains the 24-hour window in Thai', () => {
   const error = { response: { data: { error: { code: 10, error_subcode: 2018278, message: 'outside window' } } } }
   assert.match(_private.describeGraphError(error), /24 ชั่วโมง/)
 })
+
+test('an echo within seconds of the customer\'s message is the page\'s automatic reply', () => {
+  const { isAutomaticReply } = _private
+  assert.equal(isAutomaticReply({ timestamp: 1_002_000, lastInboundAt: 1_000_000 }), true) // 2 s: Instant Reply
+  assert.equal(isAutomaticReply({ timestamp: 1_010_000, lastInboundAt: 1_000_000 }), true)
+  assert.equal(isAutomaticReply({ timestamp: 1_045_000, lastInboundAt: 1_000_000 }), false) // 45 s: a person typing
+  assert.equal(isAutomaticReply({ timestamp: 1_000_000, lastInboundAt: 0 }), false) // the customer never wrote
+  assert.equal(isAutomaticReply({ timestamp: 999_000, lastInboundAt: 1_000_000 }), false) // before the message
+})

@@ -1836,3 +1836,18 @@ test('a failure is kept for the inbox too', async () => {
   assert.equal(sent.length, 0)
   assert.deepEqual([conversation().aiStatus.result, conversation().aiStatus.reason], ['failed', 'gemini'])
 })
+
+// ─── The page's automatic reply (Instant Reply) ──────────────────────────────
+test('the page\'s automatic reply does not stop the AI from answering', async () => {
+  addIncoming('i1', 'สนใจบ้านแฝดค่ะ', NOW - 20000)
+  store.set(`messenger_conversations/${CID}/messages/i2`, { direction: 'outgoing', automated: true, text: 'สวัสดี ขอบคุณที่ติดต่อเรา เราได้รับข้อความของคุณแล้ว', attachments: [], timestamp: new Ts(NOW - 18000) })
+  model([{ text: 'สนใจหลังไหนคะ' }])
+  await runFor('i1')
+  assert.equal(sent.length, 1)
+
+  // the team's button also sees the customer as still waiting
+  sent.length = 0
+  model([{ text: 'สนใจหลังไหนคะ' }])
+  await requestRetry('ri')
+  assert.equal(sent.length, 1)
+})
