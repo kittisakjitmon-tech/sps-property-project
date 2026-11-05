@@ -117,7 +117,7 @@ test('search filters by type, listing, bedrooms and budget; budget works even wh
   assert.equal(searchProperties(list, { minBedrooms: 2 }).results.every(p => p.bedrooms >= 2), true)
   const cheap = searchProperties(list, { maxPrice: 2200000 })
   assert.deepEqual(cheap.results.map(p => p.code).sort(), ['SPS-R-1', 'SPS-TH-1CLASS-204'])
-  assert.equal(searchProperties(list, { limit: 99 }).results.length <= 5, true)
+  assert.equal(searchProperties(list, { limit: 99 }).results.length <= 10, true)
 })
 
 test('place names match their synonyms and spellings', () => {
@@ -240,7 +240,8 @@ test('cards are built from catalog data with https images and masked prices', ()
   }
   const message = buildCarouselMessage(elements)
   assert.equal(message.attachment.payload.template_type, 'generic')
-  assert.equal(buildCardElements(Array(10).fill(list[0])).length, 3)
+  assert.equal(buildCardElements(Array(10).fill(list[0])).length, 10)
+  assert.equal(buildCardElements(Array(15).fill(list[0])).length, 10, 'a carousel holds at most 10 cards')
 })
 
 test('phones, emails and customer info are validated and cleaned', () => {
@@ -372,9 +373,9 @@ test('system prompt sets a human tone, the particle, masked-price rules, FAQ and
   assert.match(full, /2026-11-04/)
 })
 
-test('all ten tools are declared', () => {
+test('all eleven tools are declared', () => {
   assert.deepEqual(TOOL_DECLARATIONS.map(t => t.name), [
-    'search_properties', 'get_property', 'show_property_cards', 'save_customer_info', 'check_availability', 'request_appointment', 'estimate_loan', 'save_credit_profile', 'send_house_images', 'request_human',
+    'search_properties', 'get_property', 'show_attached_houses', 'show_property_cards', 'save_customer_info', 'check_availability', 'request_appointment', 'estimate_loan', 'save_credit_profile', 'send_house_images', 'request_human',
   ])
 })
 
@@ -746,4 +747,71 @@ test('the prompt lists the team\'s houses, tells the AI not to invent links, and
   assert.ok(!buildSystemPrompt({ isFirstReply: false }).includes('บ้านที่ทีมงานกรอกไว้สำหรับแชทนี้'))
   const tool = TOOL_DECLARATIONS.find(item => item.name === 'send_house_images')
   assert.ok(tool.parameters.properties.listingId)
+})
+
+
+// ─── Which house to show first ───────────────────────────────────────────────
+const { asksForOtherHouses, buildStaffListingElement, buildAttachedElements, MAX_CARDS: CARD_CAP, DEFAULT_CARDS } = require('./facebook-ai-core.cjs')
+
+test('a carousel holds ten houses; three are shown at first', () => {
+  assert.equal(CARD_CAP, 10)
+  assert.equal(DEFAULT_CARDS, 3)
+})
+
+test('asking for other houses is recognised, and plain interest in a house is not', () => {
+  for (const text of [
+    'มีบ้านอื่นไหมคะ', 'ขอดูหลังอื่นหน่อย', 'มีโซนอื่นไหม', 'มีแบบอื่นอีกไหมครับ', 'ขอดูเพิ่มได้ไหม', 'มีอีกไหม',
+    'มีทำเลใกล้เคียงไหม', 'any other house?', 'show more options', 'มีโครงการอื่นๆ ไหมคะ', 'ดูเพิ่มหน่อย',
+  ]) assert.equal(asksForOtherHouses(text), true, text)
+  for (const text of [
+    'สนใจบ้านแฝดค่ะ', 'หลังนี้เท่าไหร่คะ', 'ขอดูแปลน', 'สวัสดีครับ', 'ผ่อนเดือนละเท่าไหร่', 'โครงการอะไรคะ', '', undefined, null,
+  ]) assert.equal(asksForOtherHouses(text), false, String(text))
+})
+
+test('a typed-in house becomes a card with picture, rooms, area and price, and no web link', () => {
+  const card = buildStaffListingElement({
+    type: 'บ้านแฝด', title: 'สุขใจ', bedrooms: 2, bathrooms: 2, location: 'พานทอง', price: 2190000, priceVisible: true,
+    images: [{ url: 'http://insecure.example/a.jpg' }, { url: 'https://firebasestorage.googleapis.com/v0/b/x/o/a?alt=media' }],
+  })
+  assert.equal(card.title, 'บ้านแฝด สุขใจ')
+  assert.equal(card.subtitle, '2 นอน 2 น้ำ · พานทอง · 2,190,000 บาท')
+  assert.equal(card.image_url, undefined) // the first picture is http, so no image rather than an insecure one
+  assert.equal(card.buttons, undefined)
+  const withImage = buildStaffListingElement({ title: 'บ้านเดี่ยว', images: [{ url: 'https://firebasestorage.googleapis.com/v0/b/x/o/b?alt=media' }] })
+  assert.equal(withImage.image_url, 'https://firebasestorage.googleapis.com/v0/b/x/o/b?alt=media')
+  assert.equal(withImage.subtitle, undefined)
+})
+
+test('a price the team marked "do not tell" is masked on the card', () => {
+  const card = buildStaffListingElement({ type: 'บ้านเดี่ยว', title: 'สวนสวย', price: 2490000, priceVisible: false })
+  assert.match(card.subtitle, /2\.4xxx ล้านบาท/)
+  assert.ok(!JSON.stringify(card).includes('2490000') && !JSON.stringify(card).includes('2,490,000'))
+  assert.equal(buildStaffListingElement({ title: 'x', price: 2490000, priceVisible: false, listing: 'rent' }).subtitle, 'ราคา 2,490,xxx บาท/เดือน')
+  assert.ok(buildStaffListingElement({ title: 'ก'.repeat(200), details: 'x' }).title.length <= 80)
+})
+
+test('attached cards: database properties first, then typed-in houses, at most ten', () => {
+  const props = [list[0]]
+  const listings = [{ title: 'a' }, { title: 'b' }]
+  const cards = buildAttachedElements({ properties: props, listings })
+  assert.equal(cards.length, 3)
+  assert.ok(cards[0].buttons, 'the database property keeps its details button')
+  assert.equal(cards[1].title, 'a')
+  assert.equal(buildAttachedElements({ listings: Array.from({ length: 14 }, (_, n) => ({ title: `h${n}` })) }).length, 10)
+  assert.deepEqual(buildAttachedElements(), [])
+})
+
+test('the prompt makes the attached houses come first, and holds back other houses until asked', () => {
+  const none = buildSystemPrompt({ isFirstReply: false })
+  assert.ok(!none.includes('ลำดับการแนะนำบ้านในแชทนี้'))
+  const prompt = buildSystemPrompt({ isFirstReply: false, staffListings: [{ id: 'a1', title: 'บ้านแฝด' }] })
+  assert.match(prompt, /บ้านที่แนบไว้ก่อนเสมอ/)
+  assert.match(prompt, /show_attached_houses/)
+  assert.match(prompt, /ห้ามเสนอ ค้นหา หรือส่งการ์ดบ้านหลังอื่น/)
+  assert.match(prompt, /customerAskedForOtherHouses/)
+  assert.match(prompt, /ไม่เกิน 10 หลัง/)
+  // a property the AI merely remembers is not 'attached'
+  assert.ok(!buildSystemPrompt({ isFirstReply: false, focus: [list[0]] }).includes('ลำดับการแนะนำบ้านในแชทนี้'))
+  const withProperty = buildSystemPrompt({ isFirstReply: false, focus: [list[0]], attachedProperty: true })
+  assert.match(withProperty, /บ้านที่แนบไว้ก่อนเสมอ/)
 })

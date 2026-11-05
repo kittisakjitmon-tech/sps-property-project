@@ -807,6 +807,8 @@ const adminActions = {
       handoffReason: FieldValue.delete(),
       handoffAt: FieldValue.delete(),
       shownCodes: FieldValue.delete(),
+      attachedShownAt: FieldValue.delete(),
+      othersRequestedAt: FieldValue.delete(),
       currentPropertyCode: FieldValue.delete(),
       currentPropertyId: FieldValue.delete(),
       currentPropertyTitle: FieldValue.delete(),

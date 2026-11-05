@@ -361,3 +361,11 @@ test('lastInboundAt and lastOutboundAt can be stored as timestamps or numbers', 
   await adminActions.askAiToReply({ conversationId: 'c1' }, ADMIN)
   assert.equal(retryRequests().length, 1)
 })
+
+test('resetting a chat also makes the AI forget what it showed first and that other houses were asked for', async () => {
+  store.set(CONV, { pageId: 'P1', participantId: 'U1', attachedShownAt: 't1', othersRequestedAt: 't2', staffListings: [{ id: 'a1', title: 'บ้าน' }] })
+  await adminActions.resetConversationContext({ conversationId: 'c1' }, SUPER)
+  assert.equal(conversation().attachedShownAt, undefined)
+  assert.equal(conversation().othersRequestedAt, undefined)
+  assert.equal(conversation().staffListings.length, 1)
+})

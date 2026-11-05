@@ -6,6 +6,10 @@ const { createGoogleCalendarClient } = require('./google-calendar')
 const { VertexAI } = require('@google-cloud/vertexai')
 const {
   MAX_CARDS,
+  DEFAULT_CARDS,
+  asksForOtherHouses,
+  extractPropertyMentions,
+  buildAttachedElements,
   TOOL_DECLARATIONS,
   vertexClientOptions,
   toIndexedProperty,
@@ -408,15 +412,47 @@ async function answerCustomer({ conversationId, message, messageRef, retry = fal
       .filter(image => typeof image?.url === 'string')
     let houseImagesToSend = []
 
+    // Which houses are "attached" to this chat: set by the team, typed in by the team, or named by
+    // the customer (link or code). A property the AI only remembers from earlier does not count.
+    const namedByCustomer = new Set(
+      recent.filter(item => item.direction === 'incoming')
+        .flatMap(item => extractPropertyMentions(item.text, catalog))
+        .map(property => property.code),
+    )
+    const attachedProperties = focus.filter(property => (
+      (conversation.currentPropertySetBy && property.code === conversation.currentPropertyCode) || namedByCustomer.has(property.code)
+    ))
+    const attachedCodes = attachedProperties.map(property => property.code)
+    const hasAttached = attachedProperties.length > 0 || staffListings.length > 0
+    // House details the team only wrote as a note hold other houses back too.
+    const holdsOthers = hasAttached || Boolean(staffNote)
+    // Other houses are held back until the customer asks for them (and stay open after that).
+    const latestCustomerText = [...recent].filter(item => item.direction === 'incoming').sort((a, b) => b.timestamp - a.timestamp)[0]?.text || ''
+    const unlockedBefore = !holdsOthers || (conversation.othersRequestedAt?.toMillis?.() || 0) > resetAtMs
+    let othersUnlocked = unlockedBefore || asksForOtherHouses(latestCustomerText)
+    const othersRequestedNow = () => holdsOthers && !unlockedBefore && othersUnlocked
+    const cardCap = () => ((holdsOthers && othersUnlocked) || asksForOtherHouses(latestCustomerText) ? MAX_CARDS : DEFAULT_CARDS)
+    let attachedToSend = null // { properties, listings } to show as cards after the text
+    const blockedOthers = () => ({
+      ok: false,
+      blocked: true,
+      total: 0,
+      results: [],
+      error: hasAttached
+        ? 'ลูกค้ายังไม่ได้ขอดูบ้านหลังอื่น ห้ามเสนอหรือค้นบ้านหลังอื่น ให้แนะนำเฉพาะบ้านที่ทีมงานแนบไว้ด้วย show_attached_houses ถ้าลูกค้าถามหาบ้านอื่นค่อยค้นใหม่และตั้ง customerAskedForOtherHouses เป็น true'
+        : 'ลูกค้ายังไม่ได้ขอดูบ้านหลังอื่น ห้ามเสนอหรือค้นบ้านหลังอื่น ให้ตอบจากรายละเอียดบ้านที่ทีมงานเขียนไว้ ("บ้านของแชทนี้") ถ้าลูกค้าถามหาบ้านอื่นค่อยค้นใหม่และตั้ง customerAskedForOtherHouses เป็น true',
+    })
+
     const handlers = {
       search_properties: args => {
-        const result = searchProperties(catalog, args, { excludeCodes: shownCodes })
-        if (hasTeamInfo) {
-          result.note = [
-            'แชทนี้มีข้อมูลบ้านจากทีมงานแล้ว ("บ้านของแชทนี้") ถ้าลูกค้าไม่ได้ขอดูหลังอื่น แบบอื่น หรือทำเลอื่นชัดๆ ห้ามเสนอรายการเหล่านี้ ให้ตอบจากข้อมูลของทีมงาน',
-            result.note,
-          ].filter(Boolean).join(' ')
-        }
+        // The model says the customer asked for other houses; the customer's own words count too.
+        if (args?.customerAskedForOtherHouses === true) othersUnlocked = true
+        if (holdsOthers && !othersUnlocked) return blockedOthers()
+        const result = searchProperties(
+          catalog,
+          { ...args, limit: holdsOthers ? MAX_CARDS : args?.limit },
+          { excludeCodes: [...shownCodes, ...attachedCodes] },
+        )
         lastSearchCodes = result.results.map(item => item.code)
         for (const item of result.results) {
           const indexed = catalogByCode.get(item.code)
@@ -433,10 +469,30 @@ async function answerCustomer({ conversationId, message, messageRef, retry = fal
         focusCode = property.code
         return { ok: true, property: presentProperty(property) }
       },
+      show_attached_houses: args => {
+        if (!hasAttached) return { ok: false, error: 'ทีมงานยังไม่ได้แนบบ้านในแชทนี้' }
+        const ids = Array.isArray(args?.listingIds) ? args.listingIds : []
+        const codes = Array.isArray(args?.codes) ? args.codes : []
+        const chosen = ids.length || codes.length
+          ? {
+            properties: attachedProperties.filter(property => codes.includes(property.code)),
+            listings: staffListings.filter(listing => ids.includes(listing.id)),
+          }
+          : { properties: attachedProperties, listings: staffListings }
+        if (!chosen.properties.length && !chosen.listings.length) {
+          return { ok: false, error: 'ไม่พบบ้านตาม id หรือรหัสที่ระบุ ใช้ id หรือรหัสจากรายการบ้านที่ทีมงานแนบเท่านั้น หรือไม่ระบุเพื่อส่งทุกหลัง' }
+        }
+        attachedToSend = chosen
+        return { ok: true, queued: chosen.properties.length + chosen.listings.length }
+      },
       show_property_cards: args => {
-        const codes = (Array.isArray(args?.codes) ? args.codes : []).filter(code => catalogByCode.has(code))
+        let codes = (Array.isArray(args?.codes) ? args.codes : []).filter(code => catalogByCode.has(code))
+        if (holdsOthers && !othersUnlocked) {
+          codes = codes.filter(code => attachedCodes.includes(code))
+          if (!codes.length) return blockedOthers()
+        }
         for (const code of codes) if (!cardCodes.includes(code)) cardCodes.push(code)
-        cardCodes.splice(MAX_CARDS)
+        cardCodes.splice(cardCap())
         if (cardCodes.length === 1) focusCode = cardCodes[0]
         return { ok: cardCodes.length > 0, queued: cardCodes.length }
       },
@@ -705,6 +761,7 @@ async function answerCustomer({ conversationId, message, messageRef, retry = fal
       imagesEnabled: imageCfg.enabled,
       staffNote,
       staffListings,
+      attachedProperty: attachedProperties.length > 0,
       creditChecklist: settings.creditChecklist,
       staffImages,
       calendar: calendarCfg.enabled ? { scheduleText: calendarRules.describeSchedule(calendarCfg) } : null,
@@ -786,8 +843,43 @@ async function answerCustomer({ conversationId, message, messageRef, retry = fal
       },
     })
 
-    // Cards are a bonus: a failure here must not undo the reply that was already sent.
+    // The houses the team attached come first: shown on the first answer of the chat (or when the
+    // model asks for them), before any other house. A failure here must not undo the reply.
     const shown = new Set(cardCodes)
+    let attachedSent = false
+    if (hasAttached && !blockedByGuard) {
+      const shownBefore = (conversation.attachedShownAt?.toMillis?.() || 0) > resetAtMs
+      if (!attachedToSend && !shownBefore) attachedToSend = { properties: attachedProperties, listings: staffListings }
+    }
+    if (attachedToSend && !blockedByGuard) {
+      try {
+        stage = 'attached-houses'
+        const elements = buildAttachedElements(attachedToSend)
+        if (elements.length) {
+          const carousel = await sendFacebookMessage(conversation.pageId, conversation.participantId, buildCarouselMessage(elements))
+          const names = [
+            ...attachedToSend.properties.map(property => property.code),
+            ...attachedToSend.listings.map(listing => [listing.type, listing.title].filter(Boolean).join(' ') || 'บ้าน'),
+          ]
+          await storeMessengerMessage({
+            pageId: conversation.pageId,
+            pageName: conversation.pageName,
+            participantId: conversation.participantId,
+            externalId: carousel.message_id,
+            direction: 'outgoing',
+            text: `🏠 ส่งบ้านที่แนบไว้: ${names.join(', ')}`,
+            attachments: [],
+            timestamp: Date.now(),
+            sentBy: 'ai',
+            extra: { kind: 'cards' },
+          })
+          attachedSent = true
+          for (const property of attachedToSend.properties) shown.add(property.code)
+        }
+      } catch (error) {
+        functions.logger.warn('AI attached houses failed', { ...logContext, reason: error.message })
+      }
+    }
     if (sendCards) {
       try {
         stage = 'cards'
@@ -845,6 +937,8 @@ async function answerCustomer({ conversationId, message, messageRef, retry = fal
     stage = 'update'
     const update = {}
     if (shown.size) update.shownCodes = FieldValue.arrayUnion(...shown)
+    if (attachedSent) update.attachedShownAt = FieldValue.serverTimestamp()
+    if (othersRequestedNow()) update.othersRequestedAt = FieldValue.serverTimestamp()
     if (focusCode && focusCode !== conversation.currentPropertyCode) {
       update.currentPropertyCode = focusCode
       // The saved title/owner belonged to the previous property.

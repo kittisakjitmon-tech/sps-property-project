@@ -9,7 +9,8 @@ const HUMAN_ACTIVE_MS = 12 * 60 * 60 * 1000
 const MAX_MESSAGE_AGE_MS = 10 * 60 * 1000
 const DEFAULT_MAX_REPLIES_PER_HOUR = 8
 const MAX_TOOL_ROUNDS = 4
-const MAX_CARDS = 3
+const MAX_CARDS = 10 // a Messenger carousel holds at most 10 cards
+const DEFAULT_CARDS = 3 // how many houses are shown at first; up to MAX_CARDS once the customer asks for others
 const MAX_APPOINTMENT_DAYS_AHEAD = 90
 
 const TYPE_LABELS = {
@@ -232,7 +233,7 @@ function applyFilters(list, query, skip) {
 const RELAX_ORDER = ['keywords', 'minBedrooms', 'maxPrice', 'propertyType', 'location']
 
 function searchProperties(index, query = {}, { excludeCodes = [] } = {}) {
-  const limit = Math.min(Math.max(Math.trunc(Number(query.limit)) || 5, 1), 5)
+  const limit = Math.min(Math.max(Math.trunc(Number(query.limit)) || 5, 1), MAX_CARDS)
   const all = Array.isArray(index) ? index : []
 
   const skip = new Set()
@@ -420,6 +421,55 @@ function formatStaffListings(listings) {
     ].filter(Boolean)
     return `- ${parts.join(' | ')}`
   })
+}
+
+// ─── Which house to show first ───────────────────────────────────────────────
+
+// True when the customer is asking for houses other than the one(s) already on the table
+// ("มีบ้านอื่นไหม", "ขอดูหลังอื่น", "โซนอื่น", "ดูเพิ่ม").
+const OTHER_HOUSES = [
+  /(บ้าน|หลัง|แบบ|ทรัพย์|โครงการ|ตัวเลือก|โซน|ทำเล|ที่|รุ่น)\s*อื่น/,
+  /มี.{0,20}อีก\s*(ไหม|มั้ย|หรือเปล่า|บ้าง|ครับ|ค่ะ|คะ)/,
+  /มีอีก/,
+  /(ขอ)?ดู\s*(เพิ่ม|อีก|หลังอื่น|แบบอื่น)/,
+  /ใกล้เคียง/,
+  /อื่น\s*ๆ?\s*(ไหม|มั้ย|อีก|บ้าง)/,
+  /\b(other|another|more)\s+(house|houses|home|homes|option|options|zone|area)/i,
+]
+
+function asksForOtherHouses(text) {
+  const value = typeof text === 'string' ? text.slice(0, 1500) : ''
+  return value.length > 0 && OTHER_HOUSES.some(pattern => pattern.test(value))
+}
+
+// A card for a house the team typed in: picture, name, rooms, area and price (masked when the
+// team marked the price "do not tell"). No web link, because these houses have no page.
+function buildStaffListingElement(item) {
+  const rooms = [
+    item.bedrooms != null ? `${item.bedrooms} นอน` : '',
+    item.bathrooms != null ? `${item.bathrooms} น้ำ` : '',
+  ].filter(Boolean).join(' ')
+  let price = ''
+  if (item.price > 0 && item.priceVisible !== false) {
+    price = `${formatPrice(item.price, item.listing)}${item.priceNote ? ` (${item.priceNote})` : ''}`
+  } else if (item.price > 0) {
+    const masked = maskPrice(item.price, item.listing)
+    price = masked ? `ราคา ${masked}` : ''
+  }
+  const element = { title: clean([item.type, item.title].filter(Boolean).join(' '), 80) || 'บ้าน' }
+  const subtitle = clean([rooms, item.location, price].filter(Boolean).join(' · '), 80)
+  if (subtitle) element.subtitle = subtitle
+  const image = httpsUrl((Array.isArray(item.images) ? item.images : []).find(picture => picture?.url)?.url)
+  if (image) element.image_url = image
+  return element
+}
+
+// Cards for the houses the team attached to the chat: database properties first, then the typed-in ones.
+function buildAttachedElements({ properties = [], listings = [] } = {}) {
+  return [
+    ...buildCardElements(properties),
+    ...(listings || []).map(buildStaffListingElement),
+  ].slice(0, MAX_CARDS)
 }
 
 // ─── Cards (Messenger generic template) ──────────────────────────────────────
@@ -890,7 +940,7 @@ function estimateLoan(args = {}, settings = {}) {
 
 // ─── Prompt & tools ──────────────────────────────────────────────────────────
 
-function buildSystemPrompt({ isFirstReply, particle = 'ครับ', extraInstructions = '', faq = [], today, focus = [], imagesEnabled = false, staffNote = '', creditChecklist = '', staffImages = [], staffListings = [], calendar = null } = {}) {
+function buildSystemPrompt({ isFirstReply, particle = 'ครับ', extraInstructions = '', faq = [], today, focus = [], imagesEnabled = false, staffNote = '', creditChecklist = '', staffImages = [], staffListings = [], calendar = null, attachedProperty = false } = {}) {
   const p = particle === 'ค่ะ' ? 'ค่ะ' : 'ครับ'
   const faqBlock = (faq || []).length
     ? [
@@ -925,6 +975,17 @@ function buildSystemPrompt({ isFirstReply, particle = 'ครับ', extraInstr
       'ลิงก์ของเว็บไม่มีสำหรับบ้านเหล่านี้ ห้ามสร้างลิงก์ ถ้าลูกค้าอยากดูรูปแบบบ้านให้เรียก send_house_images พร้อม listingId ของบ้านหลังนั้น',
     ]
     : []
+  // A property the team set for this chat, or one the customer named, counts as attached; so do typed-in houses.
+  const hasAttached = attachedProperty === true || listingLines.length > 0
+  const orderBlock = hasAttached
+    ? [
+      '',
+      'ลำดับการแนะนำบ้านในแชทนี้ (สำคัญมาก):',
+      '- ทีมงานแนบบ้านไว้แล้ว (ดูรายการด้านบน) เมื่อลูกค้าทักว่าสนใจบ้านหรือถามถึงบ้าน ให้แนะนำ **บ้านที่แนบไว้ก่อนเสมอ** โดยดูจากข้อความของลูกค้าว่าหมายถึงหลังไหน (ประเภท ชื่อ หรือราคา) แล้วเรียก show_attached_houses พร้อม listingIds หรือ codes ของหลังนั้น ถ้าข้อความไม่ได้ระบุว่าหลังไหน ให้ส่งทุกหลังที่แนบ แล้วพูดสั้นๆ ตามข้อมูลของบ้านนั้น',
+      '- ห้ามเสนอ ค้นหา หรือส่งการ์ดบ้านหลังอื่นจากฐานข้อมูลจนกว่าลูกค้าจะถามหาบ้านอื่น (เช่น มีบ้านอื่นไหม ขอดูหลังอื่น ดูเพิ่ม โซนอื่น)',
+      '- เมื่อลูกค้าถามหาบ้านอื่นแล้ว ค่อยใช้ search_properties โดยตั้ง customerAskedForOtherHouses เป็น true และส่งการ์ดบ้านหลังอื่นได้ไม่เกิน 10 หลัง',
+    ]
+    : []
   const noteText = clean(staffNote, 1500)
   const noteBlock = noteText
     ? [
@@ -941,7 +1002,7 @@ function buildSystemPrompt({ isFirstReply, particle = 'ครับ', extraInstr
       'บ้านของแชทนี้ (สำคัญที่สุด อ่านก่อนกฎอื่น):',
       '- ลูกค้าในแชทนี้ทักมาเรื่องบ้านตามข้อมูลของทีมงานด้านล่าง ถือว่ารู้แล้วว่าลูกค้าถามถึงหลังไหน ห้ามถามกลับว่าหลังไหน',
       '- ทุกคำถามเรื่องบ้าน (ราคา ห้อง ทำเล พิกัด ของแถม รายละเอียด) ให้ตอบจากข้อมูลนี้ก่อนเสมอ ตอบสั้นๆ เฉพาะที่ลูกค้าถาม',
-      '- ห้ามเรียก search_properties ห้ามเสนอหรือส่งการ์ดทรัพย์อื่นจากระบบ จนกว่าลูกค้าจะขอดูหลังอื่น แบบอื่น หรือทำเลอื่นเองชัดๆ (เช่น "มีหลังอื่นไหม" "แถวศรีราชามีไหม" "ขอดูทาวน์โฮม")',
+      '- ห้ามเรียก search_properties ห้ามเสนอหรือส่งการ์ดทรัพย์อื่นจากระบบ จนกว่าลูกค้าจะขอดูหลังอื่น แบบอื่น หรือทำเลอื่นเองชัดๆ (เช่น "มีหลังอื่นไหม" "แถวศรีราชามีไหม" "ขอดูทาวน์โฮม") เมื่อนั้นค่อยใช้ search_properties โดยตั้ง customerAskedForOtherHouses เป็น true',
       '- ถ้าลูกค้าถามสิ่งที่ข้อมูลนี้ไม่ได้บอก ห้ามเดาและห้ามไปเอาข้อมูลทรัพย์อื่นมาตอบแทน ให้บอกว่าเดี๋ยวให้ทีมงานแจ้งรายละเอียดนี้ให้ แล้วขอเบอร์ติดต่อถ้ายังไม่มี',
       ...listingsBlock,
       ...noteBlock,
@@ -975,7 +1036,7 @@ function buildSystemPrompt({ isFirstReply, particle = 'ครับ', extraInstr
     '- ถ้าลูกค้าบอกรหัสทรัพย์หรือวางลิงก์ของเว็บ SPS ให้ใช้ get_property ดึงข้อมูลของหลังนั้น ห้ามเดา',
     '- ห้ามขอ "รหัสทรัพย์" จากลูกค้าเป็นอย่างแรก ลูกค้าส่วนใหญ่ไม่รู้ ถ้ายังไม่ทราบว่าลูกค้าหมายถึงหลังไหน ให้ถามสั้นๆ ว่าสนใจทำเลหรือโครงการไหน งบประมาณเท่าไหร่ หรือขอให้ส่งลิงก์ของหลังนั้นมา',
     '- ถ้าไม่มีทรัพย์ในทำเลที่ลูกค้าต้องการ ให้บอกตรงๆ แล้วถามว่าสนใจโซนใกล้เคียงไหม ห้ามเสนอหรือส่งการ์ดของโซนอื่นเองจนกว่าลูกค้าจะขอหรือตอบตกลง (เมื่อนั้นค้นใหม่ด้วย allowNearbyZones เป็น true)',
-    '- แนะนำไม่เกิน 3 รายการ พร้อมลิงก์ url ของแต่ละรายการ ห้ามสร้างลิงก์เอง และใช้ show_property_cards ส่งการ์ดรูปบ้านให้ลูกค้าดูเมื่อแนะนำทรัพย์',
+    '- แนะนำครั้งละไม่เกิน 3 รายการ แต่ถ้าลูกค้าขอดูบ้านหลังอื่นหรือขอดูเพิ่ม ส่งได้ไม่เกิน 10 หลัง พร้อมลิงก์ url ของแต่ละรายการ ห้ามสร้างลิงก์เอง และใช้ show_property_cards ส่งการ์ดรูปบ้านให้ลูกค้าดูเมื่อแนะนำทรัพย์',
     '- ราคา: ถ้า price เป็นตัวเลข บอกได้ตามนั้น ถ้า price เป็น null และมี priceApprox ให้บอกเป็นราคาโดยประมาณตาม priceApprox ตรงตัว (เช่น "ประมาณ 2.1xxx ล้านบาท") แล้วบอกว่าราคาจริงให้ทีมงานแจ้ง ห้ามเติมเลขแทน x ห้ามเดาหรือคำนวณเพิ่ม ห้ามยืนยันหรือปฏิเสธตัวเลขที่ลูกค้าเดา',
     calendar
       ? '- ห้ามสัญญาเรื่องการอนุมัติสินเชื่อ ราคาสุดท้าย หรือส่วนลด ให้ทีมงานเป็นผู้ยืนยัน (การนัดชมยืนยันได้เมื่อ request_appointment ตอบ confirmed เป็น true เท่านั้น)'
@@ -1022,6 +1083,7 @@ function buildSystemPrompt({ isFirstReply, particle = 'ครับ', extraInstr
       ? `- นี่คือการตอบครั้งแรก ให้ทักทายสั้นๆ ประโยคเดียว แนะนำตัวว่าเป็นผู้ช่วย AI ของ SPS (เช่น "สวัสดี${p} ผมเป็นผู้ช่วย AI ของ SPS นะ${p}") แล้วตอบคำถามต่อเลย และให้ลูกค้ารู้ว่าขอคุยกับทีมงานได้`
       : '- ไม่ต้องแนะนำตัวซ้ำ',
     ...focusBlock,
+    ...orderBlock,
     ...imagesBlock,
     ...faqBlock,
     extraInstructions ? `\nคำแนะนำเพิ่มเติมจากทีมงาน:\n${clean(extraInstructions, 2000)}` : '',
@@ -1052,6 +1114,7 @@ const TOOL_DECLARATIONS = [
         maxPrice: { type: 'NUMBER', description: 'งบสูงสุดเป็นบาท เช่น 2000000' },
         minBedrooms: { type: 'NUMBER', description: 'จำนวนห้องนอนขั้นต่ำ' },
         keywords: { type: 'STRING', description: 'คำค้นอื่นๆ เช่น ใกล้โรงงาน, ผ่อนตรง' },
+        customerAskedForOtherHouses: { type: 'BOOLEAN', description: 'ตั้งเป็น true เฉพาะเมื่อลูกค้าถามหาบ้านหลังอื่นหรือขอดูเพิ่ม (เช่น มีบ้านอื่นไหม ขอดูหลังอื่น) ในแชทที่ทีมงานแนบบ้านไว้แล้ว' },
         allowNearbyZones: { type: 'BOOLEAN', description: 'ตั้งเป็น true เฉพาะเมื่อลูกค้าขอดูหรือตอบตกลงว่าสนใจโซนใกล้เคียง ค่าเริ่มต้นคือไม่เสนอโซนอื่น' },
       },
     },
@@ -1064,6 +1127,17 @@ const TOOL_DECLARATIONS = [
       properties: {
         code: { type: 'STRING', description: 'รหัสทรัพย์ เช่น SPS-TH-1' },
         url: { type: 'STRING', description: 'ลิงก์ทรัพย์จากเว็บ SPS' },
+      },
+    },
+  },
+  {
+    name: 'show_attached_houses',
+    description: 'ส่งการ์ดบ้านที่ทีมงานแนบไว้ในแชทนี้ให้ลูกค้าดู (รูป ประเภท ห้อง ราคา) ใช้เมื่อลูกค้าสนใจบ้านหรือถามถึงบ้าน ให้เลือกหลังที่ตรงกับข้อความของลูกค้า ถ้าไม่ระบุจะส่งทุกหลังที่แนบ',
+    parameters: {
+      type: 'OBJECT',
+      properties: {
+        listingIds: { type: 'ARRAY', items: { type: 'STRING' }, description: 'id ของบ้านที่ทีมงานกรอก (จาก id= ในรายการ) ที่ตรงกับข้อความของลูกค้า' },
+        codes: { type: 'ARRAY', items: { type: 'STRING' }, description: 'รหัสทรัพย์จากฐานข้อมูลที่ตั้งไว้ในแชทนี้' },
       },
     },
   },
@@ -1311,6 +1385,10 @@ async function runConversation({ generate, contents, handlers, maxRounds = MAX_T
 module.exports = {
   SITE_URL,
   MAX_CARDS,
+  DEFAULT_CARDS,
+  asksForOtherHouses,
+  buildStaffListingElement,
+  buildAttachedElements,
   TYPE_LABELS,
   TOOL_DECLARATIONS,
   DEFAULT_MAX_REPLIES_PER_HOUR,

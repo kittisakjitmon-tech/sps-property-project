@@ -645,7 +645,7 @@ test('a customer who names the property with a code or link also lets the AI ans
   store.set('messenger_settings/ai', { enabled: true, requirePropertyForBot: true })
   model([{ text: 'ได้ครับ' }])
   await receive('สนใจ SPS-CD-9')
-  assert.equal(sent.length, 1)
+  assert.equal(sent.length, 2) // the answer, then the card of the house the customer named
   assert.equal(conversation().currentPropertyCode, 'SPS-CD-9')
 })
 
@@ -831,7 +831,7 @@ const LISTINGS = [
   { id: 'aaa1', type: 'บ้านเดี่ยว', title: 'สวนสวย', listing: 'sale', bedrooms: 3, price: 2490000, priceNote: 'เริ่มต้น', priceVisible: true, details: 'ที่จอดรถ 2 คัน', images: [PIC(1), PIC(2)] },
   { id: 'bbb2', type: 'บ้านแฝด', title: 'แฝดสุขใจ', listing: 'sale', bedrooms: 3, price: 1850000, priceVisible: false, details: 'ใกล้นิคม', images: [PIC(3)] },
 ]
-const withListings = (listings, extra = {}) => store.set('messenger_conversations/conv1', { pageId: 'P1', participantId: 'U1', pageName: 'เพจ', staffListings: listings, ...extra })
+const withListings = (listings, extra = {}) => store.set('messenger_conversations/conv1', { pageId: 'P1', participantId: 'U1', pageName: 'เพจ', staffListings: listings, attachedShownAt: new Ts(NOW - 1000), ...extra })
 
 test('the AI answers from houses the team typed in, with their prices and no web link', async () => {
   withListings(LISTINGS)
@@ -1250,8 +1250,10 @@ test('the customer who wrote before the house information existed is answered on
     model([{ text: 'บ้านแฝดราคา 2,190,000 บาทครับ' }])
     await requestRetry()
   } finally { VertexAI.prototype.getGenerativeModel = original }
-  assert.equal(sent.length, 1)
+  assert.equal(sent.length, 2) // the answer, then the card of the house the team added
   assert.match(sent[0].message.text, /2,190,000/)
+  assert.equal(sent[1].message.attachment.payload.template_type, 'generic')
+  assert.match(sent[1].message.attachment.payload.elements[0].title, /แฝดสุขใจ/)
   assert.match(prompt, /แฝดสุขใจ/)
   assert.equal(conversation().needsProperty, undefined)
   assert.equal(stored[0].extra.aiContext.listings, 1)
@@ -1439,7 +1441,7 @@ test('a property the AI remembered on its own does not push the note aside; one 
   assert.ok(prompt.includes('SPS-CD-9'))
 })
 
-test('if the AI searches anyway, the search result reminds it to answer from the note', async () => {
+test('with only a note, searching other houses is refused until the customer asks for them', async () => {
   store.set('messenger_conversations/conv1', { pageId: 'P1', participantId: 'U1', pageName: 'เพจ', staffNote: TWIN_NOTE })
   let toolAnswer
   modelScript = [
@@ -1447,5 +1449,206 @@ test('if the AI searches anyway, the search result reminds it to answer from the
     async contents => { toolAnswer = contents[contents.length - 1].parts[0].functionResponse.response; return [{ text: 'บ้านแฝดแยกมาบโป่ง 2.19 ล้านครับ' }] },
   ]
   await receive('ราคาเท่าไหร่')
-  assert.match(toolAnswer.note, /บ้านของแชทนี้/)
+  assert.equal(toolAnswer.blocked, true)
+  assert.match(toolAnswer.error, /บ้านของแชทนี้/)
+
+  // once the customer asks for other houses, the search goes through
+  modelScript = [
+    async () => [{ functionCall: { name: 'search_properties', args: { location: 'ศรีราชา' } } }],
+    async contents => { toolAnswer = contents[contents.length - 1].parts[0].functionResponse.response; return [{ text: 'มีครับ' }] },
+  ]
+  await receive('มีหลังอื่นไหมครับ', { at: NOW + 1 })
+  assert.notEqual(toolAnswer.blocked, true)
+  assert.ok(toolAnswer.total > 0)
+})
+
+// ─── The attached house first, other houses only when the customer asks ──────
+const ATTACHED = [
+  { id: 'aaa1', type: 'บ้านเดี่ยว', title: 'สวนสวย', listing: 'sale', bedrooms: 3, bathrooms: 2, price: 2490000, priceVisible: true, images: [PIC(1)] },
+  { id: 'bbb2', type: 'บ้านแฝด', title: 'แฝดสุขใจ', listing: 'sale', bedrooms: 2, bathrooms: 2, price: 1850000, priceVisible: false, images: [PIC(3)] },
+]
+const attachedChat = (extra = {}) => store.set('messenger_conversations/conv1', { pageId: 'P1', participantId: 'U1', pageName: 'เพจ', staffListings: ATTACHED, ...extra })
+const carousels = () => sent.filter(item => item.message.attachment?.payload?.template_type === 'generic')
+const addProperties = count => {
+  for (let n = 0; n < count; n += 1) {
+    store.set(`properties/more${n}`, property({ displayId: `SPS-M-${n}`, locationDisplay: 'ศรีราชา, ชลบุรี', price: 1000000 + n * 1000, showPrice: true, title: `บ้านทางเลือก ${n}` }))
+  }
+}
+const toolResult = contents => contents.at(-1).parts[0].functionResponse.response
+
+test('the first answer in a chat with attached houses shows them as cards, once', async () => {
+  attachedChat()
+  model([{ text: 'สนใจบ้านแฝดใช่ไหมครับ' }])
+  await receive('สนใจบ้านค่ะ')
+  assert.equal(sent.length, 2)
+  assert.equal(sent[0].message.text, 'สนใจบ้านแฝดใช่ไหมครับ')
+  const [cards] = carousels()
+  const elements = cards.message.attachment.payload.elements
+  assert.deepEqual(elements.map(element => element.title), ['บ้านเดี่ยว สวนสวย', 'บ้านแฝด แฝดสุขใจ'])
+  assert.equal(elements[0].image_url, PIC(1).url)
+  assert.match(elements[0].subtitle, /2,490,000 บาท/)
+  assert.match(elements[1].subtitle, /1\.8xxx ล้านบาท/) // "do not tell" price stays masked
+  assert.ok(!JSON.stringify(sent).includes('1,850,000') && !JSON.stringify(sent).includes('1850000'))
+  assert.ok(conversation().attachedShownAt)
+  assert.equal(stored.at(-1).extra.kind, 'cards')
+
+  // the next message does not repeat them
+  model([{ text: 'ครับ' }])
+  await receive('ขอบคุณค่ะ')
+  assert.equal(carousels().length, 1)
+})
+
+test('the house the customer\'s message refers to is the one shown', async () => {
+  attachedChat()
+  model(
+    [{ functionCall: { name: 'show_attached_houses', args: { listingIds: ['bbb2'] } } }],
+    [{ text: 'บ้านแฝดสุขใจครับ 2 นอน' }],
+  )
+  await receive('สนใจบ้านแฝดค่ะ')
+  assert.equal(carousels().length, 1) // not shown a second time by the automatic first showing
+  assert.deepEqual(carousels()[0].message.attachment.payload.elements.map(element => element.title), ['บ้านแฝด แฝดสุขใจ'])
+})
+
+test('an id that is not in the chat is refused and the automatic showing still happens', async () => {
+  attachedChat()
+  let answer
+  modelScript = [
+    async () => [{ functionCall: { name: 'show_attached_houses', args: { listingIds: ['nope'] } } }],
+    async contents => { answer = toolResult(contents); return [{ text: 'ครับ' }] },
+  ]
+  await receive('สนใจบ้านค่ะ')
+  assert.equal(answer.ok, false)
+  assert.equal(carousels()[0].message.attachment.payload.elements.length, 2)
+})
+
+test('before the customer asks for other houses, searching or showing them is refused', async () => {
+  addProperties(5)
+  attachedChat({ attachedShownAt: new Ts(NOW - 1000) })
+  const answers = []
+  modelScript = [
+    async () => [{ functionCall: { name: 'search_properties', args: { location: 'ศรีราชา' } } }],
+    async contents => { answers.push(toolResult(contents)); return [{ functionCall: { name: 'show_property_cards', args: { codes: ['SPS-M-0', 'SPS-M-1'] } } }] },
+    async contents => { answers.push(toolResult(contents)); return [{ text: 'มีบ้านที่แนบไว้ให้ดูก่อนครับ' }] },
+  ]
+  await receive('สนใจบ้านค่ะ ราคาเท่าไหร่')
+  assert.equal(answers[0].blocked, true)
+  assert.equal(answers[0].total, 0)
+  assert.equal(answers[1].blocked, true)
+  assert.equal(carousels().length, 0)
+  assert.equal(conversation().othersRequestedAt, undefined)
+})
+
+test('when the customer asks for other houses, they are shown, up to ten, and the chat stays open for more', async () => {
+  addProperties(12)
+  attachedChat({ attachedShownAt: new Ts(NOW - 1000) })
+  let found
+  const codes = Array.from({ length: 12 }, (_, n) => `SPS-M-${n}`)
+  modelScript = [
+    async () => [{ functionCall: { name: 'search_properties', args: { location: 'ศรีราชา' } } }],
+    async contents => { found = toolResult(contents); return [{ functionCall: { name: 'show_property_cards', args: { codes } } }] },
+    async () => [{ text: 'มีอีกหลายหลังครับ ดูการ์ดได้เลยครับ' }],
+  ]
+  await receive('มีบ้านอื่นไหมคะ')
+  assert.equal(found.total, 13) // 12 added plus the condo in the same area
+  assert.equal(found.results.length, 10)
+  assert.equal(carousels().length, 1)
+  assert.equal(carousels()[0].message.attachment.payload.elements.length, 10)
+  assert.ok(conversation().othersRequestedAt)
+
+  // later messages do not need to ask again
+  let later
+  modelScript = [
+    async () => [{ functionCall: { name: 'search_properties', args: { location: 'ศรีราชา' } } }],
+    async contents => { later = toolResult(contents); return [{ text: 'ครับ' }] },
+  ]
+  await receive('ราคาไม่เกิน 2 ล้านมีไหม')
+  assert.notEqual(later.blocked, true)
+})
+
+test('the model can open the other houses when the customer asked in other words', async () => {
+  addProperties(3)
+  attachedChat({ attachedShownAt: new Ts(NOW - 1000) })
+  let result
+  modelScript = [
+    async () => [{ functionCall: { name: 'search_properties', args: { location: 'ศรีราชา', customerAskedForOtherHouses: true } } }],
+    async contents => { result = toolResult(contents); return [{ text: 'มีครับ' }] },
+  ]
+  await receive('ขอทางเลือกเพิ่มเติมหน่อยค่ะ')
+  assert.equal(result.blocked, undefined)
+  assert.ok(result.total > 0)
+  assert.ok(conversation().othersRequestedAt)
+})
+
+test('the house the team set is not offered again among the other houses', async () => {
+  addProperties(3)
+  attachedChat({ staffListings: [], currentPropertyCode: 'SPS-CD-9', currentPropertySetBy: 'u1', attachedShownAt: new Ts(NOW - 1000) })
+  let result
+  modelScript = [
+    async () => [{ functionCall: { name: 'search_properties', args: {} } }],
+    async contents => { result = toolResult(contents); return [{ text: 'ครับ' }] },
+  ]
+  await receive('มีบ้านอื่นไหม')
+  assert.ok(result.results.length > 0)
+  assert.ok(!result.results.some(item => item.code === 'SPS-CD-9'))
+})
+
+test('a database property the team set is shown first as its own card', async () => {
+  attachedChat({ staffListings: [], currentPropertyCode: 'SPS-CD-9', currentPropertySetBy: 'u1' })
+  model([{ text: 'คอนโดศรีราชาครับ' }])
+  await receive('สนใจค่ะ')
+  const [cards] = carousels()
+  assert.equal(cards.message.attachment.payload.elements.length, 1)
+  assert.equal(cards.message.attachment.payload.elements[0].buttons[0].url, 'https://spspropertysolution.com/p/prop2')
+  assert.deepEqual(conversation().shownCodes, ['SPS-CD-9'])
+})
+
+test('a property the AI only remembers is not "attached": searching other houses stays open', async () => {
+  addProperties(3)
+  store.set('messenger_conversations/conv1', { pageId: 'P1', participantId: 'U1', pageName: 'เพจ', currentPropertyCode: 'SPS-CD-9' })
+  let result
+  modelScript = [
+    async () => [{ functionCall: { name: 'search_properties', args: { location: 'ศรีราชา' } } }],
+    async contents => { result = toolResult(contents); return [{ text: 'มีครับ' }] },
+  ]
+  await receive('มีบ้านที่ศรีราชางบ 2 ล้านไหม')
+  assert.notEqual(result.blocked, true)
+  assert.equal(carousels().length, 0)
+})
+
+test('without attached houses a normal search shows at most three cards', async () => {
+  addProperties(8)
+  const codes = Array.from({ length: 8 }, (_, n) => `SPS-M-${n}`)
+  model(
+    [{ functionCall: { name: 'search_properties', args: { location: 'ศรีราชา' } } }],
+    [{ functionCall: { name: 'show_property_cards', args: { codes } } }],
+    [{ text: 'มีหลายหลังครับ' }],
+  )
+  await receive('มีบ้านที่ศรีราชาไหม')
+  assert.equal(carousels()[0].message.attachment.payload.elements.length, 3)
+})
+
+test('when an attached-house card cannot be sent the text answer stays', async () => {
+  attachedChat()
+  model([{ text: 'สนใจบ้านแฝดใช่ไหมครับ' }])
+  const original = sent.push.bind(sent)
+  let count = 0
+  sent.push = item => { count += 1; if (count === 2) throw new Error('cards rejected'); return original(item) }
+  await receive('สนใจบ้านค่ะ')
+  assert.equal(count, 2)
+  assert.equal(stored[0].text, 'สนใจบ้านแฝดใช่ไหมครับ')
+  assert.equal(conversation().attachedShownAt, undefined) // not marked as shown, so it is tried again next time
+})
+
+test('after a reset the attached houses are shown again and the other houses are held back again', async () => {
+  attachedChat({ attachedShownAt: new Ts(NOW - 5000), othersRequestedAt: new Ts(NOW - 4000), contextResetAt: new Ts(NOW - 1000) })
+  model([{ text: 'ครับ' }])
+  await receive('สนใจค่ะ')
+  assert.equal(carousels().length, 1)
+  let result
+  modelScript = [
+    async () => [{ functionCall: { name: 'search_properties', args: {} } }],
+    async contents => { result = toolResult(contents); return [{ text: 'ครับ' }] },
+  ]
+  await receive('ราคาเท่าไหร่')
+  assert.equal(result.blocked, true)
 })
