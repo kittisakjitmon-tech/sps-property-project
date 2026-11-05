@@ -28,6 +28,7 @@ const docRef = path => ({
 })
 const collectionRef = (name, filters = [], max = Infinity) => ({
   doc: id => docRef(`${name}/${id}`),
+  async add(data) { const id = `auto${store.size}`; store.set(`${name}/${id}`, applyData({}, data)); return docRef(`${name}/${id}`) },
   where: (field, op, value) => collectionRef(name, [...filters, { field, value }], max),
   limit: n => collectionRef(name, filters, n),
   async get() {
@@ -304,4 +305,59 @@ test('resetting a chat clears what the AI remembered, keeps the team\'s own entr
   assert.equal(after.staffListings.length, 1)
   assert.equal(after.staffImages.length, 1)
   await reject(adminActions.resetConversationContext({ conversationId: 'missing' }, SUPER), 404)
+})
+
+
+// ─── Answering what is waiting ───────────────────────────────────────────────
+const retryRequests = () => [...store.entries()].filter(([path]) => path.startsWith('ai_retry_requests/')).map(([, data]) => data)
+const waiting = (extra = {}) => store.set(CONV, { pageId: 'P1', participantId: 'U1', needsProperty: true, lastInboundAt: 2000, lastOutboundAt: 1000, ...extra })
+
+test('house information added to a chat the AI was waiting on asks the AI to answer', async () => {
+  waiting()
+  const set = await adminActions.setConversationProperty({ conversationId: 'c1', propertyCode: 'SPS-TH-1' }, ADMIN)
+  assert.equal(set.answering, true)
+  assert.deepEqual(retryRequests().map(request => [request.conversationId, request.reason, request.requestedBy]), [['c1', 'property-set', 'u1']])
+
+  waiting()
+  assert.equal((await adminActions.setConversationNote({ conversationId: 'c1', note: 'ราคา 2.19 ล้าน' }, ADMIN)).answering, true)
+  waiting()
+  assert.equal((await adminActions.saveConversationListing({ conversationId: 'c1', listing: { title: 'บ้านแฝด', price: 2190000 } }, ADMIN)).answering, true)
+  assert.deepEqual(retryRequests().map(request => request.reason).sort(), ['listing-saved', 'note-saved', 'property-set'])
+})
+
+test('no retry when the AI was not waiting, when the note is cleared, or when nothing valid was saved', async () => {
+  store.set(CONV, { pageId: 'P1', participantId: 'U1', lastInboundAt: 2000, lastOutboundAt: 3000 }) // already answered
+  assert.equal((await adminActions.setConversationNote({ conversationId: 'c1', note: 'x' }, ADMIN)).answering, false)
+  waiting()
+  await adminActions.setConversationNote({ conversationId: 'c1', note: '   ' }, ADMIN) // clearing
+  waiting()
+  await reject(adminActions.saveConversationListing({ conversationId: 'c1', listing: {} }, ADMIN), 400)
+  await reject(adminActions.setConversationProperty({ conversationId: 'c1', propertyCode: 'NOPE' }, ADMIN), 404)
+  assert.equal(retryRequests().length, 0)
+})
+
+test('the button asks the AI to answer a waiting message, and says why when it cannot', async () => {
+  store.set('messenger_settings/ai', { enabled: true })
+  waiting({ needsProperty: undefined })
+  await adminActions.askAiToReply({ conversationId: 'c1' }, ADMIN)
+  assert.deepEqual(retryRequests().map(request => request.reason), ['manual'])
+
+  store.set(CONV, { pageId: 'P1', participantId: 'U1', lastInboundAt: 2000, lastOutboundAt: 3000 })
+  await reject(adminActions.askAiToReply({ conversationId: 'c1' }, ADMIN), 409) // nothing waiting
+  waiting({ botPaused: true })
+  await reject(adminActions.askAiToReply({ conversationId: 'c1' }, ADMIN), 409) // paused
+  waiting()
+  store.set('messenger_settings/ai', { enabled: false })
+  await reject(adminActions.askAiToReply({ conversationId: 'c1' }, ADMIN), 409) // off everywhere
+  store.delete('messenger_settings/ai')
+  await reject(adminActions.askAiToReply({ conversationId: 'c1' }, ADMIN), 409)
+  await reject(adminActions.askAiToReply({ conversationId: 'missing' }, ADMIN), 404)
+  assert.equal(retryRequests().length, 1)
+})
+
+test('lastInboundAt and lastOutboundAt can be stored as timestamps or numbers', async () => {
+  store.set('messenger_settings/ai', { enabled: true })
+  store.set(CONV, { pageId: 'P1', participantId: 'U1', lastInboundAt: { toMillis: () => 5000 }, lastOutboundAt: { toMillis: () => 4000 } })
+  await adminActions.askAiToReply({ conversationId: 'c1' }, ADMIN)
+  assert.equal(retryRequests().length, 1)
 })

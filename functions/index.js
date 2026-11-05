@@ -963,3 +963,4 @@ exports.aiPropertyAssistant = require('./ai-property').aiPropertyAssistant
 exports.facebookWebhook = require('./facebook-messenger').facebookWebhook
 exports.facebookMessengerAdmin = require('./facebook-messenger').facebookMessengerAdmin
 exports.facebookAiReply = require('./facebook-ai-reply').facebookAiReply
+exports.facebookAiRetry = require('./facebook-ai-reply').facebookAiRetry

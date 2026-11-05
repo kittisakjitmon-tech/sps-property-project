@@ -588,11 +588,13 @@ function sanitizeUrls(text, allowedUrls) {
     .trim()
 }
 
-function shouldReply({ settings, conversation, text, timestamp, recentMessages, hasImages = false, now = Date.now() }) {
+function shouldReply({ settings, conversation, text, timestamp, recentMessages, hasImages = false, override = false, now = Date.now() }) {
   if (settings?.enabled !== true) return { reply: false, reason: 'disabled' }
   if (conversation?.botPaused === true) return { reply: false, reason: 'paused' }
   if ((!text || !text.trim()) && !hasImages) return { reply: false, reason: 'no-text' }
-  if (now - timestamp > MAX_MESSAGE_AGE_MS) return { reply: false, reason: 'stale' }
+  if (!override && now - timestamp > MAX_MESSAGE_AGE_MS) return { reply: false, reason: 'stale' }
+  // The team asked the AI to answer: a person's earlier reply and the hourly limit do not stop it.
+  if (override) return { reply: true, reason: 'requested' }
 
   const outgoing = (recentMessages || []).filter(m => m.direction === 'outgoing')
   // An admin who resumes the bot overrides earlier human replies.

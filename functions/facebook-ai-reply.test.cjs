@@ -132,7 +132,7 @@ Module._load = function patched(request, parent, isMain) {
   }
   return originalLoad.apply(this, arguments)
 }
-const { facebookAiReply, _test } = require('./facebook-ai-reply.js')
+const { facebookAiReply, facebookAiRetry, _test } = require('./facebook-ai-reply.js')
 Module._load = originalLoad
 
 // ─── Fixtures ────────────────────────────────────────────────────────────────
@@ -1218,4 +1218,95 @@ test('after a reset the AI does not see the earlier messages, greets again, and 
   assert.ok(text.includes('สวัสดีค่ะ'))
   assert.equal(sent.length, 1) // the earlier human reply no longer keeps the AI quiet
   assert.match(prompt, /นี่คือการตอบครั้งแรก/)
+})
+
+
+// ─── Answering what is waiting (retry) ───────────────────────────────────────
+async function requestRetry(id = 'r1') {
+  store.set(`ai_retry_requests/${id}`, { conversationId: CID, reason: 'test' })
+  await facebookAiRetry.run(new DocRef(`ai_retry_requests/${id}`).snap(), {})
+}
+const waitingMessage = (text, at = NOW - 30 * 60 * 1000) => store.set(`messenger_conversations/${CID}/messages/w1`, { direction: 'incoming', text, attachments: [], timestamp: new Ts(at) })
+
+test('the customer who wrote before the house information existed is answered once it is added', async () => {
+  store.set('messenger_settings/ai', { enabled: true, requirePropertyForBot: true })
+  // 1. the customer writes, the AI has nothing to go on and waits
+  model([{ text: 'ต้องไม่ถูกส่ง' }])
+  await receive('หลังนี้เท่าไหร่คะ')
+  assert.equal(sent.length, 0)
+  assert.equal(conversation().needsProperty, true)
+  // 2. the team adds the house, the admin panel asks for an answer
+  store.set('messenger_conversations/conv1', { ...conversation(), staffListings: [{ id: 'a1', type: 'บ้านแฝด', title: 'แฝดสุขใจ', price: 2190000, priceVisible: true }] })
+  let prompt
+  const { VertexAI } = fakes['@google-cloud/vertexai']
+  const original = VertexAI.prototype.getGenerativeModel
+  VertexAI.prototype.getGenerativeModel = function patched(options) { prompt = options.systemInstruction.parts[0].text; return original.call(this, options) }
+  try {
+    model([{ text: 'บ้านแฝดราคา 2,190,000 บาทครับ' }])
+    await requestRetry()
+  } finally { VertexAI.prototype.getGenerativeModel = original }
+  assert.equal(sent.length, 1)
+  assert.match(sent[0].message.text, /2,190,000/)
+  assert.match(prompt, /แฝดสุขใจ/)
+  assert.equal(conversation().needsProperty, undefined)
+  assert.equal(stored[0].extra.aiContext.listings, 1)
+})
+
+test('a retry answers an old message and ignores an earlier reply from a person', async () => {
+  store.set('messenger_conversations/conv1/messages/human1', { direction: 'outgoing', text: 'ทีมงานตอบเอง', attachments: [], timestamp: new Ts(NOW - 3 * 3600 * 1000), sentBy: 'someAdmin' })
+  waitingMessage('ขอราคาหน่อยค่ะ') // 30 minutes old: too old for a normal reply
+  model([{ text: 'ได้ครับ' }])
+  await requestRetry()
+  assert.equal(sent.length, 1)
+})
+
+test('the same message without a retry is not answered (too old, a person was active)', async () => {
+  store.set('messenger_conversations/conv1/messages/human1', { direction: 'outgoing', text: 'ทีมงานตอบเอง', attachments: [], timestamp: new Ts(NOW - 3 * 3600 * 1000), sentBy: 'someAdmin' })
+  model([{ text: 'ไม่ควรส่ง' }])
+  await receive('ขอราคาหน่อยค่ะ', { at: NOW - 30 * 60 * 1000 })
+  assert.equal(sent.length, 0)
+})
+
+test('a retry never answers a chat that is already answered', async () => {
+  waitingMessage('ราคาเท่าไหร่', NOW - 60000)
+  store.set('messenger_conversations/conv1/messages/a1', { direction: 'outgoing', text: 'ตอบแล้วครับ', attachments: [], timestamp: new Ts(NOW - 30000), sentBy: 'ai' })
+  model([{ text: 'ต้องไม่ถูกส่ง' }])
+  await requestRetry()
+  assert.equal(sent.length, 0)
+})
+
+test('a retry respects the off switch and a paused chat', async () => {
+  waitingMessage('ราคาเท่าไหร่', NOW - 60000)
+  model([{ text: 'ต้องไม่ถูกส่ง' }])
+  store.set('messenger_settings/ai', { enabled: false })
+  await requestRetry('r1')
+  store.set('messenger_settings/ai', { enabled: true })
+  store.set('messenger_conversations/conv1', { ...conversation(), botPaused: true })
+  await requestRetry('r2')
+  assert.equal(sent.length, 0)
+})
+
+test('one request is handled once, and two close together do not both answer', async () => {
+  waitingMessage('ราคาเท่าไหร่', NOW - 60000)
+  model([{ text: 'ครับ' }], [{ text: 'ซ้ำ' }])
+  await requestRetry('r1')
+  await requestRetry('r1') // the same request delivered twice
+  assert.equal(sent.length, 1)
+
+  waitingMessage('มีอีกไหม', NOW - 1000)
+  store.delete(`messenger_conversations/${CID}/messages/m2`)
+  store.set('messenger_conversations/conv1', { ...conversation(), aiRetryLockUntil: Date.now() + 60000 })
+  model([{ text: 'ต้องไม่ถูกส่ง' }])
+  await requestRetry('r3')
+  assert.equal(sent.length, 1) // locked: another retry is running
+})
+
+test('a retry for a conversation that does not exist or with nothing waiting does nothing', async () => {
+  store.set('ai_retry_requests/rx', { conversationId: 'nope' })
+  await facebookAiRetry.run(new DocRef('ai_retry_requests/rx').snap(), {})
+  store.set('ai_retry_requests/ry', {})
+  await facebookAiRetry.run(new DocRef('ai_retry_requests/ry').snap(), {})
+  model([{ text: 'ต้องไม่ถูกส่ง' }])
+  await requestRetry('rz') // the conversation has no messages at all
+  assert.equal(sent.length, 0)
 })

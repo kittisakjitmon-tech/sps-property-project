@@ -14,6 +14,7 @@ import {
   Search,
   Send,
   Settings2,
+  Sparkles,
   ThumbsDown,
   ThumbsUp,
   UserRound,
@@ -110,6 +111,7 @@ export default function MessengerInbox() {
   const [draft, setDraft] = useState('')
   const [sending, setSending] = useState(false)
   const [actionError, setActionError] = useState('')
+  const [notice, setNotice] = useState('')
   const [mobileChatOpen, setMobileChatOpen] = useState(false)
   const [contactOpen, setContactOpen] = useState(false)
   const [pageManagerOpen, setPageManagerOpen] = useState(false)
@@ -119,6 +121,8 @@ export default function MessengerInbox() {
 
   const selectedConversation = conversations.find(item => item.id === selectedId)
   const selectedUnreadCount = selectedConversation?.unreadCount || 0
+  const millis = value => value?.toMillis?.() ?? (Number(value) || 0)
+  const waitingForAnswer = Boolean(selectedConversation) && millis(selectedConversation.lastInboundAt) > millis(selectedConversation.lastOutboundAt)
   const outsideWindow = isOutsideMessagingWindow(selectedConversation)
   const error = actionError || listError || messagesError
 
@@ -226,7 +230,8 @@ export default function MessengerInbox() {
     setPropertyBusy(true)
     setActionError('')
     try {
-      await callApi({ action: 'setConversationProperty', conversationId: selectedId, propertyCode })
+      const result = await callApi({ action: 'setConversationProperty', conversationId: selectedId, propertyCode })
+      if (result.answering) showNotice('บันทึกแล้ว AI กำลังตอบข้อความที่ค้างอยู่ของลูกค้า')
     } catch (propertyError) {
       setActionError(propertyError.message || 'ตั้งค่าทรัพย์ไม่สำเร็จ')
     } finally {
@@ -239,7 +244,8 @@ export default function MessengerInbox() {
     setPropertyBusy(true)
     setActionError('')
     try {
-      await callApi({ action: 'setConversationNote', conversationId: selectedId, note })
+      const result = await callApi({ action: 'setConversationNote', conversationId: selectedId, note })
+      if (result.answering) showNotice('บันทึกแล้ว AI กำลังตอบข้อความที่ค้างอยู่ของลูกค้า')
       return true
     } catch (noteError) {
       setActionError(noteError.message || 'บันทึกรายละเอียดไม่สำเร็จ')
@@ -287,6 +293,7 @@ export default function MessengerInbox() {
     setActionError('')
     try {
       const result = await callApi({ action: 'saveConversationListing', conversationId: selectedId, listing })
+      if (result.answering) showNotice('บันทึกแล้ว AI กำลังตอบข้อความที่ค้างอยู่ของลูกค้า')
       return result.listing || null
     } catch (listingError) {
       setActionError(listingError.message || 'บันทึกบ้านไม่สำเร็จ')
@@ -321,6 +328,25 @@ export default function MessengerInbox() {
     )
     if (!ok) return
     await runBotAction({ action: 'resetConversationContext', conversationId: selectedId })
+  }
+
+  function showNotice(message) {
+    setNotice(message)
+    setTimeout(() => setNotice(current => (current === message ? '' : current)), 10000)
+  }
+
+  async function askAiToReply() {
+    if (!selectedId) return
+    setBotBusy(true)
+    setActionError('')
+    try {
+      await callApi({ action: 'askAiToReply', conversationId: selectedId })
+      showNotice('ส่งคำขอแล้ว AI กำลังตอบข้อความที่ค้างอยู่ของลูกค้า (ใช้เวลาไม่กี่วินาที)')
+    } catch (askError) {
+      setActionError(askError.message || 'ให้ AI ตอบไม่สำเร็จ')
+    } finally {
+      setBotBusy(false)
+    }
   }
 
   function toggleConversationBot() {
@@ -433,6 +459,13 @@ export default function MessengerInbox() {
         <div className="flex gap-2 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700" role="alert">
           <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
           {error}
+        </div>
+      )}
+
+      {notice && !error && (
+        <div className="flex gap-2 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800" role="status">
+          <Sparkles className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
+          {notice}
         </div>
       )}
 
@@ -555,6 +588,18 @@ export default function MessengerInbox() {
                   <Bot className="h-4 w-4" aria-hidden="true" />
                   <span className="hidden sm:inline">{selectedConversation.botPaused === true ? 'AI หยุด · เปิดต่อ' : (botSettings.requirePropertyForBot === true && !selectedConversation.currentPropertyCode && !selectedConversation.staffNote && !selectedConversation.staffListings?.length) ? 'AI รอรายละเอียดบ้าน · หยุด' : 'AI ตอบอยู่ · หยุด'}</span>
                 </button>
+                {waitingForAnswer && botSettings.enabled && selectedConversation.botPaused !== true && (
+                  <button
+                    type="button"
+                    onClick={askAiToReply}
+                    disabled={botBusy}
+                    title="ให้ AI ตอบข้อความล่าสุดของลูกค้าที่ยังไม่มีใครตอบ"
+                    className="inline-flex items-center gap-1.5 rounded-lg bg-indigo-50 px-3 py-2 text-xs font-medium text-indigo-800 hover:bg-indigo-100 disabled:opacity-50"
+                  >
+                    <Sparkles className="h-4 w-4" aria-hidden="true" />
+                    <span className="hidden lg:inline">ให้ AI ตอบข้อความที่ค้าง</span>
+                  </button>
+                )}
                 {isSuperAdmin() && (
                   <button
                     type="button"

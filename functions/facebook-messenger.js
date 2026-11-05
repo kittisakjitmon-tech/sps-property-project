@@ -569,6 +569,31 @@ function cleanField(value, maxLength) {
   return typeof value === 'string' ? value.trim().slice(0, maxLength) : ''
 }
 
+const toMillisValue = value => value?.toMillis?.() ?? (Number(value) || 0)
+
+// Ask the AI to answer the customer message that is still waiting (see facebookAiRetry).
+async function requestAiRetry(conversationId, adminUser, reason) {
+  await admin.firestore().collection('ai_retry_requests').add({
+    conversationId,
+    reason,
+    requestedBy: adminUser?.uid || null,
+    createdAt: admin.firestore.FieldValue.serverTimestamp(),
+  })
+}
+
+// When the AI skipped a message only because the chat had no house information yet
+// (needsProperty), adding that information should not leave the customer waiting.
+async function retryIfWaiting(conversationId, data, adminUser, reason) {
+  if (data?.needsProperty !== true) return false
+  try {
+    await requestAiRetry(conversationId, adminUser, reason)
+    return true
+  } catch (error) {
+    functions.logger.warn('Could not request an AI retry', { conversationId, reason: error.message })
+    return false
+  }
+}
+
 async function deleteStaffImageFile(conversationId, image) {
   if (!image?.path) return
   await admin.storage().bucket().file(image.path).delete().catch(error => {
@@ -604,7 +629,7 @@ const adminActions = {
   // Tell the AI which property this customer is asking about (by listing code),
   // or clear it with an empty code.
   async setConversationProperty({ conversationId: id, propertyCode }, adminUser) {
-    const { conversationRef } = await loadConversation(id)
+    const { conversationRef, data: before } = await loadConversation(id)
     const FieldValue = admin.firestore.FieldValue
     const code = cleanField(propertyCode, 60)
     if (!code) {
@@ -630,13 +655,14 @@ const adminActions = {
       currentPropertySetAt: FieldValue.serverTimestamp(),
       needsProperty: FieldValue.delete(),
     }, { merge: true })
-    return { success: true, code: property.displayId, title }
+    const answering = await retryIfWaiting(id, before, adminUser, 'property-set')
+    return { success: true, code: property.displayId, title, answering }
   },
 
   // Free-text details the team wants the AI to use in this chat (house details, offers,
   // anything the listing data does not say). An empty note clears it.
   async setConversationNote({ conversationId: id, note }, adminUser) {
-    const { conversationRef } = await loadConversation(id)
+    const { conversationRef, data: before } = await loadConversation(id)
     const FieldValue = admin.firestore.FieldValue
     if (note !== undefined && typeof note !== 'string') throw httpError(400, 'ข้อความไม่ถูกต้อง')
     const text = cleanField(note, 1500)
@@ -654,7 +680,8 @@ const adminActions = {
       staffNoteAt: FieldValue.serverTimestamp(),
       needsProperty: FieldValue.delete(),
     }, { merge: true })
-    return { success: true, length: text.length }
+    const answering = await retryIfWaiting(id, before, adminUser, 'note-saved')
+    return { success: true, length: text.length, answering }
   },
 
   // Houses the team types in for one chat (for example from a post with several houses that
@@ -682,7 +709,8 @@ const adminActions = {
       staffListings: next,
       needsProperty: admin.firestore.FieldValue.delete(),
     }, { merge: true })
-    return { success: true, listing: saved }
+    const answering = await retryIfWaiting(id, data, adminUser, 'listing-saved')
+    return { success: true, listing: saved, answering }
   },
 
   async removeConversationListing({ conversationId: id, listingId }) {
@@ -742,6 +770,21 @@ const adminActions = {
       await conversationRef.set({ staffImages: remaining }, { merge: true })
     }
     await deleteStaffImageFile(id, target)
+    return { success: true }
+  },
+
+  // Answer the customer message that is still waiting, for example after the team added the
+  // house information. The AI answers as if the message had just arrived.
+  async askAiToReply({ conversationId: id }, adminUser) {
+    const { data } = await loadConversation(id)
+    const settings = (await admin.firestore().doc('messenger_settings/ai').get()).data() || {}
+    if (settings.enabled !== true) throw httpError(409, 'AI ถูกปิดทั้งระบบอยู่ เปิดสวิตช์ "AI ตอบอัตโนมัติ" ก่อน')
+    if (data.botPaused === true) throw httpError(409, 'AI หยุดตอบแชทนี้อยู่ กด "เปิดต่อ" ก่อน')
+    const inbound = toMillisValue(data.lastInboundAt)
+    if (!(inbound > 0) || inbound <= toMillisValue(data.lastOutboundAt)) {
+      throw httpError(409, 'ไม่มีข้อความของลูกค้าที่รอคำตอบ')
+    }
+    await requestAiRetry(id, adminUser, 'manual')
     return { success: true }
   },
 

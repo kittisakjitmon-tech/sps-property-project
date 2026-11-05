@@ -198,6 +198,21 @@ links to it (that needs Google Workspace domain-wide delegation).
   hand-over are cleared, and the AI is switched back on for that chat. Houses, notes, pictures
   and contact details entered by the team are kept. Use it on test chats, not real customers.
 
+## Answering what is waiting
+
+If a customer writes before the AI has what it needs (for example "property first" is on and the chat
+has no house yet) the AI stays silent and the chat is flagged `needsProperty`. When the team then
+sets a property, saves a typed-in house or saves a note, the admin panel writes a document to
+`ai_retry_requests` and the function `facebookAiRetry` answers the newest waiting customer message
+as if it had just arrived. The inbox also has a button **ให้ AI ตอบข้อความที่ค้าง** (shown when the last
+message is the customer's, the AI is on and the chat is not paused) that does the same on demand
+(`askAiToReply`).
+
+A retry skips the "message too old", "a person answered in the last 12 hours" and hourly-limit rules,
+because the team asked for it. It still respects the global off switch and a paused chat, never
+answers a chat whose last message is already an answer, handles each request once, and a short lock
+(`aiRetryLockUntil`, 90 s) stops two close requests from both answering.
+
 ## Prices
 
 - Price shown on the website (`showPrice !== false`): the bot may say it.
