@@ -11,8 +11,9 @@ import {
 } from 'firebase/firestore'
 import { adminDb } from '../../lib/firebase'
 import { useAdminAuth } from '../../context/AdminAuthContext'
+import { describeNetworkFailure, resolveApiUrl } from './apiUrl'
 
-const API_URL = import.meta.env.VITE_FACEBOOK_MESSENGER_API_URL || '/api/admin/messenger'
+const API_URL = resolveApiUrl(import.meta.env.VITE_FACEBOOK_MESSENGER_API_URL, typeof window === 'undefined' ? '' : window.location.hostname)
 
 export function useMessengerApi() {
   const { user } = useAdminAuth()
@@ -20,14 +21,20 @@ export function useMessengerApi() {
   return useCallback(async body => {
     if (!user) throw new Error('กรุณาเข้าสู่ระบบใหม่')
     const token = await user.getIdToken()
-    const response = await fetch(API_URL, {
-      method: 'POST',
-      headers: {
-        Authorization: `Bearer ${token}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify(body),
-    })
+    let response
+    try {
+      response = await fetch(API_URL, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(body),
+      })
+    } catch (networkError) {
+      console.error('เรียกหลังบ้านไม่สำเร็จ', API_URL, networkError)
+      throw new Error(describeNetworkFailure(API_URL, window.location.hostname))
+    }
     const data = await response.json().catch(() => ({}))
     if (!response.ok) throw new Error(data.error || 'เรียก API ไม่สำเร็จ')
     return data
