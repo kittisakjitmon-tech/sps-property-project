@@ -186,6 +186,17 @@ The function has no key file. It impersonates its own service account with the C
 A personal Gmail calendar works, but a service account cannot invite attendees or add Meet
 links to it (that needs Google Workspace domain-wide delegation).
 
+## Seeing what the AI knew, and testing a chat again
+
+- Every AI text message stores `aiContext` (properties it had, number of typed-in houses, whether
+  a team note existed, pictures, tools it called). The inbox shows it under the AI message
+  ("AI รู้: ทรัพย์ ... · บ้านที่กรอก 2 หลัง"), or "AI ไม่มีข้อมูลบ้านของแชทนี้ตอนตอบ" when it had
+  none. A message without the line was answered by an older deployment of `facebookAiReply`.
+- **เริ่มทดสอบใหม่** (Super Admin, per chat) sets `contextResetAt`: the AI no longer sees earlier
+  messages (they stay visible in the inbox), shown cards, current property, loan/credit notes and
+  hand-over are cleared, and the AI is switched back on for that chat. Houses, notes, pictures
+  and contact details entered by the team are kept. Use it on test chats, not real customers.
+
 ## Prices
 
 - Price shown on the website (`showPrice !== false`): the bot may say it.

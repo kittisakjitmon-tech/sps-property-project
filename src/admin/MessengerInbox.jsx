@@ -10,6 +10,7 @@ import {
   NotebookPen,
   MessageCircle,
   Paperclip,
+  RotateCcw,
   Search,
   Send,
   Settings2,
@@ -80,6 +81,17 @@ function Attachment({ attachment, outgoing }) {
       เปิดไฟล์แนบ ({attachment.type})
     </a>
   )
+}
+
+// "AI รู้: ทรัพย์ SPS-TH-1 · บ้านที่กรอก 2 หลัง · รูป 3" or a plain note that it had nothing.
+function describeAiContext(context) {
+  const parts = [
+    context.properties?.length ? `ทรัพย์ ${context.properties.join(', ')}` : '',
+    context.listings ? `บ้านที่กรอก ${context.listings} หลัง` : '',
+    context.note ? 'โน้ตของทีม' : '',
+    context.pictures ? `รูป ${context.pictures}` : '',
+  ].filter(Boolean)
+  return parts.length ? `AI รู้: ${parts.join(' · ')}` : 'AI ไม่มีข้อมูลบ้านของแชทนี้ตอนตอบ'
 }
 
 export default function MessengerInbox() {
@@ -295,6 +307,20 @@ export default function MessengerInbox() {
     } finally {
       setPropertyBusy(false)
     }
+  }
+
+  async function resetConversationForTest() {
+    if (!selectedId) return
+    const ok = window.confirm(
+      'เริ่มทดสอบแชทนี้ใหม่?\n\n'
+      + '• AI จะลืมข้อความเก่าทั้งหมดของแชทนี้ (ข้อความยังอยู่ให้เห็นในหน้านี้ ไม่ถูกลบ)\n'
+      + '• ล้างสถานะที่ AI จำไว้: การ์ดที่เคยส่ง ทรัพย์ที่ตั้ง ข้อมูลสินเชื่อ การส่งต่อให้ทีมงาน\n'
+      + '• เปิดให้ AI ตอบแชทนี้อีกครั้ง\n'
+      + '• ข้อมูลที่ทีมกรอก (บ้าน โน้ต รูป ข้อมูลลูกค้า) ยังอยู่\n\n'
+      + 'ควรใช้กับแชททดสอบของคุณเอง ไม่ใช่แชทลูกค้าจริง',
+    )
+    if (!ok) return
+    await runBotAction({ action: 'resetConversationContext', conversationId: selectedId })
   }
 
   function toggleConversationBot() {
@@ -529,6 +555,18 @@ export default function MessengerInbox() {
                   <Bot className="h-4 w-4" aria-hidden="true" />
                   <span className="hidden sm:inline">{selectedConversation.botPaused === true ? 'AI หยุด · เปิดต่อ' : (botSettings.requirePropertyForBot === true && !selectedConversation.currentPropertyCode && !selectedConversation.staffNote && !selectedConversation.staffListings?.length) ? 'AI รอรายละเอียดบ้าน · หยุด' : 'AI ตอบอยู่ · หยุด'}</span>
                 </button>
+                {isSuperAdmin() && (
+                  <button
+                    type="button"
+                    onClick={resetConversationForTest}
+                    disabled={botBusy}
+                    title="ให้ AI ลืมข้อความเก่าของแชทนี้ เพื่อทดสอบใหม่ (ข้อความไม่ถูกลบ)"
+                    className="inline-flex items-center gap-1.5 rounded-lg px-3 py-2 text-xs font-medium text-slate-600 hover:bg-slate-100 disabled:opacity-50"
+                  >
+                    <RotateCcw className="h-4 w-4" aria-hidden="true" />
+                    <span className="hidden lg:inline">เริ่มทดสอบใหม่</span>
+                  </button>
+                )}
                 <button
                   type="button"
                   onClick={() => setContactOpen(open => !open)}
@@ -587,6 +625,11 @@ export default function MessengerInbox() {
                                   <Attachment key={`${attachment.url || attachment.type}-${index}`} attachment={attachment} outgoing={outgoing} />
                                 ))}
                               </div>
+                            )}
+                            {message.sentBy === 'ai' && message.aiContext && (
+                              <p className="mt-1 text-right text-[10px] leading-4 text-blue-100/90" title="ข้อมูลที่ AI มีตอนตอบข้อความนี้">
+                                {describeAiContext(message.aiContext)}
+                              </p>
                             )}
                             <div className={`mt-1 flex items-center justify-end gap-2 text-[10px] ${outgoing && !imageOnly ? 'text-blue-100' : 'text-slate-400'}`}>
                               {message.sentBy === 'ai' && (

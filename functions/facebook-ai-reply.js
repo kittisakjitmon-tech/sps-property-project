@@ -309,7 +309,9 @@ const facebookAiReply = functions
       }
       const incomingImages = imageCfg.enabled ? pickImageAttachments(message.attachments, imageCfg.maxImages) : []
 
-      const recent = await loadRecentMessages(conversationRef)
+      // "Start testing again" hides everything before the reset: the AI does not see it.
+      const resetAtMs = conversation.contextResetAt?.toMillis?.() || 0
+      const recent = (await loadRecentMessages(conversationRef)).filter(item => item.timestamp >= resetAtMs)
       const decision = shouldReply({
         settings,
         conversation: { ...conversation, botResumedAtMs: conversation.botResumedAt?.toMillis?.() || 0 },
@@ -654,7 +656,7 @@ const facebookAiReply = functions
         staffImages,
         calendar: calendarCfg.enabled ? { scheduleText: calendarRules.describeSchedule(calendarCfg) } : null,
       })
-      const { text: rawText } = await runConversation({
+      const { text: rawText, calls: toolCalls } = await runConversation({
         generate: createGenerate({ settings, systemInstruction, info: servedBy }),
         contents: withImages(historyToContents(recent), imageParts),
         handlers,
@@ -713,6 +715,17 @@ const facebookAiReply = functions
         attachments: [],
         timestamp: Date.now(),
         sentBy: 'ai',
+        // What this answer was based on, so the team can see whether the AI had the house
+        // information (shown under the AI message in the inbox).
+        extra: {
+          aiContext: {
+            properties: [...new Set(focus.map(property => property.code))],
+            listings: staffListings.length,
+            note: Boolean(staffNote),
+            pictures: staffImages.length + staffListings.reduce((total, item) => total + (Array.isArray(item.images) ? item.images.length : 0), 0),
+            tools: [...new Set((toolCalls || []).map(call => call.name))],
+          },
+        },
       })
 
       // Cards are a bonus: a failure here must not undo the reply that was already sent.

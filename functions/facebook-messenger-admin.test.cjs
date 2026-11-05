@@ -278,3 +278,30 @@ test('with "property first" on, a typed-in house lets the AI be switched on', as
   await adminActions.setBotPaused({ conversationId: 'c1', paused: false })
   assert.equal(conversation().botPaused, false)
 })
+
+// ─── Start testing a chat again ──────────────────────────────────────────────
+test('resetting a chat clears what the AI remembered, keeps the team\'s own entries, and is for super admins only', async () => {
+  store.set(CONV, {
+    pageId: 'P1', participantId: 'U1', botPaused: true, needsHuman: true, handoffReason: 'ขอคุยกับคน', needsProperty: true,
+    shownCodes: ['SPS-TH-1'], currentPropertyCode: 'SPS-TH-1', currentPropertyTitle: 'x', loanEstimate: { verdict: 'likely' },
+    creditProfile: { age: 30 }, leadCapturedAt: 'ts', contact: { name: 'สมชาย', phone: '0812345678' },
+    staffNote: 'โน้ตของทีม', staffListings: [{ id: 'a1', title: 'บ้าน' }], staffImages: [{ url: 'u' }],
+  })
+  await reject(adminActions.resetConversationContext({ conversationId: 'c1' }, ADMIN), 403)
+  assert.equal(conversation().botPaused, true)
+
+  await adminActions.resetConversationContext({ conversationId: 'c1' }, SUPER)
+  const after = conversation()
+  assert.ok(after.contextResetAt)
+  assert.ok(after.botResumedAt)
+  assert.equal(after.botPaused, false)
+  assert.equal(after.needsHuman, false)
+  for (const field of ['handoffReason', 'needsProperty', 'shownCodes', 'currentPropertyCode', 'currentPropertyTitle', 'loanEstimate', 'creditProfile', 'leadCapturedAt']) {
+    assert.equal(after[field], undefined, field)
+  }
+  assert.equal(after.contact.phone, '0812345678')
+  assert.equal(after.staffNote, 'โน้ตของทีม')
+  assert.equal(after.staffListings.length, 1)
+  assert.equal(after.staffImages.length, 1)
+  await reject(adminActions.resetConversationContext({ conversationId: 'missing' }, SUPER), 404)
+})

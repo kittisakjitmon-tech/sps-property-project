@@ -1178,3 +1178,44 @@ test('two people cannot hold the same slot at once; holds expire and can be rele
   store.set('appointment_locks/2030-01-07', { holds: expired })
   assert.equal(await _test.holdSlot(db, '2030-01-07', 600, 690, 'f'), true)
 })
+
+// ─── What the AI knew, and starting a test again ─────────────────────────────
+
+test('each AI answer records what it was based on, so the team can see whether it had the house details', async () => {
+  store.set('messenger_conversations/conv1', {
+    pageId: 'P1', participantId: 'U1', pageName: 'เพจ', currentPropertyCode: 'SPS-CD-9', staffNote: 'โปรโมชันฟรีค่าโอน',
+    staffListings: [{ id: 'a1', title: 'บ้าน', images: [{ url: 'https://firebasestorage.googleapis.com/v0/b/x/o/1?alt=media' }] }],
+    staffImages: [{ url: 'https://firebasestorage.googleapis.com/v0/b/x/o/2?alt=media' }],
+  })
+  model([{ functionCall: { name: 'search_properties', args: {} } }], [{ text: 'มีครับ' }])
+  await receive('ราคาเท่าไหร่')
+  const context = stored[0].extra.aiContext
+  assert.deepEqual(context.properties, ['SPS-CD-9'])
+  assert.equal(context.listings, 1)
+  assert.equal(context.note, true)
+  assert.equal(context.pictures, 2)
+  assert.deepEqual(context.tools, ['search_properties'])
+})
+
+test('an answer given with no house information says so', async () => {
+  model([{ text: 'สวัสดีครับ' }])
+  await receive('สวัสดี')
+  assert.deepEqual(stored[0].extra.aiContext, { properties: [], listings: 0, note: false, pictures: 0, tools: [] })
+})
+
+test('after a reset the AI does not see the earlier messages, greets again, and its limits start over', async () => {
+  const resetAt = NOW - 1000
+  store.set('messenger_conversations/conv1', { pageId: 'P1', participantId: 'U1', pageName: 'เพจ', contextResetAt: new Ts(resetAt) })
+  store.set('messenger_conversations/conv1/messages/old1', { direction: 'incoming', text: 'สนใจบ้านพานทอง', attachments: [], timestamp: new Ts(NOW - 60000) })
+  store.set('messenger_conversations/conv1/messages/old2', { direction: 'outgoing', text: 'พอจะมีรหัสทรัพย์ไหมครับ', attachments: [], timestamp: new Ts(NOW - 50000), sentBy: 'ai' })
+  store.set('messenger_conversations/conv1/messages/old3', { direction: 'outgoing', text: 'ทีมงานตอบเอง', attachments: [], timestamp: new Ts(NOW - 40000), sentBy: 'someAdmin' })
+  let seen
+  modelScript = [async contents => { seen = contents; return [{ text: 'สวัสดีครับ' }] }]
+  const prompt = await capturePrompt(async () => { await receive('สวัสดีค่ะ') })
+  const text = JSON.stringify(seen)
+  assert.ok(!text.includes('สนใจบ้านพานทอง'))
+  assert.ok(!text.includes('รหัสทรัพย์'))
+  assert.ok(text.includes('สวัสดีค่ะ'))
+  assert.equal(sent.length, 1) // the earlier human reply no longer keeps the AI quiet
+  assert.match(prompt, /นี่คือการตอบครั้งแรก/)
+})

@@ -745,6 +745,35 @@ const adminActions = {
     return { success: true }
   },
 
+  // For testing: make the AI forget this chat. Messages stay visible in the inbox but the AI
+  // no longer sees them, and what it remembered (shown cards, current property, loan and
+  // credit notes, hand-over) is cleared. The team's own entries (houses, notes, pictures,
+  // contact) are kept. Super admins only.
+  async resetConversationContext({ conversationId: id }, adminUser) {
+    if (adminUser.role !== 'super_admin') throw httpError(403, 'เฉพาะ Super Admin เท่านั้นที่เริ่มทดสอบแชทใหม่ได้')
+    const { conversationRef } = await loadConversation(id)
+    const FieldValue = admin.firestore.FieldValue
+    await conversationRef.set({
+      contextResetAt: admin.firestore.Timestamp.now(),
+      botPaused: false,
+      botResumedAt: admin.firestore.Timestamp.now(),
+      needsHuman: false,
+      needsProperty: FieldValue.delete(),
+      handoffReason: FieldValue.delete(),
+      handoffAt: FieldValue.delete(),
+      shownCodes: FieldValue.delete(),
+      currentPropertyCode: FieldValue.delete(),
+      currentPropertyId: FieldValue.delete(),
+      currentPropertyTitle: FieldValue.delete(),
+      currentPropertySetBy: FieldValue.delete(),
+      currentPropertySetAt: FieldValue.delete(),
+      loanEstimate: FieldValue.delete(),
+      creditProfile: FieldValue.delete(),
+      leadCapturedAt: FieldValue.delete(),
+    }, { merge: true })
+    return { success: true }
+  },
+
   // What the AI is told to ask about credit, and the tone notes. Super admins only.
   async setAiGuidance({ creditChecklist, extraInstructions }, adminUser) {
     if (adminUser.role !== 'super_admin') throw httpError(403, 'เฉพาะ Super Admin เท่านั้นที่แก้คำแนะนำ AI ได้')
