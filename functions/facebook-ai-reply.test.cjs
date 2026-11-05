@@ -689,7 +689,8 @@ test('house details written by the team go into the prompt and let the AI answer
     await receive('หลังริมไหมคะ')
   })
   assert.equal(sent.length, 1)
-  assert.match(prompt, /ข้อมูลที่ทีมงานระบุไว้สำหรับแชทนี้/)
+  assert.match(prompt, /บ้านของแชทนี้ \(สำคัญที่สุด/)
+  assert.match(prompt, /รายละเอียดบ้านที่ทีมงานเขียนไว้สำหรับแชทนี้/)
   assert.match(prompt, /ที่จอดรถ 2 คัน/)
   assert.equal(conversation().needsProperty, undefined)
 })
@@ -702,7 +703,8 @@ test('a blank note does not count, and without one the prompt has no team-detail
   assert.equal(sent.length, 0)
   store.set('messenger_settings/ai', { enabled: true })
   const prompt = await capturePrompt(async () => { model([{ text: 'ครับ' }]); await receive('สวัสดีครับ') })
-  assert.ok(!prompt.includes('ข้อมูลที่ทีมงานระบุไว้สำหรับแชทนี้'))
+  assert.ok(!prompt.includes('บ้านของแชทนี้'))
+  assert.ok(!prompt.includes('รายละเอียดบ้านที่ทีมงานเขียนไว้สำหรับแชทนี้'))
 })
 
 test('the prompt tells the AI not to ask the customer for a listing code first', async () => {
@@ -1186,7 +1188,7 @@ test('two people cannot hold the same slot at once; holds expire and can be rele
 
 test('each AI answer records what it was based on, so the team can see whether it had the house details', async () => {
   store.set('messenger_conversations/conv1', {
-    pageId: 'P1', participantId: 'U1', pageName: 'เพจ', currentPropertyCode: 'SPS-CD-9', staffNote: 'โปรโมชันฟรีค่าโอน',
+    pageId: 'P1', participantId: 'U1', pageName: 'เพจ', currentPropertyCode: 'SPS-CD-9', currentPropertySetBy: 'admin1', staffNote: 'โปรโมชันฟรีค่าโอน',
     staffListings: [{ id: 'a1', title: 'บ้าน', images: [{ url: 'https://firebasestorage.googleapis.com/v0/b/x/o/1?alt=media' }] }],
     staffImages: [{ url: 'https://firebasestorage.googleapis.com/v0/b/x/o/2?alt=media' }],
   })
@@ -1384,4 +1386,66 @@ test('a picture sent just before the question is seen with it', async () => {
   await runFor('p2')
   assert.deepEqual(fetched, [STORAGE_URL])
   assert.ok(seenContents[seenContents.length - 1].parts.some(part => part.inlineData))
+})
+
+// ─── Only a note, no property picked from the list ───────────────────────────
+const TWIN_NOTE = `🏡 บ้านเเฝด 🗺️แยกมาบโป่ง เฟส8-10
+2 ห้องนอน 2 ห้องน้ำ 1 ครัว 2 จอดรถ
+✅ฟรีค่ามิเตอร์น้ำ
+✅ฟรีถังสำรองน้ำ 1,000 ลิตร
+พิกัด 📍
+https://maps.app.goo.gl/38ManFKLBfZc8vE5A?g_st=ipc
+ ราคา 2.19 ล้าน`
+
+test('with only a note, the house in it comes first and the AI is told not to offer other houses', async () => {
+  store.set('messenger_conversations/conv1', { pageId: 'P1', participantId: 'U1', pageName: 'เพจ', staffNote: TWIN_NOTE })
+  const prompt = await capturePrompt(async () => {
+    model([{ text: 'บ้านแฝดแยกมาบโป่ง 2 นอน 2 น้ำ ราคา 2.19 ล้านครับ' }])
+    await receive('รายละเอียดหลังนี้หน่อยครับ')
+  })
+  assert.equal(sent.length, 1)
+  assert.ok(prompt.indexOf('บ้านของแชทนี้') < prompt.indexOf('สไตล์การพูด'), 'the house comes before the general rules')
+  assert.match(prompt, /แยกมาบโป่ง/)
+  assert.match(prompt, /ห้ามเรียก search_properties/)
+  assert.ok(!prompt.includes('ใช้ข้อมูลจากเครื่องมือ search_properties เท่านั้น'))
+})
+
+test('the map link and the price from the note reach the customer', async () => {
+  // A house in the database with the same price, but hidden: the note's own price is still fine.
+  store.set('properties/prop3', property({ displayId: 'SPS-TW-3', price: 2190000, showPrice: false }))
+  store.set('messenger_conversations/conv1', { pageId: 'P1', participantId: 'U1', pageName: 'เพจ', staffNote: TWIN_NOTE })
+  model([{ text: 'ราคา 2.19 ล้านครับ พิกัดตามนี้เลยครับ https://maps.app.goo.gl/38ManFKLBfZc8vE5A?g_st=ipcครับ' }])
+  await receive('ราคาเท่าไหร่ อยู่ตรงไหนครับ')
+  assert.equal(sent.length, 1)
+  assert.match(sent[0].message.text, /2\.19 ล้าน/)
+  assert.ok(sent[0].message.text.includes('https://maps.app.goo.gl/38ManFKLBfZc8vE5A?g_st=ipc'))
+  assert.equal(conversation().needsHuman, undefined)
+})
+
+test('a property the AI remembered on its own does not push the note aside; one the team picked does', async () => {
+  store.set('messenger_conversations/conv1', { pageId: 'P1', participantId: 'U1', pageName: 'เพจ', staffNote: TWIN_NOTE, currentPropertyCode: 'SPS-CD-9' })
+  let prompt = await capturePrompt(async () => {
+    model([{ text: 'ได้ครับ' }])
+    await receive('ราคาเท่าไหร่')
+  })
+  assert.ok(!prompt.includes('SPS-CD-9'))
+  assert.deepEqual(stored[0].extra.aiContext.properties, [])
+
+  store.set('messenger_conversations/conv1', { ...conversation(), currentPropertyCode: 'SPS-CD-9', currentPropertySetBy: 'admin1' })
+  prompt = await capturePrompt(async () => {
+    model([{ text: 'ได้ครับ' }])
+    await receive('แล้วคอนโดล่ะ', { at: NOW + 1 })
+  })
+  assert.ok(prompt.includes('SPS-CD-9'))
+})
+
+test('if the AI searches anyway, the search result reminds it to answer from the note', async () => {
+  store.set('messenger_conversations/conv1', { pageId: 'P1', participantId: 'U1', pageName: 'เพจ', staffNote: TWIN_NOTE })
+  let toolAnswer
+  modelScript = [
+    async () => [{ functionCall: { name: 'search_properties', args: {} } }],
+    async contents => { toolAnswer = contents[contents.length - 1].parts[0].functionResponse.response; return [{ text: 'บ้านแฝดแยกมาบโป่ง 2.19 ล้านครับ' }] },
+  ]
+  await receive('ราคาเท่าไหร่')
+  assert.match(toolAnswer.note, /บ้านของแชทนี้/)
 })

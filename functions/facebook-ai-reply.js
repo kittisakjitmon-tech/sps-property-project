@@ -378,15 +378,19 @@ async function answerCustomer({ conversationId, message, messageRef, retry = fal
     // Everything the model may reference in this reply.
     const seen = new Map() // code -> indexed property (from search results)
     // Listings the customer named (link or code) or that we were already discussing.
-    const focus = findFocusProperties({ messages: recent, catalog, currentCode: conversation.currentPropertyCode })
+    const staffNote = typeof conversation.staffNote === 'string' ? conversation.staffNote.trim() : ''
+    const staffListings = (Array.isArray(conversation.staffListings) ? conversation.staffListings : [])
+      .filter(item => item && typeof item.id === 'string')
+    const hasTeamInfo = Boolean(staffNote || staffListings.length)
+    // A property the AI itself remembered from an earlier answer must not push aside the house
+    // the team wrote down for this chat; one the team picked in the inbox still counts.
+    const currentCode = hasTeamInfo && !conversation.currentPropertySetBy ? null : conversation.currentPropertyCode
+    const focus = findFocusProperties({ messages: recent, catalog, currentCode })
     for (const property of focus) seen.set(property.code, property)
     let focusCode = focus[0]?.code || null
 
     // "Property first" mode: the AI waits until the chat has a property (set by the team,
     // named by the customer with a link or code) or house details written by the team. The inbox shows a badge meanwhile.
-    const staffNote = typeof conversation.staffNote === 'string' ? conversation.staffNote.trim() : ''
-    const staffListings = (Array.isArray(conversation.staffListings) ? conversation.staffListings : [])
-      .filter(item => item && typeof item.id === 'string')
     if (settings.requirePropertyForBot === true && !focus.length && !staffNote && !staffListings.length) {
       functions.logger.info('AI reply skipped', { ...logContext, reason: 'no-property' })
       await conversationRef.set({ needsProperty: true }, { merge: true })
@@ -407,6 +411,12 @@ async function answerCustomer({ conversationId, message, messageRef, retry = fal
     const handlers = {
       search_properties: args => {
         const result = searchProperties(catalog, args, { excludeCodes: shownCodes })
+        if (hasTeamInfo) {
+          result.note = [
+            'แชทนี้มีข้อมูลบ้านจากทีมงานแล้ว ("บ้านของแชทนี้") ถ้าลูกค้าไม่ได้ขอดูหลังอื่น แบบอื่น หรือทำเลอื่นชัดๆ ห้ามเสนอรายการเหล่านี้ ให้ตอบจากข้อมูลของทีมงาน',
+            result.note,
+          ].filter(Boolean).join(' ')
+        }
         lastSearchCodes = result.results.map(item => item.code)
         for (const item of result.results) {
           const indexed = catalogByCode.get(item.code)
@@ -725,7 +735,10 @@ async function answerCustomer({ conversationId, message, messageRef, retry = fal
     // Safety checks run in code, not just in the prompt.
     stage = 'guard'
     const allowedCodes = new Set([...seen.keys(), ...shownCodes, ...cardCodes])
-    const allowedUrls = [...allowedCodes].map(code => catalogByCode.get(code)?.url).filter(Boolean)
+    // Links the team wrote themselves (e.g. a Google Maps pin in the house details) may be sent.
+    const teamText = [staffNote, ...staffListings.map(item => item.details || '')].join(' ')
+    const teamUrls = (teamText.match(/https?:\/\/[!-(*-~]+/g) || []).map(url => url.replace(/[.,;!?]+$/, ''))
+    const allowedUrls = [...[...allowedCodes].map(code => catalogByCode.get(code)?.url).filter(Boolean), ...teamUrls]
     let text = sanitizeUrls(replyText, allowedUrls)
     // A price that is public on another listing is not a secret, so don't count it as a leak.
     const visiblePrices = new Set(catalog.filter(p => !p._hidden && p._numericPrice).map(p => p._numericPrice))
@@ -734,7 +747,8 @@ async function answerCustomer({ conversationId, message, messageRef, retry = fal
       ...catalog.filter(p => p._hidden && p._numericPrice && !visiblePrices.has(p._numericPrice)).map(p => p._numericPrice),
       ...staffListings.filter(item => item.priceVisible === false && item.price > 0 && !visiblePrices.has(item.price)).map(item => item.price),
     ]
-    const customerText = recent.filter(m => m.direction === 'incoming').map(m => m.text).join(' ')
+    // A price the customer typed, or that the team wrote in this chat's house details, is not a leak.
+    const customerText = [...recent.filter(m => m.direction === 'incoming').map(m => m.text), teamText].join(' ')
     let sendCards = cardCodes.length > 0
     let blockedByGuard = false
     if (!text || findPriceLeaks(text, hiddenPrices, customerText)) {
