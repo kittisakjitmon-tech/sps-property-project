@@ -12,6 +12,7 @@ import {
 import { adminDb } from '../../lib/firebase'
 import { useAdminAuth } from '../../context/AdminAuthContext'
 import { describeNetworkFailure, resolveApiUrl } from './apiUrl'
+import { toPropertyOption } from './propertySearch'
 
 const API_URL = resolveApiUrl(import.meta.env.VITE_FACEBOOK_MESSENGER_API_URL, typeof window === 'undefined' ? '' : window.location.hostname)
 
@@ -95,7 +96,7 @@ export function usePropertyOptions() {
   return useMemo(
     () => items
       .filter(item => item.displayId)
-      .map(item => ({ code: item.displayId, title: item.title || '' }))
+      .map(toPropertyOption)
       .sort((a, b) => a.code.localeCompare(b.code)),
     [items],
   )

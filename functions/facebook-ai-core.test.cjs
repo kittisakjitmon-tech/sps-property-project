@@ -928,3 +928,14 @@ test('a house saved without a price gets the price its post states', () => {
   assert.equal(completeStaffListing({ id: 'h', details: COPIED_POST, price: 2500000 }).price, 2500000) // the saved price wins
   assert.equal(completeStaffListing({ id: 'h', details: 'บ้านสวย' }).price, undefined)
 })
+
+test('nearby places saved as a list are searchable and shown to the AI', () => {
+  const listed = toIndexedProperty('p9', {
+    status: 'available', displayId: 'SPS-TW-9', title: 'บ้านแฝด', price: 2190000,
+    nearbyPlace: ['นิคมอมตะซิตี้', { label: 'โลตัสพานทอง' }, { name: '' }, 5],
+  })
+  assert.equal(listed.nearby, 'นิคมอมตะซิตี้, โลตัสพานทอง')
+  assert.deepEqual(searchProperties([listed], { keywords: 'โลตัส' }).results.map(item => item.code), ['SPS-TW-9'])
+  assert.equal(toIndexedProperty('p8', { status: 'available', displayId: 'X', nearbyPlace: 'ตลาด' }).nearby, 'ตลาด')
+  assert.equal(toIndexedProperty('p7', { status: 'available', displayId: 'Y' }).nearby, '')
+})

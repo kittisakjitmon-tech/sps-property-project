@@ -1,6 +1,8 @@
 import { useState } from 'react'
 import { Check, ChevronDown, Home, Loader2, NotebookPen, PencilLine, X } from 'lucide-react'
 import ListingsEditor from './ListingsEditor'
+import PropertyPicker from './PropertyPicker'
+import { searchPropertyOptions } from './propertySearch'
 
 const MAX_LISTINGS = 10 // same limit as the server
 
@@ -82,21 +84,7 @@ export default function PropertyBar({
 
         {showForm && (
           <form onSubmit={submit} className="flex min-w-0 flex-1 flex-wrap items-center gap-2">
-            <label className="sr-only" htmlFor="conversation-property">รหัสหรือชื่อทรัพย์ในฐานข้อมูล</label>
-            <input
-              id="conversation-property"
-              list="conversation-property-options"
-              value={value}
-              onChange={event => setValue(event.target.value)}
-              placeholder="ทรัพย์ในฐานข้อมูล: พิมพ์รหัส แล้วเลือกจากรายการ"
-              autoComplete="off"
-              className="min-w-[200px] flex-1 rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs focus:border-blue-600 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-100"
-            />
-            <datalist id="conversation-property-options">
-              {options.slice(0, 400).map(option => (
-                <option key={option.code} value={option.code}>{option.title}</option>
-              ))}
-            </datalist>
+            <PropertyPicker options={options} value={value} onChange={setValue} onPick={setValue} disabled={busy} />
             <button type="submit" disabled={!chosen || busy} className="inline-flex items-center gap-1.5 rounded-lg bg-blue-700 px-3 py-1.5 font-medium text-white hover:bg-blue-800 disabled:opacity-50">
               {busy && <Loader2 className="h-3 w-3 animate-spin" aria-hidden="true" />}
               ตั้งทรัพย์
@@ -136,10 +124,16 @@ export default function PropertyBar({
           <ChevronDown className={`h-3.5 w-3.5 transition ${panelOpen ? 'rotate-180' : ''}`} aria-hidden="true" />
         </button>
 
-        {showForm && value.trim() && !chosen && (
+        {showForm && value.trim() && !chosen && !searchPropertyOptions(options, value).length && (
           <span className="basis-full text-amber-700">
-            ไม่พบรหัส &quot;{value.trim()}&quot; ในฐานข้อมูล (หรือทรัพย์นี้ขายแล้ว) กดปุ่ม &quot;ไม่มีในระบบ? กรอกเอง&quot; เพื่อใส่ข้อมูลและรูปเองได้
+            ไม่พบ &quot;{value.trim()}&quot; ในทรัพย์ที่ยังว่าง (ค้นจากรหัส ชื่อ โครงการ ทำเล สถานที่ใกล้เคียง) ถ้าไม่มีในระบบ กด &quot;ไม่มีในระบบ? กรอกเอง&quot;
           </span>
+        )}
+        {showForm && chosen && (
+          <span className="basis-full text-emerald-700">จะตั้งเป็น: {[chosen.code, chosen.title, chosen.location].filter(Boolean).join(' · ')} กด &quot;ตั้งทรัพย์&quot; เพื่อยืนยัน</span>
+        )}
+        {showForm && value.trim() && !chosen && searchPropertyOptions(options, value).length > 0 && (
+          <span className="basis-full text-slate-500">เลือกทรัพย์จากรายการที่ค้นเจอ แล้วกด &quot;ตั้งทรัพย์&quot;</span>
         )}
 
         {waiting && (

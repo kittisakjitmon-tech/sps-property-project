@@ -139,7 +139,11 @@ function toIndexedProperty(id, data) {
   const summary = publicSummary(data.description, priceHidden)
   const keywords = Array.isArray(data.searchKeywords) ? data.searchKeywords.filter(k => typeof k === 'string') : []
   const condition = ['มือ 1', 'มือ 2'].includes(data.propertySubStatus) ? data.propertySubStatus : ''
-  const nearby = typeof data.nearbyPlace === 'string' ? clean(data.nearbyPlace, 100) : ''
+  // Saved by the admin form as a list (strings or { label | name | value }); older data as text.
+  const nearby = clean((Array.isArray(data.nearbyPlace) ? data.nearbyPlace : [data.nearbyPlace])
+    .map(item => (typeof item === 'string' ? item : (item?.label || item?.name || item?.value || '')))
+    .filter(name => typeof name === 'string' && name.trim())
+    .join(', '), 200)
   return {
     id,
     code: clean(data.displayId, 40),
