@@ -20,6 +20,11 @@ apply immediately. The on/off switch is also in the admin Messenger inbox
 | `extraInstructions` | string | Tone or brand notes appended to the prompt, e.g. "เรียกลูกค้าว่าพี่". |
 | `maxRepliesPerHour` | number | Per conversation. Default 8 (property cards don't count). |
 | `maxReplyChars` | number | Longest reply, links not counted. Default 220, allowed 80-1000. A longer reply is rewritten shorter by the model before sending, and cut at a space if that fails. |
+| `loanBankRate` | number | Loan estimate: bank interest, % per year. Default 3.5 (same as the website calculator). |
+| `loanDirectRate` | number | Loan estimate: direct installment (ผ่อนตรง) interest, % per year. Default 2.5. |
+| `loanDefaultDownPercent` | number | Down payment used when the customer does not say one. Default 20. |
+| `loanDefaultYears` / `loanMaxYears` | number | Years used when not given, and the cap. Default 30 / 30. |
+| `loanMaxDsrPercent` | number | Debt (new instalment + existing debts) as % of income that counts as "likely". Default 40. |
 
 ## Company facts and FAQ
 
@@ -43,6 +48,7 @@ without a deploy, e.g. "ตอบไม่เกิน 1 ประโยค เ�
 | `show_property_cards` | Sends up to 3 Messenger cards (photo, place, rooms, price, "ดูรายละเอียด" button). A failure here never undoes the text reply. |
 | `save_customer_info` | Saves name / phone / email / budget / interest into the conversation's `contact` (never overwrites what a teammate typed) and sets `leadCapturedAt` when it gets a phone or email. |
 | `request_appointment` | Creates a document in `appointments` (`type: 'Customer'`, `status: 'pending'`, `source: 'messenger-ai'`). The existing `onAppointmentCreated` trigger sends the LINE notification. The bot never confirms a time itself. |
+| `estimate_loan` | Rough monthly instalment and "likely / not clear" check from price (or a listing with a public price), income and monthly debts. Calculated in code with the settings above, never by the model. It is an estimate, never an approval, and never says a loan is refused. If it cannot settle (no income, high debt ratio, no usable price) the bot says the team is working on it and asks for a phone number; once a number is on file the chat is handed to a teammate. Hidden-price listings are never used (the instalment would reveal the price). Result is saved on the conversation as `loanEstimate` (admin-only). |
 | `request_human` | Hands the conversation to a person. |
 
 ## Prices

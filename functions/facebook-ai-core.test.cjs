@@ -282,9 +282,9 @@ test('system prompt sets a human tone, the particle, masked-price rules, FAQ and
   assert.match(full, /2026-11-04/)
 })
 
-test('all five tools are declared', () => {
+test('all six tools are declared', () => {
   assert.deepEqual(TOOL_DECLARATIONS.map(t => t.name), [
-    'search_properties', 'show_property_cards', 'save_customer_info', 'request_appointment', 'request_human',
+    'search_properties', 'show_property_cards', 'save_customer_info', 'request_appointment', 'estimate_loan', 'request_human',
   ])
 })
 
@@ -384,4 +384,80 @@ test('the shorten request keeps facts, prices and links and states the limit', (
   assert.match(request.systemInstruction, /ลิงก์/)
   assert.match(request.contents[0].parts[0].text, /ไม่เกิน 180 ตัวอักษร/)
   assert.match(request.contents[0].parts[0].text, /2\.1xxx/)
+})
+
+
+// ─── Loan estimate ───────────────────────────────────────────────────────────
+const { estimateLoan } = require('./facebook-ai-core.cjs')
+
+test('estimateLoan: standard instalment with default down payment and years', () => {
+  const r = estimateLoan({ price: 2500000, monthlyIncome: 40000, monthlyDebt: 3000 })
+  assert.equal(r.ok, true)
+  assert.equal(r.assumptions.downPayment, 500000)
+  assert.equal(r.assumptions.loanAmount, 2000000)
+  assert.equal(r.assumptions.years, 30)
+  assert.equal(r.assumptions.ratePercent, 3.5)
+  assert.equal(r.monthlyPayment, 9000) // 2,000,000 @ 3.5% over 30 years, rounded to 100
+  assert.equal(r.verdict, 'likely')
+  assert.equal(r.needsTeam, false)
+})
+
+test('estimateLoan: customer-given down payment, years and direct installment are used', () => {
+  const r = estimateLoan({ price: 1000000, downPayment: 100000, years: 10, loanType: 'direct', monthlyIncome: 50000 }, {})
+  assert.equal(r.assumptions.loanAmount, 900000)
+  assert.equal(r.assumptions.years, 10)
+  assert.equal(r.assumptions.ratePercent, 2.5)
+  assert.equal(r.monthlyPayment, 8500)
+  const zero = estimateLoan({ price: 1000000, downPercent: 0, monthlyIncome: 50000 })
+  assert.equal(zero.assumptions.downPayment, 0)
+})
+
+test('estimateLoan: years are capped and settings override the defaults', () => {
+  assert.equal(estimateLoan({ price: 2000000, years: 99, monthlyIncome: 50000 }).assumptions.years, 30)
+  const r = estimateLoan({ price: 2000000, monthlyIncome: 50000 }, { loanBankRate: 5, loanDefaultDownPercent: 10, loanMaxYears: 20, loanDefaultYears: 20 })
+  assert.equal(r.assumptions.ratePercent, 5)
+  assert.equal(r.assumptions.downPayment, 200000)
+  assert.equal(r.assumptions.years, 20)
+  // nonsense settings fall back to the defaults
+  assert.equal(estimateLoan({ price: 2000000, monthlyIncome: 50000 }, { loanBankRate: 'abc', loanMaxDsrPercent: -5 }).assumptions.ratePercent, 3.5)
+})
+
+test('estimateLoan: high debt burden is never called a rejection and goes to the team', () => {
+  const r = estimateLoan({ price: 2500000, downPayment: 300000, monthlyIncome: 20000, monthlyDebt: 2000 })
+  assert.equal(r.verdict, 'unlikely')
+  assert.equal(r.needsTeam, true)
+  assert.match(r.hint, /ห้ามบอกว่ากู้ไม่ผ่าน/)
+  const border = estimateLoan({ price: 2000000, downPercent: 0, monthlyIncome: 20000 }) // ~9,000 / 20,000 = 45%
+  assert.equal(border.verdict, 'borderline')
+  assert.equal(border.needsTeam, true)
+})
+
+test('estimateLoan: missing income still gives the instalment but asks the team to follow up', () => {
+  const r = estimateLoan({ price: 2500000 })
+  assert.equal(r.ok, true)
+  assert.equal(r.verdict, 'unknown')
+  assert.equal(r.needsTeam, true)
+  assert.ok(r.monthlyPayment > 0)
+})
+
+test('estimateLoan: no usable price means it cannot calculate', () => {
+  for (const price of [undefined, 0, 500, -5, 'abc', 5e9]) {
+    const r = estimateLoan({ price, monthlyIncome: 40000 })
+    assert.equal(r.ok, false)
+    assert.equal(r.needsTeam, true)
+  }
+})
+
+test('estimateLoan: the approximate maximum loan is rounded down and fits the income', () => {
+  const r = estimateLoan({ price: 5000000, monthlyIncome: 40000, monthlyDebt: 4000 })
+  assert.ok(r.approxMaxLoan % 50000 === 0)
+  const paymentAtMax = estimateLoan({ price: r.approxMaxLoan + r.assumptions.downPayment, downPayment: r.assumptions.downPayment, monthlyIncome: 40000, monthlyDebt: 4000 })
+  assert.ok(paymentAtMax.dsrPercent <= 40)
+})
+
+test('the loan tool is declared and the prompt tells the bot not to promise approval', () => {
+  assert.ok(TOOL_DECLARATIONS.some(tool => tool.name === 'estimate_loan'))
+  const prompt = buildSystemPrompt({ isFirstReply: false })
+  assert.match(prompt, /estimate_loan/)
+  assert.match(prompt, /ทีมงานกำลังดำเนินการให้ รบกวนฝากเบอร์ติดต่อ/)
 })
