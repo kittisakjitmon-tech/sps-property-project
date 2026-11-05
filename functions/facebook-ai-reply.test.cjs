@@ -1311,7 +1311,7 @@ test('one request is handled once, and two close together do not both answer', a
 
 test('a retry that did not answer does not block the next one', async () => {
   waitingMessage('ราคาเท่าไหร่', NOW - 60000)
-  model([]) // the model gives no answer
+  modelScript = [async () => { throw new Error('model unavailable') }] // the AI cannot answer
   await requestRetry('r1')
   assert.equal(sent.length, 0)
   assert.equal(conversation().aiRetryLockUntil, undefined)
@@ -1782,4 +1782,57 @@ test('several questions typed in a row are all answered, in a longer message', a
   assert.match(prompt, /ห้ามเกิน 484 ตัวอักษร/) // 220 x 2.2 for three questions
   assert.ok(!prompt.includes('ให้พูดเรื่องที่สำคัญที่สุดก่อนเรื่องเดียว'))
   assert.equal(sent.length, 1)
+})
+
+// ─── The AI never goes silent ────────────────────────────────────────────────
+test('a credit question that uses many tools still gets an answer', async () => {
+  const call = (name, args = {}) => [{ functionCall: { name, args } }]
+  let lastContents
+  modelScript = [
+    ...[
+      call('save_credit_profile', { note: 'มี MOU ธอส.' }),
+      call('estimate_loan', { price: 2600000 }),
+      call('save_customer_info', { note: 'ว่างอาทิตย์หน้า' }),
+      call('save_credit_profile', { creditIssue: 'none' }),
+      call('estimate_loan', { price: 2600000, monthlyIncome: 15000 }),
+      call('save_customer_info', { note: 'ยังไม่พร้อมเอกสาร' }),
+      call('save_credit_profile', { note: 'รายได้ไม่ถึง' }),
+    ].map(parts => async () => parts),
+    async contents => { lastContents = contents; return [{ text: 'มี MOU กับ ธอส. ช่วยได้มากค่ะ เดี๋ยวทีมงานช่วยเช็กเอกสารให้นะคะ' }] },
+  ]
+  await receive('เพื่อรายได้ไม่ถึง แต่พี่มี mou รอส.น่ะ')
+  assert.equal(sent.length, 1)
+  assert.match(sent[0].message.text, /MOU/)
+  assert.match(lastContents.at(-1).parts.at(-1).text, /ห้ามเรียกเครื่องมือเพิ่ม/)
+})
+
+test('when the AI has no answer at all, the customer is told the team will follow up', async () => {
+  model([])
+  await receive('ถามอะไรก็ได้')
+  assert.equal(sent.length, 1)
+  assert.match(sent[0].message.text, /ทีมงาน/)
+  assert.equal(conversation().needsHuman, true)
+  assert.equal(conversation().botPaused, true)
+})
+
+test('why the AI did not answer is kept for the inbox, and cleared by the next answer', async () => {
+  // a teammate replied by hand a moment ago
+  store.set(`messenger_conversations/${CID}/messages/h1`, { direction: 'outgoing', sentBy: 'u1', text: 'เดี๋ยวโทรหานะครับ', attachments: [], timestamp: new Ts(NOW - 5000) })
+  model([{ text: 'ต้องไม่ถูกส่ง' }])
+  await receive('มีบ้านไหม', { at: NOW - 1000 })
+  assert.equal(sent.length, 0)
+  assert.equal(conversation().aiStatus.result, 'skipped')
+  assert.equal(conversation().aiStatus.reason, 'human-active')
+
+  store.set('messenger_conversations/conv1', { ...conversation(), botResumedAt: new Ts(NOW) }) // the team lets the AI answer again
+  model([{ text: 'มีครับ' }])
+  await receive('ราคาเท่าไหร่')
+  assert.equal(conversation().aiStatus, undefined)
+})
+
+test('a failure is kept for the inbox too', async () => {
+  modelScript = [async () => { throw new Error('Vertex down') }]
+  await receive('สวัสดี')
+  assert.equal(sent.length, 0)
+  assert.deepEqual([conversation().aiStatus.result, conversation().aiStatus.reason], ['failed', 'gemini'])
 })

@@ -8,7 +8,7 @@ const MAX_REPLY_CHARS = 1900 // Messenger text limit is 2000
 const HUMAN_ACTIVE_MS = 12 * 60 * 60 * 1000
 const MAX_MESSAGE_AGE_MS = 10 * 60 * 1000
 const DEFAULT_MAX_REPLIES_PER_HOUR = 8
-const MAX_TOOL_ROUNDS = 4
+const MAX_TOOL_ROUNDS = 6
 const MAX_CARDS = 10 // a Messenger carousel holds at most 10 cards
 const DEFAULT_CARDS = 3 // how many houses are shown at first; up to MAX_CARDS once the customer asks for others
 const MAX_APPOINTMENT_DAYS_AHEAD = 90
@@ -1517,17 +1517,18 @@ function selectFreeChatModels(models, { pinned } = {}) {
 
 // generate(contents) must resolve to the model's content parts for one turn.
 // handlers: { toolName(args) -> plain object }.
+// A model that keeps calling tools (a credit question can use several) is never left without an
+// answer: after maxRounds it is asked once more to reply in words, with no more tools.
+const FINAL_ANSWER_CUE = '[ข้อความจากระบบ ไม่ใช่ลูกค้า: ใช้ข้อมูลที่ได้จากเครื่องมือแล้ว ตอนนี้ให้พิมพ์ตอบลูกค้าเป็นข้อความเลย ห้ามเรียกเครื่องมือเพิ่ม]'
+
 async function runConversation({ generate, contents, handlers, maxRounds = MAX_TOOL_ROUNDS }) {
   const history = [...contents]
   const calls = []
+  const textOf = parts => cleanReplyText((parts || []).map(part => part.text || '').join('').trim())
   for (let round = 0; round <= maxRounds; round += 1) {
     const parts = await generate(history)
     const functionCalls = (parts || []).filter(part => part.functionCall)
-    if (!functionCalls.length) {
-      const text = (parts || []).map(part => part.text || '').join('').trim()
-      return { text: cleanReplyText(text), calls }
-    }
-    if (round === maxRounds) break
+    if (!functionCalls.length) return { text: textOf(parts), calls }
     history.push({ role: 'model', parts })
     const responses = []
     for (const { functionCall } of functionCalls) {
@@ -1543,7 +1544,10 @@ async function runConversation({ generate, contents, handlers, maxRounds = MAX_T
     }
     history.push({ role: 'user', parts: responses })
   }
-  return { text: null, calls }
+  // Out of rounds: ask for the answer in words. Tool calls in this last turn are ignored.
+  history[history.length - 1] = { role: 'user', parts: [...history[history.length - 1].parts, { text: FINAL_ANSWER_CUE }] }
+  const last = await generate(history)
+  return { text: textOf((last || []).filter(part => !part.functionCall)), calls, outOfRounds: true }
 }
 
 module.exports = {

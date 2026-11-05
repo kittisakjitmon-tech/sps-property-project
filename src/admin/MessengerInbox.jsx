@@ -124,6 +124,17 @@ export default function MessengerInbox() {
   const millis = value => value?.toMillis?.() ?? (Number(value) || 0)
   const waitingForAnswer = Boolean(selectedConversation) && millis(selectedConversation.lastInboundAt) > millis(selectedConversation.lastOutboundAt)
   const outsideWindow = isOutsideMessagingWindow(selectedConversation)
+  // Why the AI did not answer the customer's latest message (saved by the server), while it waits.
+  const aiStatus = selectedConversation?.aiStatus
+  const aiStatusText = waitingForAnswer && aiStatus && millis(aiStatus.at) >= millis(selectedConversation.lastInboundAt)
+    ? ({
+      'no-text': 'ลูกค้าส่งมาแค่สติกเกอร์หรือรูป และยังไม่ได้เปิดให้ AI อ่านรูป',
+      stale: 'ข้อความเก่าเกิน 10 นาทีตอนที่ AI จะตอบ กด "ให้ AI ตอบที่ค้าง" ได้',
+      'human-active': 'ทีมงานเพิ่งตอบเองในแชทนี้ (ภายใน 12 ชั่วโมง) AI จึงไม่แทรก กด "ให้ AI ตอบที่ค้าง" ถ้าต้องการให้ AI ตอบ',
+      'rate-limited': 'AI ตอบแชทนี้ครบจำนวนต่อชั่วโมงแล้ว กด "ให้ AI ตอบที่ค้าง" ได้',
+    }[aiStatus.reason] || (aiStatus.result === 'failed' ? `AI ขัดข้องชั่วคราว (ขั้นตอน ${aiStatus.reason}) กด "ให้ AI ตอบที่ค้าง" เพื่อลองใหม่` : null))
+    : null
+
   // One AI button: answer the customer's waiting message, or, when nothing is waiting, write
   // first from the conversation so far (a follow-up). Why it cannot be used now, or null.
   const followedUpAlready = millis(selectedConversation?.lastFollowUpAt) > millis(selectedConversation?.lastInboundAt)
@@ -743,6 +754,12 @@ export default function MessengerInbox() {
                 )}
               </div>
 
+              {aiStatusText && (
+                <div className="flex gap-2 border-t border-amber-200 bg-amber-50 px-4 py-2 text-xs text-amber-800" role="status">
+                  <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
+                  <span><span className="font-medium">AI ไม่ได้ตอบข้อความล่าสุด:</span> {aiStatusText}</span>
+                </div>
+              )}
               {outsideWindow && (
                 <div className="flex gap-2 border-t border-amber-200 bg-amber-50 px-4 py-2 text-xs text-amber-800">
                   <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />

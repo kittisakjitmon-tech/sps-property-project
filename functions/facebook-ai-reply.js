@@ -209,6 +209,18 @@ async function shortenReply(settings, text, maxChars) {
   return hardTrim(text, maxChars)
 }
 
+// Why the AI did not answer the customer's latest message, shown in the inbox until it answers.
+// Only reasons the team can act on; "a newer message will be answered" and similar are left out.
+const VISIBLE_SKIPS = new Set(['no-text', 'stale', 'human-active', 'rate-limited'])
+
+async function noteAiStatus(conversationRef, { result, reason }) {
+  try {
+    await conversationRef.set({ aiStatus: { result, reason, at: admin.firestore.Timestamp.now() } }, { merge: true })
+  } catch (error) {
+    functions.logger.warn('Could not save the AI status', { reason: error.message })
+  }
+}
+
 // Used instead of an AI answer when a safety check fails; a human takes over.
 function safeFallbackText(particle) {
   const p = particle === 'ค่ะ' ? 'ค่ะ' : 'ครับ'
@@ -387,6 +399,7 @@ async function answerCustomer({ conversationId, message, messageRef, retry = fal
     })
     if (!decision.reply) {
       functions.logger.info('AI reply skipped', { ...logContext, reason: decision.reason })
+      if (VISIBLE_SKIPS.has(decision.reason)) await noteAiStatus(conversationRef, { result: 'skipped', reason: decision.reason })
       return null
     }
 
@@ -789,15 +802,19 @@ async function answerCustomer({ conversationId, message, messageRef, retry = fal
       staffImages,
       calendar: calendarCfg.enabled ? { scheduleText: calendarRules.describeSchedule(calendarCfg) } : null,
     })
-    const { text: rawText, calls: toolCalls } = await runConversation({
+    const conversationResult = await runConversation({
       generate: createGenerate({ settings, systemInstruction, info: servedBy }),
       contents: followingUp ? withFollowUpCue(historyToContents(recent)) : withImages(historyToContents(recent), imageParts),
       handlers,
     })
 
+    const toolCalls = conversationResult.calls
+    let rawText = conversationResult.text
     if (!rawText) {
-      functions.logger.warn('AI produced no reply text', logContext)
-      return null
+      // Never leave the customer without an answer: say the team will follow up, and hand over.
+      functions.logger.warn('AI produced no reply text', { ...logContext, outOfRounds: conversationResult.outOfRounds === true })
+      rawText = safeFallbackText(settings.particle)
+      handoffReason = handoffReason || 'AI ตอบข้อความนี้ไม่ได้ ให้ทีมงานช่วยตอบ'
     }
 
     // A loan estimate the bot could not settle goes to a teammate, but only once we
@@ -963,6 +980,7 @@ async function answerCustomer({ conversationId, message, messageRef, retry = fal
     const update = {}
     if (shown.size) update.shownCodes = FieldValue.arrayUnion(...shown)
     if (attachedSent) update.attachedShownAt = FieldValue.serverTimestamp()
+    if (conversation.aiStatus) update.aiStatus = FieldValue.delete() // answered: no "AI did not answer" note
     if (followingUp) update.lastFollowUpAt = admin.firestore.Timestamp.now()
     if (othersRequestedNow()) update.othersRequestedAt = FieldValue.serverTimestamp()
     if (focusCode && focusCode !== conversation.currentPropertyCode) {
@@ -1005,6 +1023,7 @@ async function answerCustomer({ conversationId, message, messageRef, retry = fal
       appointment: appointmentRequested,
     })
   } catch (error) {
+    if (!replied) await noteAiStatus(conversationRef, { result: 'failed', reason: stage })
     // Don't use a field called "message": the Firebase logger overwrites it.
     functions.logger.error('AI reply failed', {
       ...logContext,
