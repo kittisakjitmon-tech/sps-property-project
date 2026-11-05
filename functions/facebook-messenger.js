@@ -2,7 +2,8 @@ const crypto = require('node:crypto')
 const axios = require('axios')
 const admin = require('firebase-admin')
 const functions = require('firebase-functions')
-const { sanitizeStaffListing, MAX_STAFF_LISTINGS } = require('./facebook-ai-core.cjs')
+const { sanitizeStaffListing, cleanPost, MAX_STAFF_LISTINGS } = require('./facebook-ai-core.cjs')
+const { extractListingFields } = require('./facebook-ai-extract')
 
 const CONVERSATIONS = 'messenger_conversations'
 const PAGES = 'messenger_pages'
@@ -686,21 +687,34 @@ const adminActions = {
     return { success: true, length: text.length, answering }
   },
 
-  // Houses the team types in for one chat (for example from a post with several houses that
-  // are not in the property database). Pictures are managed by the image actions below.
-  async saveConversationListing({ conversationId: id, listing }, adminUser) {
+  // Houses the team adds for one chat (for example from a post with several houses that are not
+  // in the property database). The team pastes the post; with `extract` the AI reads the type,
+  // name, area, rooms and price from it (shown to the team to check). Without it the fields
+  // are saved as sent, e.g. after the team corrected them. Pictures: the image actions below.
+  async saveConversationListing({ conversationId: id, listing, extract }, adminUser) {
     const { conversationRef, data } = await loadConversation(id)
-    const checked = sanitizeStaffListing(listing && typeof listing === 'object' ? listing : {})
-    if (!checked.ok) throw httpError(400, checked.error)
+    let input = listing && typeof listing === 'object' ? listing : {}
     const existing = Array.isArray(data.staffListings) ? data.staffListings : []
-    const wantedId = typeof listing?.id === 'string' ? listing.id : ''
+    const wantedId = typeof input.id === 'string' ? input.id : ''
     const index = wantedId ? existing.findIndex(item => item.id === wantedId) : -1
     if (wantedId && index === -1) throw httpError(404, 'ไม่พบบ้านรายการนี้ อาจถูกลบไปแล้ว')
     if (index === -1 && existing.length >= MAX_STAFF_LISTINGS) {
       throw httpError(409, `เพิ่มบ้านได้ไม่เกิน ${MAX_STAFF_LISTINGS} รายการต่อแชท กรุณาลบรายการเก่าก่อน`)
     }
+    let readBy = input.fieldsEdited === true ? 'team' : (existing[index]?.readBy || 'team')
+    if (extract === true) {
+      const details = cleanPost(input.details)
+      if (!details) throw httpError(400, 'กรุณาวางโพสต์หรือรายละเอียดบ้าน')
+      const settings = (await admin.firestore().doc('messenger_settings/ai').get()).data() || {}
+      const result = await extractListingFields(details, settings)
+      input = { ...input, ...result.fields, details, priceVisible: input.priceVisible !== false }
+      readBy = result.by
+    }
+    const checked = sanitizeStaffListing(input)
+    if (!checked.ok) throw httpError(400, checked.error)
     const saved = {
       ...checked.value,
+      readBy,
       id: index === -1 ? crypto.randomUUID().replace(/-/g, '').slice(0, 10) : existing[index].id,
       images: index === -1 ? [] : (existing[index].images || []),
       updatedAt: Date.now(),
@@ -712,7 +726,7 @@ const adminActions = {
       needsProperty: admin.firestore.FieldValue.delete(),
     }, { merge: true })
     const answering = await retryIfWaiting(id, data, adminUser, 'listing-saved')
-    return { success: true, listing: saved, answering }
+    return { success: true, listing: saved, answering, readBy }
   },
 
   async removeConversationListing({ conversationId: id, listingId }) {
@@ -1036,8 +1050,9 @@ const adminActions = {
   },
 }
 
+// Reading a pasted house post can use the chatbot's AI (OpenRouter tries up to three models).
 const facebookMessengerAdmin = functions
-  .runWith({ timeoutSeconds: 60, memory: '512MB', secrets: FACEBOOK_SECRETS })
+  .runWith({ timeoutSeconds: 120, memory: '512MB', secrets: [...FACEBOOK_SECRETS, 'OPENROUTER_API_KEY'] })
   .https.onRequest(async (req, res) => {
     setAdminCors(req, res)
     if (req.method === 'OPTIONS') return res.status(204).send('')

@@ -1652,3 +1652,19 @@ test('after a reset the attached houses are shown again and the other houses are
   await receive('ราคาเท่าไหร่')
   assert.equal(result.blocked, true)
 })
+
+test('a pasted post with the price marked "do not tell" never lets the real price out', async () => {
+  store.set('messenger_conversations/conv1', {
+    pageId: 'P1', participantId: 'U1', pageName: 'เพจ', attachedShownAt: new Ts(NOW - 1000),
+    staffListings: [{ id: 'h1', type: 'บ้านแฝด', title: 'แยกมาบโป่ง', price: 2190000, priceVisible: false, details: TWIN_NOTE }],
+  })
+  const prompt = await capturePrompt(async () => {
+    model([{ text: 'ราคา 2.19 ล้านครับ' }])
+    await receive('ราคาเท่าไหร่')
+  })
+  assert.ok(!prompt.includes('2.19 ล้าน'))
+  assert.match(prompt, /2\.1xxx ล้านบาท/)
+  assert.ok(prompt.includes('maps.app.goo.gl'))
+  assert.ok(!sent[0].message.text.includes('2.19'), 'the guard replaced the answer')
+  assert.ok(conversation().needsHuman)
+})

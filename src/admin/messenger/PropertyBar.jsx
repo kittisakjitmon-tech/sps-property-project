@@ -162,7 +162,7 @@ export default function PropertyBar({
             <label htmlFor="conversation-note" className="flex flex-wrap items-center gap-2 font-medium">
               <NotebookPen className="h-4 w-4 shrink-0" aria-hidden="true" />
               รายละเอียดอื่นๆ ให้ AI ใช้ตอบในแชทนี้
-              <span className="font-normal text-slate-500">(พิมพ์เอง เช่น โปรโมชันของโพสต์ เงื่อนไขการจอง)</span>
+              <span className="font-normal text-slate-500">(พิมพ์เอง เช่น โปรโมชันของโพสต์ เงื่อนไขการจอง · ข้อมูลบ้านให้วางโพสต์ที่ "กรอกเอง")</span>
             </label>
             <textarea
               id="conversation-note"

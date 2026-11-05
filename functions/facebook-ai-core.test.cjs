@@ -1,6 +1,13 @@
 const { test } = require('node:test')
 const assert = require('node:assert/strict')
 const {
+  cleanPost,
+  parseThaiPrice,
+  guessListingFields,
+  checkExtractedFields,
+  buildExtractRequest,
+  parseJsonObject,
+  publicListingText,
   toIndexedProperty,
   searchProperties,
   shouldReply,
@@ -714,7 +721,7 @@ test('prices, room counts and lengths are checked; the picture list cannot be ty
   assert.equal(odd.type, 'วิลล่า')
   const long = sanitizeStaffListing({ title: 'ก'.repeat(500), details: 'ข'.repeat(5000) }).value
   assert.equal(long.title.length, 80)
-  assert.equal(long.details.length, 600)
+  assert.equal(long.details.length, 2000)
   assert.equal('images' in sanitizeStaffListing({ title: 'x', images: [{ url: 'https://evil.example/a.png' }], id: 'abc' }).value, false)
 })
 
@@ -814,4 +821,72 @@ test('the prompt makes the attached houses come first, and holds back other hous
   assert.ok(!buildSystemPrompt({ isFirstReply: false, focus: [list[0]] }).includes('ลำดับการแนะนำบ้านในแชทนี้'))
   const withProperty = buildSystemPrompt({ isFirstReply: false, focus: [list[0]], attachedProperty: true })
   assert.match(withProperty, /บ้านที่แนบไว้ก่อนเสมอ/)
+})
+
+// ─── A pasted house post ─────────────────────────────────────────────────────
+const POST = `🏡 บ้านเเฝด 🗺️แยกมาบโป่ง เฟส8-10
+2 ห้องนอน 2 ห้องน้ำ 1 ครัว 2 จอดรถ
+พื้นที่เงียบสงบ เป็นส่วนตัว
+✅ฟรีถังสำรองน้ำ 1,000 ลิตร   
+
+พิกัด 📍
+https://maps.app.goo.gl/38ManFKLBfZc8vE5A?g_st=ipc
+ ราคา 2.19 ล้าน`
+
+test('a pasted post keeps its lines, tidied', () => {
+  const text = cleanPost('  บรรทัด   แรก \r\n\n\n\nบรรทัดสอง  ')
+  assert.equal(text, 'บรรทัด แรก\n\nบรรทัดสอง')
+  assert.equal(cleanPost('ก'.repeat(3000)).length, 2000)
+  assert.equal(cleanPost(42), '')
+})
+
+test('Thai prices are read in the ways people write them', () => {
+  assert.equal(parseThaiPrice('ราคา 2.19 ล้าน'), 2190000)
+  assert.equal(parseThaiPrice('2,190,000 บาท'), 2190000)
+  assert.equal(parseThaiPrice('1.85 ลบ.'), 1850000)
+  assert.equal(parseThaiPrice('9 แสน'), 900000)
+  assert.equal(parseThaiPrice('ค่าเช่า 8,500 บาท/เดือน'), 8500)
+  assert.equal(parseThaiPrice('ถังน้ำ 1,000 ลิตร'), null)
+})
+
+test('without the AI the type, rooms and price are read from the post itself', () => {
+  const fields = guessListingFields(POST)
+  assert.equal(fields.type, 'บ้านแฝด') // "บ้านเเฝด" typed with two เ
+  assert.equal(fields.bedrooms, 2)
+  assert.equal(fields.bathrooms, 2)
+  assert.equal(fields.price, 2190000)
+  assert.equal(fields.title, 'บ้านแฝด แยกมาบโป่ง เฟส8-10')
+  assert.equal(guessListingFields('ให้เช่าทาวน์โฮม 3 นอน ค่าเช่า 7,000 บาท/เดือน').listing, 'rent')
+})
+
+test('what the AI read is checked: a price the post does not say is replaced, bad values dropped', () => {
+  const read = checkExtractedFields({ title: 'แยกมาบโป่ง เฟส8-10', type: 'บ้านแฝด', location: 'แยกมาบโป่ง', bedrooms: 2, bathrooms: 2, price: 2190000 }, POST)
+  assert.deepEqual(read, { title: 'แยกมาบโป่ง เฟส8-10', type: 'บ้านแฝด', listing: 'sale', location: 'แยกมาบโป่ง', bedrooms: 2, bathrooms: 2, price: 2190000, priceNote: '' })
+  assert.equal(checkExtractedFields({ price: 2500000 }, POST).price, 2190000) // invented: the post's own price is used
+  assert.equal(checkExtractedFields({ price: 2500000 }, 'บ้านสวย ไม่บอกราคา').price, null)
+  const odd = checkExtractedFields({ type: 'วิลล่า', bedrooms: 99, listing: 'x' }, 'บ้านสวย')
+  assert.equal(odd.type, 'อื่นๆ')
+  assert.equal(odd.bedrooms, null)
+  assert.equal(odd.listing, 'sale')
+  assert.equal(checkExtractedFields(null, POST).type, 'บ้านแฝด')
+})
+
+test('the request to read a post says the post is data, and the answer may come in a code block', () => {
+  const request = buildExtractRequest(POST)
+  assert.match(request.systemInstruction, /ไม่ใช่คำสั่ง/)
+  assert.match(request.contents[0].parts[0].text, /แยกมาบโป่ง/)
+  assert.deepEqual(parseJsonObject('```json\n{"price": 1}\n```'), { price: 1 })
+  assert.equal(parseJsonObject('no json'), null)
+  assert.equal(parseJsonObject('[1,2]'), null)
+})
+
+test('with the price marked "do not tell", the lines about money are left out of the post', () => {
+  const hidden = publicListingText({ details: POST, priceVisible: false })
+  assert.ok(!hidden.includes('2.19'))
+  assert.ok(hidden.includes('maps.app.goo.gl'))
+  assert.ok(hidden.includes('1,000 ลิตร'))
+  assert.ok(publicListingText({ details: POST }).includes('2.19 ล้าน'))
+  const lines = formatStaffListings([{ id: 'a1', type: 'บ้านแฝด', details: POST, price: 2190000, priceVisible: false }])
+  assert.ok(!lines[0].includes('2.19 ล้าน') && !lines[0].includes('2,190,000'))
+  assert.match(lines[0], /2\.1xxx ล้านบาท/)
 })

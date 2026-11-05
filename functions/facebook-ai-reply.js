@@ -30,6 +30,7 @@ const {
   hardTrim,
   buildShortenRequest,
   cleanReplyText,
+  publicListingText,
   shouldReply,
   replyDelayMs,
   hasNewerCustomerMessage,
@@ -793,7 +794,8 @@ async function answerCustomer({ conversationId, message, messageRef, retry = fal
     stage = 'guard'
     const allowedCodes = new Set([...seen.keys(), ...shownCodes, ...cardCodes])
     // Links the team wrote themselves (e.g. a Google Maps pin in the house details) may be sent.
-    const teamText = [staffNote, ...staffListings.map(item => item.details || '')].join(' ')
+    // Only what the AI was shown: a post whose price is "do not tell" has its money lines removed.
+    const teamText = [staffNote, ...staffListings.map(publicListingText)].join(' ')
     const teamUrls = (teamText.match(/https?:\/\/[!-(*-~]+/g) || []).map(url => url.replace(/[.,;!?]+$/, ''))
     const allowedUrls = [...[...allowedCodes].map(code => catalogByCode.get(code)?.url).filter(Boolean), ...teamUrls]
     let text = sanitizeUrls(replyText, allowedUrls)

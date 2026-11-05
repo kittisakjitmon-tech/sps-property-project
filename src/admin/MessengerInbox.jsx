@@ -287,13 +287,15 @@ export default function MessengerInbox() {
     }
   }
 
-  async function saveListing(listing) {
+  // extract: let the AI read the type, name, area, rooms and price from the pasted post.
+  async function saveListing(listing, { extract = false } = {}) {
     if (!selectedId) return null
     setPropertyBusy(true)
     setActionError('')
     try {
-      const result = await callApi({ action: 'saveConversationListing', conversationId: selectedId, listing })
+      const result = await callApi({ action: 'saveConversationListing', conversationId: selectedId, listing, extract })
       if (result.answering) showNotice('บันทึกแล้ว AI กำลังตอบข้อความที่ค้างอยู่ของลูกค้า')
+      else if (extract && result.readBy === 'text') showNotice('บันทึกแล้ว แต่ AI อ่านโพสต์ไม่ได้ตอนนี้ ระบบอ่านจากข้อความแทน กรุณาตรวจข้อมูลที่อ่านได้')
       return result.listing || null
     } catch (listingError) {
       setActionError(listingError.message || 'บันทึกบ้านไม่สำเร็จ')

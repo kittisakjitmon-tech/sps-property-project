@@ -369,3 +369,57 @@ test('resetting a chat also makes the AI forget what it showed first and that ot
   assert.equal(conversation().othersRequestedAt, undefined)
   assert.equal(conversation().staffListings.length, 1)
 })
+
+// ─── A pasted house post, read by the AI ─────────────────────────────────────
+const extract = require('./facebook-ai-extract')
+const POST = `🏡 บ้านเเฝด 🗺️แยกมาบโป่ง เฟส8-10
+2 ห้องนอน 2 ห้องน้ำ 1 ครัว 2 จอดรถ
+✅ฟรีถังสำรองน้ำ 1,000 ลิตร
+พิกัด 📍 https://maps.app.goo.gl/38ManFKLBfZc8vE5A?g_st=ipc
+ราคา 2.19 ล้าน`
+
+test('a pasted post is read by the AI into the fields a card needs, and the post is kept', async () => {
+  let asked
+  extract._test.setGenerate(async (settings, request) => {
+    asked = request.contents[0].parts[0].text
+    return '{"title":"แยกมาบโป่ง เฟส8-10","type":"บ้านแฝด","listing":"sale","location":"แยกมาบโป่ง ชลบุรี","bedrooms":2,"bathrooms":2,"price":2190000,"priceNote":""}'
+  })
+  try {
+    const result = await adminActions.saveConversationListing({ conversationId: 'c1', listing: { details: POST, priceVisible: false }, extract: true }, ADMIN)
+    assert.match(asked, /แยกมาบโป่ง/)
+    assert.equal(result.readBy, 'ai')
+    const [saved] = conversation().staffListings
+    assert.equal(saved.type, 'บ้านแฝด')
+    assert.equal(saved.title, 'แยกมาบโป่ง เฟส8-10')
+    assert.equal(saved.location, 'แยกมาบโป่ง ชลบุรี')
+    assert.equal(saved.bedrooms, 2)
+    assert.equal(saved.price, 2190000)
+    assert.equal(saved.priceVisible, false)
+    assert.equal(saved.readBy, 'ai')
+    assert.match(saved.details, /\n/) // the post keeps its lines
+    assert.equal(conversation().needsProperty, undefined)
+
+    // the team corrects what was read: saved as sent, marked as checked by the team
+    await adminActions.saveConversationListing({ conversationId: 'c1', listing: { ...saved, title: 'มาบโป่ง เฟส 9', fieldsEdited: true } }, ADMIN)
+    assert.equal(conversation().staffListings[0].title, 'มาบโป่ง เฟส 9')
+    assert.equal(conversation().staffListings[0].readBy, 'team')
+  } finally {
+    extract._test.setGenerate(null)
+  }
+})
+
+test('when the AI cannot read the post, the fields are read from the text and it still saves', async () => {
+  extract._test.setGenerate(async () => { throw new Error('model unavailable') })
+  try {
+    const result = await adminActions.saveConversationListing({ conversationId: 'c1', listing: { details: POST }, extract: true }, ADMIN)
+    assert.equal(result.readBy, 'text')
+    const [saved] = conversation().staffListings
+    assert.equal(saved.type, 'บ้านแฝด')
+    assert.equal(saved.bedrooms, 2)
+    assert.equal(saved.price, 2190000)
+    assert.equal(saved.priceVisible, true)
+  } finally {
+    extract._test.setGenerate(null)
+  }
+  await reject(adminActions.saveConversationListing({ conversationId: 'c1', listing: { details: '   ' }, extract: true }, ADMIN), 400)
+})

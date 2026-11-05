@@ -266,3 +266,14 @@ the message as `aiFeedback` for later review.
   Cloud Functions service account to call it (`roles/aiplatform.user`).
 - Firestore rules deployed (`messenger_settings`, `messenger_faq`).
 - `LINE_TOKEN` and LINE admin IDs configured if appointment alerts should reach LINE.
+
+## Houses the team pastes in ("กรอกเอง")
+
+In the inbox the team adds a house that is not in the database by pasting its post as it is
+(one house per entry, up to 2,000 characters, with up to 6 pictures). On save, the chatbot's
+AI (`provider` / `model` above) reads the type, name, area, rooms and price from the post for
+the house card; the inbox shows what was read ("AI อ่านได้ว่า") and the team can correct it.
+A price is only kept when the post itself says it. If the AI cannot be reached, the fields are
+read from the text and the inbox says so. The customer-facing AI answers from the whole post.
+With "ให้ AI บอกราคาในโพสต์กับลูกค้าได้" unticked, the lines about money are removed before the
+AI sees the post, and it is given only the masked price (e.g. 2.1xxx ล้านบาท).
