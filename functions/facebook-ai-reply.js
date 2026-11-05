@@ -27,6 +27,9 @@ const {
   buildShortenRequest,
   cleanReplyText,
   shouldReply,
+  replyDelayMs,
+  hasNewerCustomerMessage,
+  unansweredCustomerMessages,
   historyToContents,
   imageSettings,
   pickImageAttachments,
@@ -55,6 +58,7 @@ const {
 //     extraInstructions: '...',  // tone / brand notes added to the prompt
 //     maxRepliesPerHour: 8,
 //     maxReplyChars: 220,        // longer replies are shortened before sending (80-1000)
+//     replyDelaySeconds: 6,      // wait for more messages typed in a row before answering (0-30, 0 = off)
 //   }
 // Company facts and FAQs live in the messenger_faq collection: { question, answer, active }.
 const SETTINGS_DOC = 'messenger_settings/ai'
@@ -102,6 +106,9 @@ async function loadFaq() {
   return list
 }
 
+// Tests replace this so they do not really wait.
+let sleep = ms => new Promise(resolve => setTimeout(resolve, ms))
+
 function bangkokToday() {
   const now = new Date()
   return {
@@ -130,9 +137,11 @@ async function loadRecentMessages(conversationRef) {
   return snapshot.docs.map(doc => {
     const data = doc.data()
     return {
+      id: doc.id,
       direction: data.direction,
       text: data.text || '',
       attachmentCount: Array.isArray(data.attachments) ? data.attachments.length : 0,
+      attachments: Array.isArray(data.attachments) ? data.attachments : [],
       sentBy: data.sentBy || null,
       kind: data.kind || null,
       timestamp: data.timestamp?.toMillis?.() || 0,
@@ -306,6 +315,13 @@ async function answerCustomer({ conversationId, message, messageRef, retry = fal
     stage = 'claim'
     if (!retry && !(await claimMessage(messageRef))) return null
 
+    // Give the customer a moment to finish typing (see replyDelayMs).
+    const delayMs = retry ? 0 : replyDelayMs(settings)
+    if (delayMs > 0) {
+      stage = 'wait'
+      await sleep(delayMs)
+    }
+
     stage = 'history'
     const conversation = (await conversationRef.get()).data()
     if (!conversation?.pageId || !conversation?.participantId) return null
@@ -317,11 +333,20 @@ async function answerCustomer({ conversationId, message, messageRef, retry = fal
       calendarClientInstance = calendarClientInstance || calendarClientFactory(calendarCfg, process.env.GCLOUD_PROJECT || admin.app().options.projectId)
       return calendarClientInstance
     }
-    const incomingImages = imageCfg.enabled ? pickImageAttachments(message.attachments, imageCfg.maxImages) : []
 
     // "Start testing again" hides everything before the reset: the AI does not see it.
     const resetAtMs = conversation.contextResetAt?.toMillis?.() || 0
     const recent = (await loadRecentMessages(conversationRef)).filter(item => item.timestamp >= resetAtMs)
+    const messageTimestamp = message.timestamp?.toMillis?.() || 0
+    if (!retry && hasNewerCustomerMessage(recent, { id: messageRef?.id, timestamp: messageTimestamp })) {
+      // The run for the newer message answers all of them together.
+      functions.logger.info('AI reply skipped', { ...logContext, reason: 'newer-message' })
+      return null
+    }
+    // Pictures from every message the customer sent since the last reply, not only this one.
+    const waiting = unansweredCustomerMessages(recent)
+    const burstAttachments = (waiting.length ? waiting : [message]).flatMap(item => item.attachments || [])
+    const incomingImages = imageCfg.enabled ? pickImageAttachments(burstAttachments, imageCfg.maxImages) : []
     if (retry) {
       const newest = [...recent].sort((first, second) => second.timestamp - first.timestamp)[0]
       if (!newest || newest.direction !== 'incoming') {
@@ -931,6 +956,7 @@ module.exports = {
       faqCache = { at: 0, list: [] }
     },
     setImageFetcher(fn) { imageFetcher = fn },
+    setSleep(fn) { sleep = fn },
     setCalendarClientFactory(fn) { calendarClientFactory = fn },
     holdSlot,
     releaseSlot,

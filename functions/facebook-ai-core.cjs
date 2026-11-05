@@ -616,6 +616,43 @@ function shouldReply({ settings, conversation, text, timestamp, recentMessages, 
   return { reply: true, reason: 'ok' }
 }
 
+// ─── Several messages typed in a row ─────────────────────────────────────────
+
+// Customers often type a question in several short messages ("สวัสดี", "มีบ้านแถวพานทองไหม",
+// "งบ 2 ล้าน"). Each one starts its own reply, so each run first waits a little, and only the
+// run for the newest message answers; it sees all of them in the history.
+const DEFAULT_REPLY_DELAY_SECONDS = 6
+const MAX_REPLY_DELAY_SECONDS = 30
+
+function replyDelayMs(settings) {
+  const value = settings?.replyDelaySeconds
+  const n = value === undefined || value === null || value === '' ? NaN : Number(value)
+  const seconds = Number.isFinite(n) && n >= 0 && n <= MAX_REPLY_DELAY_SECONDS ? n : DEFAULT_REPLY_DELAY_SECONDS
+  return Math.round(seconds * 1000)
+}
+
+const hasPicture = attachments => (Array.isArray(attachments) ? attachments : [])
+  .some(item => item?.type === 'image' && !item.stickerId)
+
+// True when the customer sent another message after this one that will get its own answer.
+// A sticker or an empty message does not count: nobody would answer it, so this run must.
+// messages: [{ id, direction, text, attachments, timestamp }]
+function hasNewerCustomerMessage(messages, { id, timestamp }) {
+  return (messages || []).some(m => m.direction === 'incoming' &&
+    m.id !== id &&
+    m.timestamp > timestamp &&
+    ((typeof m.text === 'string' && m.text.trim()) || hasPicture(m.attachments)))
+}
+
+// The customer's messages since the last reply (oldest first), so pictures sent in an earlier
+// message of the same burst are seen too.
+function unansweredCustomerMessages(messages) {
+  const sorted = [...(messages || [])].sort((a, b) => a.timestamp - b.timestamp)
+  let start = 0
+  sorted.forEach((m, index) => { if (m.direction === 'outgoing') start = index + 1 })
+  return sorted.slice(start).filter(m => m.direction === 'incoming')
+}
+
 // ─── Pictures the customer sends ─────────────────────────────────────────────
 
 const IMAGE_DEFAULTS = { maxImages: 2, maxBytes: 4 * 1024 * 1024 }
@@ -1298,6 +1335,10 @@ module.exports = {
   fromOpenAiMessage,
   selectFreeChatModels,
   shouldReply,
+  replyDelayMs,
+  DEFAULT_REPLY_DELAY_SECONDS,
+  hasNewerCustomerMessage,
+  unansweredCustomerMessages,
   historyToContents,
   cleanReplyText,
   buildSystemPrompt,

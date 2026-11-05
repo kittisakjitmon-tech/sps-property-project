@@ -144,8 +144,11 @@ const property = (extra = {}) => ({
   description: 'บ้านใหม่ ใกล้นิคม', coverImageUrl: 'https://img.example/a.jpg', ...extra,
 })
 
+let slept
 beforeEach(() => {
   _test.resetCaches()
+  slept = []
+  _test.setSleep(async ms => { slept.push(ms) })
   store = new Map()
   sent = []
   stored = []
@@ -1320,4 +1323,65 @@ test('a retry for a conversation that does not exist or with nothing waiting doe
   model([{ text: 'ต้องไม่ถูกส่ง' }])
   await requestRetry('rz') // the conversation has no messages at all
   assert.equal(sent.length, 0)
+})
+
+// ─── Several messages typed in a row ─────────────────────────────────────────
+const addIncoming = (id, text, at, attachments = []) =>
+  store.set(`messenger_conversations/${CID}/messages/${id}`, { direction: 'incoming', text, attachments, timestamp: new Ts(at) })
+const runFor = id => facebookAiReply.run(new DocRef(`messenger_conversations/${CID}/messages/${id}`).snap(), { params: { conversationId: CID, messageDocId: id } })
+
+test('messages typed in a row get one answer, from the run for the newest one', async () => {
+  addIncoming('b1', 'สวัสดีครับ', NOW - 3000)
+  addIncoming('b2', 'มีบ้านแถวพานทองไหม', NOW - 2000)
+  addIncoming('b3', 'งบ 2 ล้าน', NOW - 1000)
+  spyModel('มีครับ งบ 2 ล้านมีทาวน์โฮมครับ')
+  await runFor('b1')
+  await runFor('b2')
+  assert.equal(sent.length, 0, 'older messages leave the answer to the newest one')
+  await runFor('b3')
+  assert.equal(sent.length, 1)
+  const asked = seenContents[seenContents.length - 1].parts[0].text
+  assert.match(asked, /สวัสดีครับ[\s\S]*พานทอง[\s\S]*งบ 2 ล้าน/)
+  assert.deepEqual(slept, [6000, 6000, 6000])
+})
+
+test('a sticker after the question does not leave the question unanswered', async () => {
+  addIncoming('s1', 'ราคาเท่าไหร่ครับ', NOW - 2000)
+  addIncoming('s2', '', NOW - 1000, [{ type: 'image', url: 'https://scontent.fbcdn.net/s.png', stickerId: 369239263222822 }])
+  model([{ text: 'ประมาณ 2.1xxx ล้านบาทครับ' }])
+  await runFor('s1')
+  assert.equal(sent.length, 1)
+})
+
+test('the wait can be changed or turned off, and a bad value uses the default', async () => {
+  store.set('messenger_settings/ai', { enabled: true, replyDelaySeconds: 0 })
+  model([{ text: 'ได้ครับ' }])
+  await receive('สวัสดี')
+  assert.deepEqual(slept, [])
+  store.set('messenger_settings/ai', { enabled: true, replyDelaySeconds: 99 })
+  model([{ text: 'ได้ครับ' }])
+  await receive('มีบ้านไหม', { at: NOW + 1 })
+  assert.deepEqual(slept, [6000])
+})
+
+test('a team retry does not wait', async () => {
+  waitingMessage('ราคาเท่าไหร่', NOW - 60000)
+  model([{ text: 'ประมาณ 2.1xxx ล้านบาทครับ' }])
+  await requestRetry('rw')
+  assert.equal(sent.length, 1)
+  assert.deepEqual(slept, [])
+})
+
+test('a picture sent just before the question is seen with it', async () => {
+  store.set('messenger_settings/ai', { enabled: true, imagesEnabled: true })
+  const fetched = []
+  _test.setImageFetcher(async url => { fetched.push(url); return { mimeType: 'image/png', buffer: PNG } })
+  addIncoming('p1', '', NOW - 2000, [{ type: 'image', url: STORAGE_URL }])
+  addIncoming('p2', 'หลังนี้ยังว่างไหม', NOW - 1000)
+  spyModel('หลังนี้ใช่ SPS-TH-1 ไหมครับ')
+  await runFor('p1')
+  assert.equal(sent.length, 0)
+  await runFor('p2')
+  assert.deepEqual(fetched, [STORAGE_URL])
+  assert.ok(seenContents[seenContents.length - 1].parts.some(part => part.inlineData))
 })
