@@ -213,6 +213,26 @@ because the team asked for it. It still respects the global off switch and a pau
 answers a chat whose last message is already an answer, handles each request once, and a short lock
 (`aiRetryLockUntil`, 90 s) stops two close requests from both answering.
 
+## The attached house first, other houses only when asked
+
+A house is **attached** to a chat when the team set a database property for it, typed a house in, or
+the customer named a property (link or listing code). In such a chat:
+
+1. The attached houses are shown first, as a carousel of cards after the AI's text. The model picks
+   the ones the customer's message refers to (`show_attached_houses` with `listingIds` / `codes`); if
+   it does not, all attached houses are shown on the first answer of the chat (`attachedShownAt`, once).
+   A typed-in house gets a card with its first picture, type, rooms, area and price (masked when the
+   team marked the price "do not tell"), without a link. A database property gets its usual card.
+2. Other houses from the database are not searched or shown until the customer asks for them
+   ("มีบ้านอื่นไหม", "ขอดูหลังอื่น", "โซนอื่น", "ดูเพิ่ม", ... recognised in code, or the model sets
+   `customerAskedForOtherHouses`). The search and `show_property_cards` are refused until then
+   (`blocked`). Once asked, it stays open for the chat (`othersRequestedAt`).
+3. Other houses are shown up to **10** (a Messenger carousel holds 10); normal browsing without an
+   attached house still shows 3 at first. The attached houses are left out of the "other" results.
+
+A property the AI only remembers from an earlier answer is not "attached". **เริ่มทดสอบใหม่** clears
+`attachedShownAt` and `othersRequestedAt`.
+
 ## Prices
 
 - Price shown on the website (`showPrice !== false`): the bot may say it.
