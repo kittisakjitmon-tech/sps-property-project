@@ -85,10 +85,11 @@ const firestore = () => ({
     const updates = []
     const transaction = {
       get: async ref => ref.snap(),
-      update: (ref, data) => updates.push([ref, data]),
+      update: (ref, data) => updates.push([ref, data, 'update']),
+      set: (ref, data) => updates.push([ref, data, 'set']),
     }
     const result = await run(transaction)
-    for (const [ref, data] of updates) await ref.update(data)
+    for (const [ref, data, kind] of updates) await (kind === 'set' ? ref.set(data) : ref.update(data))
     return result
   },
 })
@@ -670,4 +671,262 @@ test('when the AI moves to another property it drops the saved title of the old 
   assert.equal(conversation().currentPropertyCode, 'SPS-CD-9')
   assert.equal(conversation().currentPropertyTitle, undefined)
   assert.equal(conversation().currentPropertySetBy, undefined)
+})
+
+// ─── Google Calendar bookings ────────────────────────────────────────────────
+const bangkokDate = daysAhead => {
+  const date = new Date(`${new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Bangkok' }).format(new Date())}T00:00:00Z`)
+  date.setUTCDate(date.getUTCDate() + daysAhead)
+  return date.toISOString().slice(0, 10)
+}
+// The next weekday (Mon-Sat) at least 3 days away, so notice time never matters.
+const nextOpenDay = () => {
+  for (let ahead = 3; ahead < 12; ahead += 1) {
+    const date = bangkokDate(ahead)
+    if (new Date(`${date}T00:00:00Z`).getUTCDay() !== 0) return date
+  }
+}
+const nextSunday = () => {
+  for (let ahead = 3; ahead < 12; ahead += 1) {
+    const date = bangkokDate(ahead)
+    if (new Date(`${date}T00:00:00Z`).getUTCDay() === 0) return date
+  }
+}
+
+function fakeCalendar({ busy = [], failFreeBusy = false, failInsert = false } = {}) {
+  const calls = { freeBusy: 0, inserted: [], deleted: [] }
+  const client = {
+    freeBusy: async () => {
+      calls.freeBusy += 1
+      if (failFreeBusy) throw new Error('Google Calendar: boom')
+      return [...busy, ...calls.inserted.map(event => ({ start: event.start.dateTime, end: event.end.dateTime }))]
+    },
+    insertEvent: async (calendarId, event) => {
+      if (failInsert) throw new Error('Google Calendar: insert failed')
+      calls.inserted.push({ calendarId, ...event })
+      return { id: event.id, htmlLink: `https://calendar.example/${event.id}`, duplicate: false }
+    },
+    deleteEvent: async (calendarId, id) => { calls.deleted.push(id) },
+  }
+  _test.setCalendarClientFactory(() => client)
+  return calls
+}
+const CAL = { enabled: true, calendarEnabled: true, calendarId: 'team@group.calendar.google.com' }
+const appointments = () => [...store.entries()].filter(([path]) => path.startsWith('appointments/')).map(([, data]) => data)
+const busyOn = (date, from, to) => ({ start: `${date}T${from}:00+07:00`, end: `${date}T${to}:00+07:00` })
+const book = (date, time, extra = {}) => ({ name: 'สมชาย', phone: '0812345678', propertyCode: 'SPS-TH-1', date, time, ...extra })
+
+test('check_availability lists the free start times of an open day', async () => {
+  store.set('messenger_settings/ai', CAL)
+  const day = nextOpenDay()
+  fakeCalendar({ busy: [busyOn(day, '09:00', '12:00')] })
+  let answer
+  modelScript = [
+    async () => [{ functionCall: { name: 'check_availability', args: { date: day } } }],
+    async contents => { answer = contents.at(-1).parts[0].functionResponse.response; return [{ text: 'ว่างบ่ายครับ' }] },
+  ]
+  await receive('นัดชมวันนั้นได้ไหม')
+  assert.equal(answer.open, true)
+  assert.equal(answer.durationMinutes, 90)
+  assert.ok(!answer.anyFreeStartTimes.includes('10:00'))
+  assert.ok(answer.anyFreeStartTimes.includes('12:00'))
+  assert.ok(answer.freeStartTimes.length <= 4)
+})
+
+test('check_availability: Sunday is closed, a bad date is refused, a Google failure is reported as unavailable', async () => {
+  store.set('messenger_settings/ai', CAL)
+  const answers = []
+  const capture = date => [
+    async () => [{ functionCall: { name: 'check_availability', args: { date } } }],
+    async contents => { answers.push(contents.at(-1).parts[0].functionResponse.response); return [{ text: 'ครับ' }] },
+  ]
+  fakeCalendar()
+  modelScript = capture(nextSunday()); await receive('วันอาทิตย์ได้ไหม')
+  assert.equal(answers[0].open, false)
+  modelScript = capture('2020-01-01'); await receive('วันที่ผ่านมาแล้ว')
+  assert.equal(answers[1].ok, false)
+  fakeCalendar({ failFreeBusy: true })
+  modelScript = capture(nextOpenDay()); await receive('ลองอีกวัน')
+  assert.equal(answers[2].unavailable, true)
+})
+
+test('a free time is booked: Google event, confirmed appointment for the LINE alert, and no hand-off', async () => {
+  store.set('messenger_settings/ai', CAL)
+  const day = nextOpenDay()
+  const calls = fakeCalendar()
+  let answer
+  modelScript = [
+    async () => [{ functionCall: { name: 'request_appointment', args: book(day, '10:30') } }],
+    async contents => { answer = contents.at(-1).parts[0].functionResponse.response; return [{ text: `นัดเรียบร้อยแล้วครับ วันที่ ${day} เวลา 10:30` }] },
+  ]
+  await receive('นัดวันนั้น 10:30 ครับ')
+  assert.equal(answer.confirmed, true)
+  assert.equal(answer.time, '10:30')
+  assert.equal(answer.endTime, '12:00')
+  assert.equal(calls.inserted.length, 1)
+  const event = calls.inserted[0]
+  assert.equal(event.calendarId, 'team@group.calendar.google.com')
+  assert.equal(event.start.dateTime, `${day}T10:30:00+07:00`)
+  assert.equal(event.end.dateTime, `${day}T12:00:00+07:00`)
+  assert.equal(event.start.timeZone, 'Asia/Bangkok')
+  assert.match(event.summary, /SPS-TH-1/)
+  assert.match(event.description, /0812345678/)
+  assert.ok(!event.description.includes('2150000')) // a hidden price never goes into the calendar
+  const [appointment] = appointments()
+  assert.equal(appointment.status, 'confirmed')
+  assert.equal(appointment.source, 'messenger-ai')
+  assert.equal(appointment.date, day)
+  assert.equal(appointment.time, '10:30')
+  assert.equal(appointment.endTime, '12:00')
+  assert.equal(appointment.calendarEventId, event.id)
+  assert.equal(conversation().botPaused, undefined)
+  assert.equal(conversation().contact.phone, '0812345678')
+  assert.deepEqual(store.get(`appointment_locks/${day}`).holds, []) // the hold is released
+})
+
+test('a busy time is not booked and other free times are offered', async () => {
+  store.set('messenger_settings/ai', CAL)
+  const day = nextOpenDay()
+  const calls = fakeCalendar({ busy: [busyOn(day, '10:00', '11:30')] })
+  let answer
+  modelScript = [
+    async () => [{ functionCall: { name: 'request_appointment', args: book(day, '10:30') } }],
+    async contents => { answer = contents.at(-1).parts[0].functionResponse.response; return [{ text: 'เวลานั้นไม่ว่างครับ 12:00 ได้ไหมครับ' }] },
+  ]
+  await receive('นัด 10:30')
+  assert.equal(answer.confirmed, false)
+  assert.equal(answer.reason, 'busy')
+  assert.match(answer.error, /ห้ามบอกลูกค้าว่านัดแล้ว/)
+  assert.ok(answer.freeStartTimes.length > 0)
+  assert.ok(!answer.freeStartTimes.includes('10:30'))
+  assert.equal(calls.inserted.length, 0)
+  assert.equal(appointments().length, 0)
+})
+
+test('closed days, off-hours and odd minutes are refused without touching the calendar', async () => {
+  store.set('messenger_settings/ai', CAL)
+  const calls = fakeCalendar()
+  const reasons = []
+  const attempt = args => {
+    modelScript = [
+      async () => [{ functionCall: { name: 'request_appointment', args } }],
+      async contents => { reasons.push(contents.at(-1).parts[0].functionResponse.response.reason); return [{ text: 'ครับ' }] },
+    ]
+    return receive('นัด')
+  }
+  await attempt(book(nextSunday(), '10:00'))
+  await attempt(book(nextOpenDay(), '08:00'))
+  await attempt(book(nextOpenDay(), '17:30'))
+  await attempt(book(nextOpenDay(), '10:15'))
+  assert.deepEqual(reasons, ['closed', 'outside-hours', 'outside-hours', 'bad-time'])
+  assert.equal(calls.inserted.length, 0)
+  assert.equal(appointments().length, 0)
+})
+
+test('a booking without a date and time asks for them first', async () => {
+  store.set('messenger_settings/ai', CAL)
+  const calls = fakeCalendar()
+  let answer
+  modelScript = [
+    async () => [{ functionCall: { name: 'request_appointment', args: { name: 'สมชาย', phone: '0812345678', propertyCode: 'SPS-TH-1' } } }],
+    async contents => { answer = contents.at(-1).parts[0].functionResponse.response; return [{ text: 'สะดวกวันไหนครับ' }] },
+  ]
+  await receive('อยากนัดชม')
+  assert.equal(answer.ok, false)
+  assert.equal(answer.confirmed, false)
+  assert.equal(calls.inserted.length, 0)
+})
+
+test('asking for the same booking twice gives one event and one appointment', async () => {
+  store.set('messenger_settings/ai', CAL)
+  const day = nextOpenDay()
+  const calls = fakeCalendar()
+  const answers = []
+  for (let n = 0; n < 2; n += 1) {
+    modelScript = [
+      async () => [{ functionCall: { name: 'request_appointment', args: book(day, '13:30') } }],
+      async contents => { answers.push(contents.at(-1).parts[0].functionResponse.response); return [{ text: 'นัดเรียบร้อยครับ' }] },
+    ]
+    await receive('นัด 13:30 ครับ')
+  }
+  assert.equal(answers.every(answer => answer.confirmed === true), true)
+  assert.equal(calls.inserted.length, 1)
+  assert.equal(appointments().length, 1)
+})
+
+test('if Google cannot be reached the request goes to the team as before and nothing is confirmed', async () => {
+  store.set('messenger_settings/ai', CAL)
+  const day = nextOpenDay()
+  fakeCalendar({ failFreeBusy: true })
+  let answer
+  modelScript = [
+    async () => [{ functionCall: { name: 'request_appointment', args: book(day, '10:00') } }],
+    async contents => { answer = contents.at(-1).parts[0].functionResponse.response; return [{ text: 'ส่งคำขอให้ทีมงานแล้วครับ' }] },
+  ]
+  await receive('นัด 10:00')
+  assert.equal(answer.confirmed, false)
+  assert.match(answer.message, /ห้ามบอกลูกค้าว่านัดแล้ว/)
+  const [appointment] = appointments()
+  assert.equal(appointment.status, 'pending')
+  assert.equal(conversation().botPaused, true)
+  assert.match(conversation().handoffReason, /ขอนัดชม/)
+})
+
+test('if creating the event fails, nothing is recorded as booked and the team is asked', async () => {
+  store.set('messenger_settings/ai', CAL)
+  const day = nextOpenDay()
+  fakeCalendar({ failInsert: true })
+  let answer
+  modelScript = [
+    async () => [{ functionCall: { name: 'request_appointment', args: book(day, '10:00') } }],
+    async contents => { answer = contents.at(-1).parts[0].functionResponse.response; return [{ text: 'ส่งคำขอให้ทีมงานแล้วครับ' }] },
+  ]
+  await receive('นัด 10:00')
+  assert.equal(answer.confirmed, false)
+  assert.equal(appointments().filter(a => a.status === 'confirmed').length, 0)
+  assert.equal(appointments()[0].status, 'pending')
+  assert.deepEqual(store.get(`appointment_locks/${day}`).holds, [])
+})
+
+test('with the calendar off, appointments work exactly as before', async () => {
+  store.set('messenger_settings/ai', { enabled: true })
+  const day = nextOpenDay()
+  let called = false
+  _test.setCalendarClientFactory(() => { called = true; return {} })
+  let tools
+  modelScript = [
+    async () => [{ functionCall: { name: 'request_appointment', args: book(day, '10:00') } }],
+    async () => [{ text: 'ส่งคำขอให้ทีมงานแล้วครับ' }],
+  ]
+  await receive('นัด')
+  assert.equal(called, false)
+  assert.equal(appointments()[0].status, 'pending')
+  assert.equal(conversation().botPaused, true)
+  void tools
+})
+
+test('the prompt only talks about calendar booking when it is on', async () => {
+  store.set('messenger_settings/ai', CAL)
+  fakeCalendar()
+  const on = await capturePrompt(async () => { model([{ text: 'ครับ' }]); await receive('สวัสดี') })
+  assert.match(on, /check_availability/)
+  assert.match(on, /จันทร์-เสาร์ 09:00-18:00 นัดละ 90 นาที/)
+  assert.match(on, /confirmed เป็น true/)
+  store.set('messenger_settings/ai', { enabled: true })
+  const off = await capturePrompt(async () => { model([{ text: 'ครับ' }]); await receive('สวัสดีอีกที') })
+  assert.ok(!off.includes('check_availability'))
+  assert.match(off, /ทีมงานจะยืนยันเวลากลับ/)
+})
+
+test('two people cannot hold the same slot at once; holds expire and can be released', async () => {
+  const db = fakes['firebase-admin'].firestore()
+  assert.equal(await _test.holdSlot(db, '2030-01-07', 600, 690, 'a'), true)
+  assert.equal(await _test.holdSlot(db, '2030-01-07', 630, 720, 'b'), false) // overlaps
+  assert.equal(await _test.holdSlot(db, '2030-01-07', 690, 780, 'c'), true)  // touches only
+  await _test.releaseSlot(db, '2030-01-07', 'a')
+  assert.equal(await _test.holdSlot(db, '2030-01-07', 630, 720, 'd'), false) // still overlaps c? 630-720 vs 690-780 -> yes
+  assert.equal(await _test.holdSlot(db, '2030-01-07', 600, 660, 'e'), true)
+  const expired = store.get('appointment_locks/2030-01-07').holds.map(hold => ({ ...hold, expiresAt: 1 }))
+  store.set('appointment_locks/2030-01-07', { holds: expired })
+  assert.equal(await _test.holdSlot(db, '2030-01-07', 600, 690, 'f'), true)
 })

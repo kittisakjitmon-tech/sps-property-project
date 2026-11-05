@@ -1,6 +1,8 @@
 const functions = require('firebase-functions')
 const admin = require('firebase-admin')
 const axios = require('axios')
+const calendarRules = require('./facebook-ai-calendar.cjs')
+const { createGoogleCalendarClient } = require('./google-calendar')
 const { VertexAI } = require('@google-cloud/vertexai')
 const {
   MAX_CARDS,
@@ -184,6 +186,60 @@ function safeFallbackText(particle) {
   return `ขอให้ทีมงานช่วยยืนยันรายละเอียดตรงนี้ให้นะ${p} เดี๋ยวทีมงานติดต่อกลับโดยเร็วที่สุด${p}`
 }
 
+// ─── Google Calendar bookings ────────────────────────────────────────────────
+
+// Tests replace this; in production it impersonates the function's own service account.
+let calendarClientFactory = (cfg, projectId) => createGoogleCalendarClient({
+  serviceAccount: cfg.serviceAccount || `${projectId}@appspot.gserviceaccount.com`,
+})
+
+const HOLD_MS = 2 * 60 * 1000
+
+// A short "someone is booking this slot right now" hold, so two customers asking for the
+// same time at once cannot both get it. It only covers the moment between checking the
+// calendar and the event appearing there; after that the calendar itself is the truth.
+async function holdSlot(db, date, startMinute, endMinute, owner) {
+  return db.runTransaction(async transaction => {
+    const ref = db.collection('appointment_locks').doc(date)
+    const snapshot = await transaction.get(ref)
+    const now = Date.now()
+    const holds = (snapshot.exists ? snapshot.data().holds || [] : []).filter(hold => hold.expiresAt > now)
+    if (holds.some(hold => calendarRules.overlaps(hold.start, hold.end, startMinute, endMinute))) return false
+    holds.push({ start: startMinute, end: endMinute, owner, expiresAt: now + HOLD_MS })
+    transaction.set(ref, { holds })
+    return true
+  })
+}
+
+async function releaseSlot(db, date, owner) {
+  try {
+    await db.runTransaction(async transaction => {
+      const ref = db.collection('appointment_locks').doc(date)
+      const snapshot = await transaction.get(ref)
+      if (!snapshot.exists) return
+      transaction.set(ref, { holds: (snapshot.data().holds || []).filter(hold => hold.owner !== owner) })
+    })
+  } catch (error) {
+    functions.logger.warn('Could not release appointment hold', { date, reason: error.message })
+  }
+}
+
+const isValidDate = (value, today) => {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(value || '')) return false
+  const parsed = new Date(`${value}T00:00:00Z`)
+  if (Number.isNaN(parsed.getTime()) || parsed.toISOString().slice(0, 10) !== value) return false
+  const limit = new Date(new Date(`${today}T00:00:00Z`).getTime() + 90 * 86400000).toISOString().slice(0, 10)
+  return value >= today && value <= limit
+}
+
+const REASON_TEXT = {
+  'bad-time': 'เวลาต้องเป็นช่วงครึ่งชั่วโมง เช่น 10:00 หรือ 10:30',
+  closed: 'วันนั้นไม่รับนัด',
+  'outside-hours': 'เวลานั้นอยู่นอกเวลารับนัด หรือไม่พอสำหรับการนัดหนึ่งครั้ง',
+  'too-soon': 'เวลานั้นใกล้เกินไป ต้องนัดล่วงหน้าอย่างน้อยตามที่กำหนด',
+  busy: 'เวลานั้นไม่ว่างแล้ว',
+}
+
 // Fetch one picture for the model. Tests replace this so nothing touches the network.
 let imageFetcher = async (url, maxBytes) => {
   const response = await axios.get(url, {
@@ -243,6 +299,12 @@ const facebookAiReply = functions
       if (!conversation?.pageId || !conversation?.participantId) return null
 
       const imageCfg = imageSettings(settings)
+      const calendarCfg = calendarRules.calendarSettings(settings)
+      let calendarClientInstance = null
+      const calendarClient = () => {
+        calendarClientInstance = calendarClientInstance || calendarClientFactory(calendarCfg, process.env.GCLOUD_PROJECT || admin.app().options.projectId)
+        return calendarClientInstance
+      }
       const incomingImages = imageCfg.enabled ? pickImageAttachments(message.attachments, imageCfg.maxImages) : []
 
       const recent = await loadRecentMessages(conversationRef)
@@ -327,33 +389,175 @@ const facebookAiReply = functions
           }
           return { ok: Object.keys(info).length > 0, saved }
         },
+        check_availability: async args => {
+          if (!calendarCfg.enabled) {
+            return { ok: false, unavailable: true, error: 'ยังไม่ได้เปิดระบบตรวจปฏิทิน ให้ใช้ request_appointment ส่งคำขอให้ทีมงานยืนยันเวลา' }
+          }
+          const date = typeof args?.date === 'string' ? args.date.trim() : ''
+          if (!isValidDate(date, today.iso)) {
+            return { ok: false, error: 'วันที่ไม่ถูกต้อง ใช้รูปแบบ YYYY-MM-DD และเป็นวันนี้ถึงไม่เกิน 90 วันข้างหน้า' }
+          }
+          const schedule = calendarRules.describeSchedule(calendarCfg)
+          if (!calendarRules.candidateStarts(calendarCfg, date).length) {
+            return { ok: true, date, open: false, message: `วันนั้นไม่รับนัด (รับนัด ${schedule})` }
+          }
+          let busy
+          try {
+            const { timeMin, timeMax } = calendarRules.dayRange(date)
+            busy = await calendarClient().freeBusy(calendarCfg.calendarId, timeMin, timeMax)
+          } catch (error) {
+            functions.logger.warn('Calendar check failed', { ...logContext, reason: error.message })
+            return { ok: false, unavailable: true, error: 'ตรวจปฏิทินไม่ได้ชั่วคราว ให้บอกลูกค้าว่าส่งคำขอนัดให้ทีมงานยืนยัน แล้วใช้ request_appointment' }
+          }
+          const free = calendarRules.freeStarts(calendarCfg, date, busy)
+          const suggestions = calendarRules.suggestStarts(calendarCfg, free).map(calendarRules.fromMinutes)
+          return {
+            ok: true,
+            date,
+            open: true,
+            durationMinutes: calendarCfg.slotMinutes,
+            freeStartTimes: suggestions,
+            anyFreeStartTimes: free.map(calendarRules.fromMinutes),
+            message: free.length ? undefined : 'วันนั้นไม่มีเวลาว่างแล้ว ให้เสนอวันอื่น',
+          }
+        },
         request_appointment: async args => {
           const result = validateAppointment(args, { today: today.iso, knownCodes: catalogByCode })
           if (!result.ok) return { ok: false, error: result.error }
-          const existing = await db.collection('appointments')
-            .where('conversationId', '==', context.params.conversationId)
-            .limit(10)
-            .get()
-          const cutoff = Date.now() - 30 * 60 * 1000
-          const duplicate = existing.docs.some(doc => {
-            const data = doc.data()
-            return data.propertyId === result.value.propertyId && (data.createdAt?.toMillis?.() || 0) > cutoff
-          })
-          if (!duplicate) {
-            await db.collection('appointments').add({
-              type: 'Customer',
-              ...result.value,
-              status: 'pending',
-              source: 'messenger-ai',
-              conversationId: context.params.conversationId,
-              createdAt: FieldValue.serverTimestamp(),
+
+          // The request that existed before the calendar: a pending appointment for a person to confirm.
+          const requestForTeam = async message => {
+            const existing = await db.collection('appointments')
+              .where('conversationId', '==', context.params.conversationId)
+              .limit(10)
+              .get()
+            const cutoff = Date.now() - 30 * 60 * 1000
+            const duplicate = existing.docs.some(doc => {
+              const data = doc.data()
+              return data.propertyId === result.value.propertyId && (data.createdAt?.toMillis?.() || 0) > cutoff
             })
+            if (!duplicate) {
+              await db.collection('appointments').add({
+                type: 'Customer',
+                ...result.value,
+                status: 'pending',
+                source: 'messenger-ai',
+                conversationId: context.params.conversationId,
+                createdAt: FieldValue.serverTimestamp(),
+              })
+            }
+            appointmentRequested = true
+            handoffReason = handoffReason || `ขอนัดชม ${result.value.propertyId || ''}`.trim()
+            if (!conversation.contact?.name && !contactUpdates.name) contactUpdates.name = result.value.contactName
+            if (!conversation.contact?.phone && !contactUpdates.phone) contactUpdates.phone = result.value.tel
+            return { ok: true, confirmed: false, message: message || 'บันทึกคำขอนัดแล้ว ทีมงานจะยืนยันเวลากับลูกค้า' }
           }
-          appointmentRequested = true
-          handoffReason = handoffReason || `ขอนัดชม ${result.value.propertyId || ''}`.trim()
-          if (!conversation.contact?.name && !contactUpdates.name) contactUpdates.name = result.value.contactName
-          if (!conversation.contact?.phone && !contactUpdates.phone) contactUpdates.phone = result.value.tel
-          return { ok: true, message: 'บันทึกคำขอนัดแล้ว ทีมงานจะยืนยันเวลากับลูกค้า' }
+
+          if (!calendarCfg.enabled) return requestForTeam()
+
+          const { date, time, propertyId, contactName, tel } = result.value
+          if (!date || !time) {
+            return { ok: false, confirmed: false, error: 'ต้องมีวันที่และเวลาที่จะนัด (ภายใน 90 วัน) ถามลูกค้า แล้วเรียก check_availability ก่อน' }
+          }
+          const eventId = calendarRules.eventIdFor(context.params.conversationId, date, time, propertyId)
+
+          // The same booking asked again (customer repeats, or a retry) is the same booking.
+          const earlier = await db.collection('appointments')
+            .where('conversationId', '==', context.params.conversationId)
+            .limit(20)
+            .get()
+          const same = earlier.docs.map(doc => doc.data())
+            .find(data => data.calendarEventId === eventId && data.status !== 'cancelled')
+          const confirmedResult = (endTime, minutes) => ({
+            ok: true,
+            confirmed: true,
+            date,
+            time,
+            endTime,
+            durationMinutes: minutes,
+            propertyCode: propertyId || undefined,
+            message: 'นัดเรียบร้อยและลงปฏิทินแล้ว ให้ยืนยันวันและเวลานี้กับลูกค้าตรงตัว',
+          })
+          if (same) {
+            const minutes = calendarCfg.slotMinutes
+            return confirmedResult(same.endTime || calendarRules.fromMinutes(calendarRules.toMinutes(time) + minutes), minutes)
+          }
+
+          const refuse = (reason, busy) => {
+            const free = calendarRules.freeStarts(calendarCfg, date, busy || [])
+            return {
+              ok: false,
+              confirmed: false,
+              reason,
+              error: `${REASON_TEXT[reason] || 'นัดเวลานี้ไม่ได้'} ห้ามบอกลูกค้าว่านัดแล้ว ให้เสนอเวลาอื่นที่ว่าง`,
+              freeStartTimes: calendarRules.suggestStarts(calendarCfg, free).map(calendarRules.fromMinutes),
+            }
+          }
+
+          const client = calendarClient()
+          const { timeMin, timeMax } = calendarRules.dayRange(date)
+          let busy
+          try {
+            busy = await client.freeBusy(calendarCfg.calendarId, timeMin, timeMax)
+          } catch (error) {
+            functions.logger.warn('Calendar check failed', { ...logContext, reason: error.message })
+            return requestForTeam('ตรวจปฏิทินไม่ได้ชั่วคราว จึงยังไม่ยืนยันเวลา ส่งคำขอให้ทีมงานแล้ว ทีมงานจะติดต่อยืนยัน ห้ามบอกลูกค้าว่านัดแล้ว')
+          }
+          const check = calendarRules.checkSlot(calendarCfg, date, time, busy)
+          if (!check.ok) return refuse(check.reason, busy)
+
+          if (!(await holdSlot(db, date, check.minute, check.endMinute, eventId))) return refuse('busy', busy)
+          try {
+            // Look again now that we hold the slot: an earlier booking may have just landed.
+            const fresh = await client.freeBusy(calendarCfg.calendarId, timeMin, timeMax)
+            const recheck = calendarRules.checkSlot(calendarCfg, date, time, fresh)
+            if (!recheck.ok) return refuse(recheck.reason, fresh)
+
+            const listing = propertyId ? catalogByCode.get(propertyId) : null
+            const endTime = calendarRules.fromMinutes(check.endMinute)
+            const event = await client.insertEvent(calendarCfg.calendarId, {
+              id: eventId,
+              summary: `นัดชม ${propertyId || 'ทรัพย์'} · ${contactName}`,
+              description: [
+                `ลูกค้า: ${contactName}`,
+                `เบอร์โทร: ${tel}`,
+                propertyId ? `ทรัพย์: ${propertyId}${result.value.propertyTitle ? ` ${result.value.propertyTitle}` : ''}` : '',
+                listing?.url ? `ลิงก์: ${listing.url}` : '',
+                result.value.note ? `หมายเหตุ: ${result.value.note}` : '',
+                'ช่องทาง: Messenger (นัดโดยผู้ช่วย AI)',
+              ].filter(Boolean).join('\n'),
+              start: { dateTime: `${date}T${time}:00${calendarRules.TZ_OFFSET}`, timeZone: 'Asia/Bangkok' },
+              end: { dateTime: `${date}T${endTime}:00${calendarRules.TZ_OFFSET}`, timeZone: 'Asia/Bangkok' },
+              extendedProperties: { private: { source: 'messenger-ai', conversationId: context.params.conversationId } },
+            })
+            try {
+              await db.collection('appointments').add({
+                type: 'Customer',
+                ...result.value,
+                endTime,
+                durationMinutes: calendarCfg.slotMinutes,
+                status: 'confirmed',
+                source: 'messenger-ai',
+                conversationId: context.params.conversationId,
+                calendarEventId: event.id,
+                calendarEventLink: event.htmlLink || '',
+                createdAt: FieldValue.serverTimestamp(),
+              })
+            } catch (error) {
+              // No record of the booking: take the event back rather than leave a ghost.
+              await client.deleteEvent(calendarCfg.calendarId, event.id).catch(() => {})
+              throw error
+            }
+            appointmentRequested = true
+            if (!conversation.contact?.name && !contactUpdates.name) contactUpdates.name = contactName
+            if (!conversation.contact?.phone && !contactUpdates.phone) contactUpdates.phone = tel
+            return confirmedResult(endTime, calendarCfg.slotMinutes)
+          } catch (error) {
+            functions.logger.warn('Calendar booking failed', { ...logContext, reason: error.message })
+            return requestForTeam('ลงปฏิทินไม่สำเร็จ จึงยังไม่ยืนยันเวลา ส่งคำขอให้ทีมงานแล้ว ทีมงานจะติดต่อยืนยัน ห้ามบอกลูกค้าว่านัดแล้ว')
+          } finally {
+            await releaseSlot(db, date, eventId)
+          }
         },
         estimate_loan: args => {
           const code = typeof args?.propertyCode === 'string' ? args.propertyCode.trim() : ''
@@ -406,6 +610,7 @@ const facebookAiReply = functions
         today,
         focus,
         imagesEnabled: imageCfg.enabled,
+        calendar: calendarCfg.enabled ? { scheduleText: calendarRules.describeSchedule(calendarCfg) } : null,
       })
       const { text: rawText } = await runConversation({
         generate: createGenerate({ settings, systemInstruction, info: servedBy }),
@@ -552,5 +757,8 @@ module.exports = {
       faqCache = { at: 0, list: [] }
     },
     setImageFetcher(fn) { imageFetcher = fn },
+    setCalendarClientFactory(fn) { calendarClientFactory = fn },
+    holdSlot,
+    releaseSlot,
   },
 }

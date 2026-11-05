@@ -20,6 +20,13 @@ apply immediately. The on/off switch is also in the admin Messenger inbox
 | `extraInstructions` | string | Tone or brand notes appended to the prompt, e.g. "เรียกลูกค้าว่าพี่". |
 | `maxRepliesPerHour` | number | Per conversation. Default 8 (property cards don't count). |
 | `maxReplyChars` | number | Longest reply, links not counted. Default 220, allowed 80-1000. A longer reply is rewritten shorter by the model before sending, and cut at a space if that fails. |
+| `calendarEnabled` | boolean | `true` lets the bot book appointments in Google Calendar (needs `calendarId`). Default off: appointments stay "pending requests" for the team. |
+| `calendarId` | string | The Google Calendar to read free/busy from and add events to. |
+| `calendarWorkDays` | number[] | Days the team takes appointments, 0 = Sunday. Default `[1,2,3,4,5,6]` (Mon-Sat). |
+| `calendarWorkStart` / `calendarWorkEnd` | string | Opening hours, Thai time, `HH:MM`. Default `09:00` / `18:00`. |
+| `calendarSlotMinutes` | number | Length of one appointment, 15-240. Default 90. |
+| `calendarLeadHours` | number | Minimum notice before an appointment, 0-72. Default 2. |
+| `calendarServiceAccount` | string | Service account the function impersonates. Default `<project>@appspot.gserviceaccount.com`. |
 | `requirePropertyForBot` | boolean | `true` = "property first": the AI answers a chat only when it has a property (set by the team in the inbox, or named by the customer with a link or listing code). Otherwise it stays silent and the chat gets a "รอเลือกทรัพย์" badge. Switch in the inbox (Super Admin). Default off. |
 | `loanBankRate` | number | Loan estimate: bank interest, % per year. Default 3.5 (same as the website calculator). |
 | `loanDirectRate` | number | Loan estimate: direct installment (ผ่อนตรง) interest, % per year. Default 2.5. |
@@ -95,6 +102,45 @@ called) and shows **รอเลือกทรัพย์**; the AI cannot be 
 refuses with 409) until a property is set. If the customer sends a link or listing code
 of an available property, that counts too. A property that is no longer available does not
 count. Customer-named properties replace the team's choice (the saved title is dropped).
+
+## Appointments in Google Calendar
+
+With `calendarEnabled: true` and a `calendarId`, the bot checks the calendar before it
+offers or confirms a time:
+
+- `check_availability(date)` returns the free start times of that day (Thai time).
+- `request_appointment` books only a time that is free, inside opening hours, on a working
+  day, on a 30-minute mark, with the minimum notice. It creates the Google event (title,
+  customer name and phone, listing code and link; never a price) and an `appointments`
+  document with `status: 'confirmed'`, `calendarEventId`, `calendarEventLink`, so the
+  existing LINE alert still goes out. The chat is not handed over for a confirmed booking.
+- A busy or closed time is refused with other free times to offer; the bot is told never to
+  say "booked" unless the result has `confirmed: true`.
+- If Google cannot be reached or the event cannot be created, nothing is confirmed: the
+  request is saved as a pending appointment for the team (hand-over, as when the calendar is off).
+- Two customers asking for the same time at once: a short Firestore hold
+  (`appointment_locks/<date>`, 2 minutes) lets only one proceed, and the calendar is checked
+  again once the hold is taken. The same booking asked twice returns the same event.
+- Only free/busy is read; event details of other appointments are never read.
+
+Not done yet: events moved or deleted in the calendar are not synced back to
+`appointments`; no cancelling or rescheduling by the customer; one calendar only; the
+website's own appointment form does not use the calendar.
+
+### One-time setup (Google side)
+
+The function has no key file. It impersonates its own service account with the Calendar scope:
+
+1. Enable the **Google Calendar API** and the **IAM Service Account Credentials API** in the project.
+2. Give the service account (`<project>@appspot.gserviceaccount.com`, check IAM) the role
+   **Service Account Token Creator** on itself:
+   `gcloud iam service-accounts add-iam-policy-binding SA --member="serviceAccount:SA" --role="roles/iam.serviceAccountTokenCreator"`
+3. In Google Calendar, share the calendar with that service account email with
+   **Make changes to events**, and copy the **Calendar ID** (Settings and sharing > Integrate calendar).
+4. Set `calendarId` and `calendarEnabled: true` in `messenger_settings/ai`.
+
+A personal Gmail calendar works, but a service account cannot invite attendees or add Meet
+links to it (that needs Google Workspace domain-wide delegation).
 
 ## Prices
 

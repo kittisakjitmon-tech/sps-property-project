@@ -282,9 +282,9 @@ test('system prompt sets a human tone, the particle, masked-price rules, FAQ and
   assert.match(full, /2026-11-04/)
 })
 
-test('all seven tools are declared', () => {
+test('all eight tools are declared', () => {
   assert.deepEqual(TOOL_DECLARATIONS.map(t => t.name), [
-    'search_properties', 'get_property', 'show_property_cards', 'save_customer_info', 'request_appointment', 'estimate_loan', 'request_human',
+    'search_properties', 'get_property', 'show_property_cards', 'save_customer_info', 'check_availability', 'request_appointment', 'estimate_loan', 'request_human',
   ])
 })
 
