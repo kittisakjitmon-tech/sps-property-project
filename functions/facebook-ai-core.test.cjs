@@ -18,6 +18,7 @@ const {
   runConversation,
   vertexClientOptions,
   replyCharLimit,
+  countQuestions,
   isTooLong,
   hardTrim,
   buildShortenRequest,
@@ -943,4 +944,16 @@ test('nearby places saved as a list are searchable and shown to the AI', () => {
   assert.deepEqual(searchProperties([listed], { keywords: 'โลตัส' }).results.map(item => item.code), ['SPS-TW-9'])
   assert.equal(toIndexedProperty('p8', { status: 'available', displayId: 'X', nearbyPlace: 'ตลาด' }).nearby, 'ตลาด')
   assert.equal(toIndexedProperty('p7', { status: 'available', displayId: 'Y' }).nearby, '')
+})
+
+test('the reply may be longer when it answers several questions, within limits', () => {
+  assert.equal(replyCharLimit({}, 1), 220)
+  assert.equal(replyCharLimit({}, 2), 352)
+  assert.equal(replyCharLimit({}, 3), 484)
+  assert.equal(replyCharLimit({}, 9), 550) // at most 2.5 times
+  assert.equal(replyCharLimit({ maxReplyChars: 600 }, 3), 1000) // never over 1000
+  assert.equal(replyCharLimit({}, 0), 220)
+  assert.equal(countQuestions([{ direction: 'incoming', text: 'ราคา' }, { direction: 'incoming', text: '' }, { direction: 'incoming', text: 'พิกัด' }]), 2)
+  assert.equal(countQuestions([]), 1)
+  assert.match(buildSystemPrompt({ maxChars: 352 }), /ห้ามเกิน 352 ตัวอักษร/)
 })

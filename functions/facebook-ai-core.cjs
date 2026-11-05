@@ -801,7 +801,7 @@ function shouldReply({ settings, conversation, text, timestamp, recentMessages, 
 // Customers often type a question in several short messages ("สวัสดี", "มีบ้านแถวพานทองไหม",
 // "งบ 2 ล้าน"). Each one starts its own reply, so each run first waits a little, and only the
 // run for the newest message answers; it sees all of them in the history.
-const DEFAULT_REPLY_DELAY_SECONDS = 6
+const DEFAULT_REPLY_DELAY_SECONDS = 15
 const MAX_REPLY_DELAY_SECONDS = 30
 
 function replyDelayMs(settings) {
@@ -908,9 +908,19 @@ function cleanReplyText(raw) {
 // shortened by the model, and as a last resort cut at the last space before the limit.
 const DEFAULT_MAX_REPLY_CHARS = 220
 
-function replyCharLimit(settings) {
+// questions: how many customer messages this reply answers. Several questions typed in a row
+// are all answered in one message, so it may be longer: +60% of the limit per extra question,
+// at most 2.5 times the limit (and never over 1000).
+function replyCharLimit(settings, questions = 1) {
   const n = Number(settings?.maxReplyChars)
-  return Number.isFinite(n) && n >= 80 && n <= 1000 ? Math.floor(n) : DEFAULT_MAX_REPLY_CHARS
+  const base = Number.isFinite(n) && n >= 80 && n <= 1000 ? Math.floor(n) : DEFAULT_MAX_REPLY_CHARS
+  const extra = Math.max(0, Math.min(Math.floor(Number(questions) || 1), 10) - 1)
+  return Math.min(1000, Math.floor(base * Math.min(1 + 0.6 * extra, 2.5)))
+}
+
+// How many of the customer's unanswered messages ask something (have text).
+function countQuestions(messages) {
+  return Math.max(1, (messages || []).filter(m => m?.direction === 'incoming' && typeof m.text === 'string' && m.text.trim()).length)
 }
 
 function visibleLength(text) {
@@ -1070,7 +1080,7 @@ function estimateLoan(args = {}, settings = {}) {
 
 // ─── Prompt & tools ──────────────────────────────────────────────────────────
 
-function buildSystemPrompt({ isFirstReply, particle = 'ครับ', extraInstructions = '', faq = [], today, focus = [], imagesEnabled = false, staffNote = '', creditChecklist = '', staffImages = [], staffListings = [], calendar = null, attachedProperty = false, followUp = false } = {}) {
+function buildSystemPrompt({ isFirstReply, maxChars = DEFAULT_MAX_REPLY_CHARS, particle = 'ครับ', extraInstructions = '', faq = [], today, focus = [], imagesEnabled = false, staffNote = '', creditChecklist = '', staffImages = [], staffListings = [], calendar = null, attachedProperty = false, followUp = false } = {}) {
   const p = particle === 'ค่ะ' ? 'ค่ะ' : 'ครับ'
   const faqBlock = (faq || []).length
     ? [
@@ -1147,11 +1157,11 @@ function buildSystemPrompt({ isFirstReply, particle = 'ครับ', extraInstr
     '',
     'สไตล์การพูด (สำคัญมาก ต้องเหมือนคนพิมพ์แชท ไม่ใช่เขียนจดหมาย):',
     `- พูดเหมือนเซลส์อสังหาที่เป็นกันเองและสุภาพ ใช้คำลงท้าย "${p}" ภาษาพูดธรรมชาติ เช่น "ได้${p}" "มี${p}" "โอเค${p}" "เดี๋ยว...ให้นะ${p}" ห้ามใช้คำแข็งๆ เช่น "ท่าน" "กรุณา" "ขออนุญาต" "ยินดีให้บริการ" "หากมีข้อสงสัยเพิ่มเติม"`,
-    '- ตอบเป็นข้อความเดียวและสั้น: ปกติ 1-2 ประโยค ประมาณ 100-150 ตัวอักษร ห้ามเกิน 220 ตัวอักษร (ไม่นับลิงก์) แม้จะแนะนำทรัพย์ อย่าเล่ายาว เล่าแค่ที่ลูกค้าอยากรู้ตอนนี้ ที่เหลือรอให้ลูกค้าถามต่อหรือให้ดูในการ์ด',
+    `- ตอบเป็นข้อความเดียวและสั้น: ปกติ 1-2 ประโยคต่อคำถาม ห้ามเกิน ${maxChars} ตัวอักษร (ไม่นับลิงก์) แม้จะแนะนำทรัพย์ อย่าเล่ายาว เล่าแค่ที่ลูกค้าอยากรู้ตอนนี้ ที่เหลือรอให้ลูกค้าถามต่อหรือให้ดูในการ์ด`,
     '- ตอบตรงคำถามก่อนเสมอ ไม่ทวนคำถามของลูกค้า ไม่ขึ้นต้นด้วยคำขอบคุณหรือคำชมทุกครั้ง ไม่สรุปปิดท้ายซ้ำ ไม่ขอโทษเกินจำเป็น',
     '- จบด้วยคำถามสั้นๆ ได้ครั้งละ 1 ข้อเท่านั้น เพื่อให้บทสนทนาไปต่อ (เช่น งบประมาณ ทำเลที่ชอบ) ห้ามถามหลายข้อพร้อมกัน',
     '- แนะนำทรัพย์: พูดถึงแต่ละหลังไม่เกิน 1 บรรทัด (ทำเล ห้องนอน ราคา จุดเด่น 1 อย่าง) ห้ามเรียงเป็นรายการยาวหรือหัวข้อ ห้ามใช้ markdown เช่น ** หรือ #',
-    '- ถ้ามีหลายเรื่อง ให้พูดเรื่องที่สำคัญที่สุดก่อนเรื่องเดียว แล้วให้ลูกค้าถามต่อ ห้ามอัดทุกเรื่องในข้อความเดียว',
+    '- ลูกค้ามักพิมพ์หลายข้อความติดกัน ให้อ่านทุกข้อความที่ยังไม่ได้ตอบ ถ้าถามหลายข้อ (เช่น ราคา พิกัด กี่ห้องนอน) ให้ตอบครบทุกข้อในข้อความเดียว ข้อละสั้นๆ เรียงตามที่ถาม ห้ามตอบแค่ข้อเดียวแล้วรอให้ถามซ้ำ ข้อที่ไม่มีข้อมูลให้บอกว่าเดี๋ยวทีมงานแจ้ง',
     '- ใช้อีโมจิได้บ้างไม่เกิน 1 ตัวต่อการตอบ ใช้เฉพาะเมื่อเข้ากับบริบท',
     '',
     'ตัวอย่างน้ำเสียงที่ต้องการ (ดูแค่สไตล์ ค่าในวงเล็บปีกกา {} คือค่าที่ต้องมาจากผลค้นหาจริง ห้ามเอาตัวเลขในตัวอย่างไปใช้):',
@@ -1585,6 +1595,7 @@ module.exports = {
   sanitizeUrls,
   DEFAULT_MAX_REPLY_CHARS,
   replyCharLimit,
+  countQuestions,
   isTooLong,
   hardTrim,
   buildShortenRequest,

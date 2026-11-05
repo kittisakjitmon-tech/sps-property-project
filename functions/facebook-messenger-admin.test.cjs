@@ -474,3 +474,12 @@ test('with nothing waiting the button asks the AI to write first, within Faceboo
   await reject(adminActions.askAiToReply({ conversationId: 'c1' }, ADMIN), 409)
   assert.equal(retryRequests().length, 1)
 })
+
+test('a super admin sets how long the AI waits for more messages', async () => {
+  await adminActions.setAiGuidance({ replyDelaySeconds: 20 }, SUPER)
+  assert.equal(store.get('messenger_settings/ai').replyDelaySeconds, 20)
+  await adminActions.setAiGuidance({ replyDelaySeconds: 0 }, SUPER)
+  assert.equal(store.get('messenger_settings/ai').replyDelaySeconds, 0)
+  await reject(adminActions.setAiGuidance({ replyDelaySeconds: 31 }, SUPER), 400)
+  await reject(adminActions.setAiGuidance({ replyDelaySeconds: 'x' }, SUPER), 400)
+})

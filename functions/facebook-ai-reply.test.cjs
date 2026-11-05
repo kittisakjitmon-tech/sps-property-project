@@ -343,11 +343,12 @@ test('a reply over the limit is rewritten shorter by the model before it is sent
 test('if the rewrite is still too long or fails, the reply is cut instead', async () => {
   const words = Array.from({ length: 80 }, (_, i) => `คำที่${i}`).join(' ')
   model([{ text: words }], [{ text: words }])
-  await receive('ถามยาวๆ')
+  const first = await receive('ถามยาวๆ')
   assert.ok(sent[0].message.text.length <= 220)
   assert.ok(words.startsWith(sent[0].message.text))
 
   sent.length = 0
+  store.delete(`messenger_conversations/${CID}/messages/${first}`) // answered (stored replies are not kept by this fake)
   model([{ text: words }], [])
   modelScript.push(async () => { throw new Error('model down') })
   await receive('ถามอีกที')
@@ -1346,7 +1347,7 @@ test('messages typed in a row get one answer, from the run for the newest one', 
   assert.equal(sent.length, 1)
   const asked = seenContents[seenContents.length - 1].parts[0].text
   assert.match(asked, /สวัสดีครับ[\s\S]*พานทอง[\s\S]*งบ 2 ล้าน/)
-  assert.deepEqual(slept, [6000, 6000, 6000])
+  assert.deepEqual(slept, [15000, 15000, 15000])
 })
 
 test('a sticker after the question does not leave the question unanswered', async () => {
@@ -1365,7 +1366,7 @@ test('the wait can be changed or turned off, and a bad value uses the default', 
   store.set('messenger_settings/ai', { enabled: true, replyDelaySeconds: 99 })
   model([{ text: 'ได้ครับ' }])
   await receive('มีบ้านไหม', { at: NOW + 1 })
-  assert.deepEqual(slept, [6000])
+  assert.deepEqual(slept, [15000])
 })
 
 test('a team retry does not wait', async () => {
@@ -1767,4 +1768,18 @@ test('a follow-up request answers normally when the customer wrote in the meanti
   assert.equal(sent.length, 1)
   assert.ok(!prompt.includes('ตอนนี้คุณเป็นฝ่ายทักลูกค้าก่อน'))
   assert.equal(stored[0].extra.followUp, undefined)
+})
+
+test('several questions typed in a row are all answered, in a longer message', async () => {
+  addIncoming('m1', 'ราคาเท่าไหร่ครับ', NOW - 3000)
+  addIncoming('m2', 'ขอพิกัดหน่อย', NOW - 2000)
+  addIncoming('m3', 'กี่ห้องนอนครับ', NOW - 1000)
+  const prompt = await capturePrompt(async () => {
+    model([{ text: 'ราคา 2.19 ล้านครับ พิกัดตามลิงก์นี้ครับ มี 2 ห้องนอนครับ' }])
+    await runFor('m3')
+  })
+  assert.match(prompt, /ตอบครบทุกข้อในข้อความเดียว/)
+  assert.match(prompt, /ห้ามเกิน 484 ตัวอักษร/) // 220 x 2.2 for three questions
+  assert.ok(!prompt.includes('ให้พูดเรื่องที่สำคัญที่สุดก่อนเรื่องเดียว'))
+  assert.equal(sent.length, 1)
 })

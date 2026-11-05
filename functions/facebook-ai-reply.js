@@ -26,6 +26,7 @@ const {
   findPriceLeaks,
   sanitizeUrls,
   replyCharLimit,
+  countQuestions,
   isTooLong,
   hardTrim,
   buildShortenRequest,
@@ -769,8 +770,11 @@ async function answerCustomer({ conversationId, message, messageRef, retry = fal
     const imageParts = incomingImages.length ? await loadImageParts(incomingImages, imageCfg.maxBytes, logContext) : []
 
     stage = 'gemini'
+    // Several questions typed in a row are answered together, so the reply may be longer.
+    const maxChars = replyCharLimit(settings, followingUp ? 1 : countQuestions(waiting))
     const systemInstruction = buildSystemPrompt({
       isFirstReply,
+      maxChars,
       particle: settings.particle,
       extraInstructions: settings.extraInstructions,
       faq,
@@ -805,7 +809,6 @@ async function answerCustomer({ conversationId, message, messageRef, retry = fal
 
     // Keep it chat-sized: a too-long answer is rewritten shorter before anything else.
     stage = 'shorten'
-    const maxChars = replyCharLimit(settings)
     const replyText = isTooLong(rawText, maxChars) ? await shortenReply(settings, rawText, maxChars) : rawText
 
     // Safety checks run in code, not just in the prompt.

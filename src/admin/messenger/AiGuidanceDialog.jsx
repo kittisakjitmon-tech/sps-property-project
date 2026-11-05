@@ -9,6 +9,8 @@ export default function AiGuidanceDialog({ settings, callApi, onClose }) {
   const [checklist, setChecklist] = useState(settings.creditChecklist || '')
   const [extra, setExtra] = useState(settings.extraInstructions || '')
   const [particle, setParticle] = useState(settings.particle === 'ค่ะ' ? 'ค่ะ' : 'ครับ')
+  const savedDelay = Number(settings.replyDelaySeconds)
+  const [delay, setDelay] = useState(Number.isInteger(savedDelay) && savedDelay >= 0 && savedDelay <= 30 ? savedDelay : 15)
   const [saving, setSaving] = useState(false)
   const [status, setStatus] = useState({ type: '', message: '' })
 
@@ -19,7 +21,7 @@ export default function AiGuidanceDialog({ settings, callApi, onClose }) {
     setSaving(true)
     setStatus({ type: '', message: '' })
     try {
-      await callApi({ action: 'setAiGuidance', creditChecklist: checklist, extraInstructions: extra, particle })
+      await callApi({ action: 'setAiGuidance', creditChecklist: checklist, extraInstructions: extra, particle, replyDelaySeconds: delay })
       setStatus({ type: 'success', message: 'บันทึกแล้ว AI จะใช้ในข้อความถัดไป' })
     } catch (error) {
       setStatus({ type: 'error', message: error.message || 'บันทึกไม่สำเร็จ' })
@@ -51,6 +53,12 @@ export default function AiGuidanceDialog({ settings, callApi, onClose }) {
             </div>
             <p className="text-xs text-slate-500">AI ตอบเหมือนแอดมินเพจ ไม่แนะนำตัวว่าเป็น AI แต่ถ้าลูกค้าถามตรงๆ ว่าเป็นบอทไหม จะตอบตามจริง</p>
           </fieldset>
+
+          <label className="block space-y-2">
+            <span className="font-medium text-slate-800">รอให้ลูกค้าพิมพ์จบก่อนตอบ: {delay === 0 ? 'ตอบทันที' : `${delay} วินาที`}</span>
+            <input type="range" min={0} max={30} step={1} value={delay} onChange={event => setDelay(Number(event.target.value))} className="w-full" />
+            <span className="block text-xs text-slate-500">ลูกค้ามักพิมพ์หลายข้อความติดกัน AI จะรอจนลูกค้าหยุดพิมพ์ตามเวลานี้ แล้วตอบทุกคำถามรวมในข้อความเดียว ยิ่งนานยิ่งรวมได้ครบ แต่ลูกค้าที่ถามข้อเดียวจะรอนานขึ้น (แนะนำ 10-20 วินาที)</span>
+          </label>
 
           <div className="space-y-2">
             <label htmlFor={`${id}-checklist`} className="font-medium text-slate-800">
