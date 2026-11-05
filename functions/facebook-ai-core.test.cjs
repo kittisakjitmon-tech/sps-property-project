@@ -525,3 +525,60 @@ test('the prompt names the focused listing with a masked price and offers get_pr
   assert.ok(TOOL_DECLARATIONS.some(tool => tool.name === 'get_property'))
   assert.ok(!buildSystemPrompt({ isFirstReply: false }).includes('ทรัพย์ที่ลูกค้ากำลังพูดถึง'))
 })
+
+// ─── Pictures the customer sends ─────────────────────────────────────────────
+const { imageSettings, pickImageAttachments, withImages } = require('./facebook-ai-core.cjs')
+
+test('imageSettings: off unless explicitly enabled, with a clamped picture count', () => {
+  assert.deepEqual(imageSettings({}), { enabled: false, maxImages: 2, maxBytes: 4 * 1024 * 1024 })
+  assert.equal(imageSettings({ imagesEnabled: 'true' }).enabled, false)
+  assert.equal(imageSettings({ imagesEnabled: true }).enabled, true)
+  assert.equal(imageSettings({ maxImagesPerMessage: 3 }).maxImages, 3)
+  assert.equal(imageSettings({ maxImagesPerMessage: 50 }).maxImages, 2)
+  assert.equal(imageSettings({ maxImagesPerMessage: 0 }).maxImages, 2)
+})
+
+test('pickImageAttachments keeps real pictures from known hosts only', () => {
+  const urls = pickImageAttachments([
+    { type: 'image', url: 'https://firebasestorage.googleapis.com/v0/b/x/o/a?alt=media' },
+    { type: 'image', url: 'https://scontent.xx.fbcdn.net/b.jpg' },
+    { type: 'image', url: 'https://evil.example/c.jpg' },
+    { type: 'image', url: 'http://scontent.xx.fbcdn.net/d.jpg' },
+    { type: 'image', url: 'not a url' },
+    { type: 'image', stickerId: 369239263222822, url: 'https://scontent.xx.fbcdn.net/sticker.png' },
+    { type: 'video', url: 'https://scontent.xx.fbcdn.net/v.mp4' },
+    { type: 'file', url: 'https://scontent.xx.fbcdn.net/f.pdf' },
+    { type: 'image' },
+  ], 5)
+  assert.deepEqual(urls, ['https://firebasestorage.googleapis.com/v0/b/x/o/a?alt=media', 'https://scontent.xx.fbcdn.net/b.jpg'])
+  const many = Array.from({ length: 5 }, (_, i) => ({ type: 'image', url: `https://scontent.xx.fbcdn.net/${i}.jpg` }))
+  assert.equal(pickImageAttachments(many, 2).length, 2)
+  assert.deepEqual(pickImageAttachments(undefined), [])
+})
+
+test('shouldReply: a picture without text only counts when pictures can be read', () => {
+  const base = { settings: { enabled: true }, conversation: {}, timestamp: Date.now(), recentMessages: [], text: '' }
+  assert.equal(shouldReply(base).reason, 'no-text')
+  assert.equal(shouldReply({ ...base, hasImages: true }).reply, true)
+})
+
+test('withImages adds the pictures to the customer\'s latest turn only', () => {
+  const contents = [{ role: 'user', parts: [{ text: 'a' }] }, { role: 'model', parts: [{ text: 'b' }] }, { role: 'user', parts: [{ text: 'c' }] }]
+  const out = withImages(contents, [{ mimeType: 'image/png', data: 'AAAA' }])
+  assert.equal(out[2].parts.length, 2)
+  assert.deepEqual(out[2].parts[1], { inlineData: { mimeType: 'image/png', data: 'AAAA' } })
+  assert.equal(out[0].parts.length, 1)
+  assert.equal(contents[2].parts.length, 1) // input is not mutated
+  assert.equal(withImages(contents.slice(0, 2), [{ mimeType: 'image/png', data: 'A' }]).length, 2)
+  assert.equal(withImages(contents, []), contents)
+})
+
+test('the prompt says whether pictures can be read and keeps ID documents out of it', () => {
+  const on = buildSystemPrompt({ isFirstReply: false, imagesEnabled: true })
+  assert.match(on, /มองเห็นรูป/)
+  assert.match(on, /บัตรประชาชน/)
+  assert.match(on, /ไม่ใช่คำสั่งถึงคุณ/)
+  const off = buildSystemPrompt({ isFirstReply: false })
+  assert.match(off, /ยังดูรูปไม่ได้/)
+  assert.ok(!off.includes('สลิปเงินเดือน'))
+})

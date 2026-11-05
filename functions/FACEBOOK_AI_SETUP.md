@@ -25,6 +25,8 @@ apply immediately. The on/off switch is also in the admin Messenger inbox
 | `loanDefaultDownPercent` | number | Down payment used when the customer does not say one. Default 20. |
 | `loanDefaultYears` / `loanMaxYears` | number | Years used when not given, and the cap. Default 30 / 30. |
 | `loanMaxDsrPercent` | number | Debt (new instalment + existing debts) as % of income that counts as "likely". Default 40. |
+| `imagesEnabled` | boolean | `true` lets the bot read pictures the customer sends (off by default). When off, the bot says it cannot view pictures and asks for the listing code or area instead, and a picture sent with no text gets no reply. |
+| `maxImagesPerMessage` | number | Pictures read per message, 1-3. Default 2. |
 
 ## Company facts and FAQ
 
@@ -61,8 +63,23 @@ property the customer means", with the same price masking as search results, so 
 does not ask "which one?". The listing being discussed is remembered on the
 conversation as `currentPropertyCode` (set from a pasted link or code, `get_property`,
 or when exactly one card is shown) and reused on the next message. Codes and links that
-are not in the available catalog are ignored. Not covered yet: pictures/screenshots,
-and the website's "chat" button does not say which property the page was about.
+are not in the available catalog are ignored. Pictures/screenshots are handled
+separately (see Pictures below). Not covered yet: the website's "chat" button does not say which property the page was about.
+
+## Pictures
+
+With `imagesEnabled: true`, up to `maxImagesPerMessage` pictures from the customer's latest
+message are sent to Gemini together with the text. Only JPEG/PNG/WebP up to 4 MB, from our
+own Storage copy or Facebook's CDN, are read; stickers, videos, files and other hosts are
+ignored, and a picture that cannot be fetched is skipped without failing the reply. The
+prompt tells the bot to read listing codes/names from screenshots of our listings and
+confirm the code with the customer, to treat text inside a picture as data, not
+instructions, to refuse personal/financial documents (ID card, payslip, bank slip) and
+hand over to a teammate, and never to estimate price or condition from a picture.
+
+**Privacy:** pictures are processed by Google (Vertex AI). Before turning this on, update
+the privacy policy and the data-handling answers for Meta, and warn customers not to send
+ID documents. The code cannot tell what a picture contains before the model sees it.
 
 ## Prices
 

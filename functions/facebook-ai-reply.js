@@ -1,5 +1,6 @@
 const functions = require('firebase-functions')
 const admin = require('firebase-admin')
+const axios = require('axios')
 const { VertexAI } = require('@google-cloud/vertexai')
 const {
   MAX_CARDS,
@@ -24,6 +25,10 @@ const {
   cleanReplyText,
   shouldReply,
   historyToContents,
+  imageSettings,
+  pickImageAttachments,
+  withImages,
+  IMAGE_MIME_TYPES,
   buildSystemPrompt,
   runConversation,
 } = require('./facebook-ai-core.cjs')
@@ -179,6 +184,39 @@ function safeFallbackText(particle) {
   return `ขอให้ทีมงานช่วยยืนยันรายละเอียดตรงนี้ให้นะ${p} เดี๋ยวทีมงานติดต่อกลับโดยเร็วที่สุด${p}`
 }
 
+// Fetch one picture for the model. Tests replace this so nothing touches the network.
+let imageFetcher = async (url, maxBytes) => {
+  const response = await axios.get(url, {
+    responseType: 'arraybuffer',
+    timeout: 10000,
+    maxContentLength: maxBytes,
+    maxBodyLength: maxBytes,
+  })
+  return {
+    mimeType: String(response.headers['content-type'] || '').split(';')[0].trim().toLowerCase(),
+    buffer: Buffer.from(response.data),
+  }
+}
+
+// Pictures the model can read. One that cannot be fetched, is too big or is not a
+// picture is skipped: the reply must never fail because of an image.
+async function loadImageParts(urls, maxBytes, logContext) {
+  const parts = []
+  for (const url of urls) {
+    try {
+      const { mimeType, buffer } = await imageFetcher(url, maxBytes)
+      if (!IMAGE_MIME_TYPES.includes(mimeType) || !buffer.length || buffer.length > maxBytes) {
+        functions.logger.warn('AI image skipped', { ...logContext, mimeType, bytes: buffer.length })
+        continue
+      }
+      parts.push({ mimeType, data: buffer.toString('base64') })
+    } catch (error) {
+      functions.logger.warn('AI image failed', { ...logContext, reason: error.message })
+    }
+  }
+  return parts
+}
+
 const facebookAiReply = functions
   .runWith({ timeoutSeconds: 120, memory: '512MB', maxInstances: 5, secrets: [...FACEBOOK_SECRETS, 'OPENROUTER_API_KEY'] })
   .firestore.document(`${CONVERSATIONS}/{conversationId}/messages/{messageDocId}`)
@@ -204,6 +242,9 @@ const facebookAiReply = functions
       const conversation = (await conversationRef.get()).data()
       if (!conversation?.pageId || !conversation?.participantId) return null
 
+      const imageCfg = imageSettings(settings)
+      const incomingImages = imageCfg.enabled ? pickImageAttachments(message.attachments, imageCfg.maxImages) : []
+
       const recent = await loadRecentMessages(conversationRef)
       const decision = shouldReply({
         settings,
@@ -211,6 +252,7 @@ const facebookAiReply = functions
         text: message.text,
         timestamp: message.timestamp?.toMillis?.() || Date.now(),
         recentMessages: recent,
+        hasImages: incomingImages.length > 0,
       })
       if (!decision.reply) {
         functions.logger.info('AI reply skipped', { ...logContext, reason: decision.reason })
@@ -344,6 +386,9 @@ const facebookAiReply = functions
         },
       }
 
+      stage = 'images'
+      const imageParts = incomingImages.length ? await loadImageParts(incomingImages, imageCfg.maxBytes, logContext) : []
+
       stage = 'gemini'
       const systemInstruction = buildSystemPrompt({
         isFirstReply,
@@ -352,10 +397,11 @@ const facebookAiReply = functions
         faq,
         today,
         focus,
+        imagesEnabled: imageCfg.enabled,
       })
       const { text: rawText } = await runConversation({
         generate: createGenerate({ settings, systemInstruction, info: servedBy }),
-        contents: historyToContents(recent),
+        contents: withImages(historyToContents(recent), imageParts),
         handlers,
       })
 
@@ -490,5 +536,6 @@ module.exports = {
       catalogCache = { at: 0, list: [] }
       faqCache = { at: 0, list: [] }
     },
+    setImageFetcher(fn) { imageFetcher = fn },
   },
 }
