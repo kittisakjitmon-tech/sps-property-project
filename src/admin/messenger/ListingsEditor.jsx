@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { ChevronDown, Loader2, Pencil, Plus, Sparkles, Trash2, X } from 'lucide-react'
+import { ChevronDown, Loader2, Pencil, Sparkles, Trash2, X } from 'lucide-react'
 import ImageDropZone from './ImageDropZone'
 
 const TYPES = ['บ้านเดี่ยว', 'บ้านแฝด', 'ทาวน์โฮม', 'คอนโด', 'ที่ดิน', 'อื่นๆ']
@@ -81,15 +81,8 @@ export default function ListingsEditor({ listings, busy, creating, onCreatingCha
   const previews = useMemo(() => pending.map(file => ({ file, url: URL.createObjectURL(file) })), [pending])
   useEffect(() => () => previews.forEach(item => URL.revokeObjectURL(item.url)), [previews])
 
-  function startNew() {
-    setDraft(EMPTY)
-    setSavedDetails('')
-    setFieldsOpen(false)
-    setFieldsEdited(false)
-    setPending([])
-    setEditingId(null)
-    onCreatingChange(true)
-  }
+  // A new house is started from the "ไม่มีในระบบ? กรอกเอง" button above, which remounts this
+  // editor (a new key), so the form always starts empty.
 
   function startEdit(listing) {
     setDraft(toDraft(listing))
@@ -256,14 +249,8 @@ export default function ListingsEditor({ listings, busy, creating, onCreatingCha
   return (
     <section className="space-y-2" aria-label="บ้านที่กรอกเอง">
       <div className="flex flex-wrap items-center gap-2">
-        <p className="font-medium">ทรัพย์ที่แอดมินกรอกเอง</p>
-        <span className="text-slate-500">(ใช้เมื่อไม่มีในฐานข้อมูล วางโพสต์ทีละหลัง)</span>
-        {!creating && listings.length < MAX_LISTINGS && (
-          <button type="button" onClick={startNew} disabled={busy} className="ml-auto inline-flex items-center gap-1 rounded-lg border border-slate-300 bg-white px-2.5 py-1 font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50">
-            <Plus className="h-3.5 w-3.5" aria-hidden="true" />
-            เพิ่มทรัพย์ที่กรอกเอง
-          </button>
-        )}
+        <p className="font-medium">{creating ? 'เพิ่มบ้านที่ไม่มีในระบบ' : 'บ้านที่กรอกเอง'}</p>
+        <span className="text-slate-500">(วางโพสต์ทีละหลัง สูงสุด {MAX_LISTINGS} หลัง)</span>
       </div>
 
       {creating && form}
@@ -336,7 +323,7 @@ export default function ListingsEditor({ listings, busy, creating, onCreatingCha
         })}
       </ul>
       {!listings.length && !creating && (
-        <p className="text-slate-500">ยังไม่มีทรัพย์ที่กรอกเอง กด &quot;เพิ่มทรัพย์ที่กรอกเอง&quot; แล้ววางโพสต์ของบ้านหลังนั้น พร้อมรูปแบบบ้าน</p>
+        <p className="text-slate-500">ยังไม่มีบ้านที่กรอกเอง ถ้าบ้านไม่มีในฐานข้อมูล กด &quot;ไม่มีในระบบ? กรอกเอง&quot; ด้านบน แล้ววางโพสต์ของบ้านหลังนั้นพร้อมรูป</p>
       )}
     </section>
   )

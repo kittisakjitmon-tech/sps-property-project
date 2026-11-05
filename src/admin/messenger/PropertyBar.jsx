@@ -1,14 +1,14 @@
 import { useState } from 'react'
 import { Check, ChevronDown, Home, Loader2, NotebookPen, PencilLine, X } from 'lucide-react'
-import ImageDropZone from './ImageDropZone'
 import ListingsEditor from './ListingsEditor'
 
-const MAX_IMAGES = 6 // same limit as the server
+const MAX_LISTINGS = 10 // same limit as the server
 
-// What this chat is about, for the AI: a property from the database, houses the team types in
-// (for example from a post with several houses), free-text details and pictures. With
-// "property first" on, the AI will not answer a chat until one of these exists. The parent
-// keys it by conversation so the forms reset when another chat is opened.
+// What this chat is about, for the AI. Two ways: a property from the database ("ตั้งทรัพย์"), or a
+// house the team adds by pasting its post ("กรอกเอง"). The note and the chat-wide pictures are
+// older, optional extras: the note is folded away, and the pictures only show on chats that
+// already have some. With "property first" on, the AI will not answer a chat until it has a
+// house. The parent keys it by conversation so the forms reset when another chat is opened.
 export default function PropertyBar({
   conversation, options, required, busy,
   onSet, onClear, onSaveNote, onAddImages, onRemoveImage, onSaveListing, onRemoveListing,
@@ -23,8 +23,10 @@ export default function PropertyBar({
   const [value, setValue] = useState('')
   const [note, setNote] = useState(savedNote)
   const [noteSaved, setNoteSaved] = useState(false)
-  const [panelOpen, setPanelOpen] = useState(!hasInfo)
+  const [panelOpen, setPanelOpen] = useState(!hasInfo || listings.length > 0)
   const [creating, setCreating] = useState(false)
+  const [editorKey, setEditorKey] = useState(0) // a new key starts the house form empty
+  const [noteOpen, setNoteOpen] = useState(Boolean(savedNote.trim()))
 
   if (!conversation) return null
 
@@ -46,6 +48,7 @@ export default function PropertyBar({
 
   function startManualEntry() {
     setPanelOpen(true)
+    setEditorKey(key => key + 1)
     setCreating(true)
   }
 
@@ -109,7 +112,8 @@ export default function PropertyBar({
         <button
           type="button"
           onClick={startManualEntry}
-          disabled={busy}
+          disabled={busy || creating || listings.length >= MAX_LISTINGS}
+          title={listings.length >= MAX_LISTINGS ? `แชทนี้มีบ้านที่กรอกเองครบ ${MAX_LISTINGS} หลังแล้ว ลบหลังเก่าก่อน` : undefined}
           className="inline-flex items-center gap-1.5 rounded-lg border border-blue-300 bg-white px-2.5 py-1.5 font-medium text-blue-800 hover:bg-blue-50 disabled:opacity-50"
         >
           <PencilLine className="h-3.5 w-3.5" aria-hidden="true" />
@@ -123,7 +127,7 @@ export default function PropertyBar({
           className={`ml-auto inline-flex items-center gap-1.5 rounded-lg border px-2.5 py-1 font-medium ${hasInfo ? 'border-emerald-300 bg-emerald-50 text-emerald-800' : 'border-slate-300 bg-white text-slate-700'} hover:bg-slate-50`}
         >
           <NotebookPen className="h-3.5 w-3.5" aria-hidden="true" />
-          ข้อมูลบ้านให้ AI
+          บ้านที่กรอกเอง
           {(listings.length > 0 || pictureCount > 0 || savedNote.trim()) && (
             <span className="font-normal">
               ({[listings.length ? `${listings.length} หลัง` : '', pictureCount ? `${pictureCount} รูป` : '', savedNote.trim() ? 'มีโน้ต' : ''].filter(Boolean).join(' · ')})
@@ -140,7 +144,7 @@ export default function PropertyBar({
 
         {waiting && (
           <span className="basis-full font-medium">
-            เปิด &quot;ต้องมีข้อมูลบ้านก่อน&quot; อยู่ · AI จะยังไม่ตอบแชทนี้ จนกว่าจะเลือกทรัพย์จากฐานข้อมูล หรือกรอกทรัพย์เอง (ปุ่ม &quot;ไม่มีในระบบ? กรอกเอง&quot;) หรือกรอกรายละเอียดบ้าน (หรือลูกค้าส่งลิงก์/รหัสทรัพย์มาเอง)
+            AI จะตอบแชทนี้เมื่อมีบ้าน: เลือกจากฐานข้อมูลแล้วกด &quot;ตั้งทรัพย์&quot; หรือกด &quot;ไม่มีในระบบ? กรอกเอง&quot; แล้ววางโพสต์
           </span>
         )}
       </div>
@@ -148,6 +152,7 @@ export default function PropertyBar({
       {panelOpen && (
         <div className="max-h-[50vh] space-y-4 overflow-y-auto border-t border-slate-100 px-4 py-3">
           <ListingsEditor
+            key={editorKey}
             listings={listings}
             busy={busy}
             creating={creating}
@@ -158,42 +163,55 @@ export default function PropertyBar({
             onRemoveImage={onRemoveImage}
           />
 
-          <form onSubmit={saveNote} className="flex flex-col gap-2">
-            <label htmlFor="conversation-note" className="flex flex-wrap items-center gap-2 font-medium">
+          <section className="rounded-lg border border-slate-200" aria-label="หมายเหตุถึง AI">
+            <button
+              type="button"
+              onClick={() => setNoteOpen(open => !open)}
+              aria-expanded={noteOpen}
+              className="flex w-full flex-wrap items-center gap-2 px-3 py-2 text-left font-medium"
+            >
               <NotebookPen className="h-4 w-4 shrink-0" aria-hidden="true" />
-              รายละเอียดอื่นๆ ให้ AI ใช้ตอบในแชทนี้
-              <span className="font-normal text-slate-500">(พิมพ์เอง เช่น โปรโมชันของโพสต์ เงื่อนไขการจอง · ข้อมูลบ้านให้วางโพสต์ที่ "กรอกเอง")</span>
-            </label>
-            <textarea
-              id="conversation-note"
-              value={note}
-              onChange={event => { setNote(event.target.value); setNoteSaved(false) }}
-              maxLength={1500}
-              rows={3}
-              placeholder="เช่น โพสต์นี้ฟรีค่าโอนถึงสิ้นเดือน จองด้วยเงิน 10,000 บาท"
-              className="w-full resize-y rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs leading-relaxed focus:border-blue-600 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-100"
-            />
-            <div className="flex flex-wrap items-center gap-2">
-              <button type="submit" disabled={!noteChanged || busy} className="inline-flex items-center gap-1.5 rounded-lg bg-blue-700 px-3 py-1.5 font-medium text-white hover:bg-blue-800 disabled:opacity-50">
-                {busy && <Loader2 className="h-3 w-3 animate-spin" aria-hidden="true" />}
-                บันทึกให้ AI
-              </button>
-              {noteSaved && !noteChanged && (
-                <span className="inline-flex items-center gap-1 font-medium text-emerald-700">
-                  <Check className="h-3.5 w-3.5" aria-hidden="true" />
-                  บันทึกแล้ว AI จะใช้ในข้อความถัดไป
-                </span>
-              )}
-              <span className="ml-auto text-slate-500">{note.length}/1500</span>
-            </div>
-          </form>
+              หมายเหตุถึง AI {savedNote.trim() ? <span className="font-normal text-emerald-700">(มีโน้ต)</span> : <span className="font-normal text-slate-500">(ไม่บังคับ)</span>}
+              <span className="font-normal text-slate-500">· เรื่องที่ไม่ใช่ข้อมูลบ้าน เช่น ลูกค้าคนนี้ขอส่วนลดไปแล้ว ข้อมูลบ้านให้วางโพสต์ที่ &quot;กรอกเอง&quot;</span>
+              <ChevronDown className={`ml-auto h-3.5 w-3.5 transition ${noteOpen ? 'rotate-180' : ''}`} aria-hidden="true" />
+            </button>
+            {noteOpen && (
+              <div className="border-t border-slate-100 p-3">
+            <form onSubmit={saveNote} className="flex flex-col gap-2">
+              <label htmlFor="conversation-note" className="sr-only">หมายเหตุถึง AI</label>
+              <textarea
+                id="conversation-note"
+                value={note}
+                onChange={event => { setNote(event.target.value); setNoteSaved(false) }}
+                maxLength={1500}
+                rows={3}
+                placeholder="เช่น โพสต์นี้ฟรีค่าโอนถึงสิ้นเดือน จองด้วยเงิน 10,000 บาท"
+                className="w-full resize-y rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs leading-relaxed focus:border-blue-600 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-100"
+              />
+              <div className="flex flex-wrap items-center gap-2">
+                <button type="submit" disabled={!noteChanged || busy} className="inline-flex items-center gap-1.5 rounded-lg bg-blue-700 px-3 py-1.5 font-medium text-white hover:bg-blue-800 disabled:opacity-50">
+                  {busy && <Loader2 className="h-3 w-3 animate-spin" aria-hidden="true" />}
+                  บันทึกให้ AI
+                </button>
+                {noteSaved && !noteChanged && (
+                  <span className="inline-flex items-center gap-1 font-medium text-emerald-700">
+                    <Check className="h-3.5 w-3.5" aria-hidden="true" />
+                    บันทึกแล้ว AI จะใช้ในข้อความถัดไป
+                  </span>
+                )}
+                <span className="ml-auto text-slate-500">{note.length}/1500</span>
+              </div>
+            </form>
+              </div>
+            )}
+          </section>
 
-          <section className="space-y-2" aria-label="รูปทั่วไปของแชท">
-            <p className="font-medium">
-              รูปทั่วไปของแชทนี้ (เช่น รูปโพสต์ แปลนรวม)
-              <span className="font-normal text-slate-500"> · AI ส่งเมื่อลูกค้าขอดูเท่านั้น สูงสุด {MAX_IMAGES} รูป</span>
-            </p>
-            {images.length > 0 && (
+          {images.length > 0 && (
+            <section className="space-y-2" aria-label="รูปทั่วไปของแชท">
+              <p className="font-medium">
+                รูปทั่วไปของแชทนี้ (แบบเดิม)
+                <span className="font-normal text-slate-500"> · AI ส่งเมื่อลูกค้าขอดู รูปบ้านใหม่ให้ใส่ในบ้านที่กรอกเอง</span>
+              </p>
               <ul className="flex flex-wrap gap-2">
                 {images.map(image => (
                   <li key={image.url} className="relative">
@@ -212,11 +230,8 @@ export default function PropertyBar({
                   </li>
                 ))}
               </ul>
-            )}
-            {images.length < MAX_IMAGES && (
-              <ImageDropZone busy={busy} onFiles={files => onAddImages(files)} label="ลากรูปมาวางที่นี่ หรือคลิกเพื่อเลือก" />
-            )}
-          </section>
+            </section>
+          )}
         </div>
       )}
     </div>
