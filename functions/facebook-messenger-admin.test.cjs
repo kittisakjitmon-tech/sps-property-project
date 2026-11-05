@@ -443,3 +443,11 @@ test('when the AI cannot read the post, the fields are read from the text and it
   }
   await reject(adminActions.saveConversationListing({ conversationId: 'c1', listing: { details: '   ' }, extract: true }, ADMIN), 400)
 })
+
+test('a super admin chooses how the AI ends its sentences', async () => {
+  await adminActions.setAiGuidance({ particle: 'ค่ะ' }, SUPER)
+  assert.equal(store.get('messenger_settings/ai').particle, 'ค่ะ')
+  await reject(adminActions.setAiGuidance({ particle: 'จ้า' }, SUPER), 400)
+  await reject(adminActions.setAiGuidance({ particle: 'ครับ' }, ADMIN), 403)
+  assert.equal(store.get('messenger_settings/ai').particle, 'ค่ะ')
+})

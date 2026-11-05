@@ -8,6 +8,7 @@ export default function AiGuidanceDialog({ settings, callApi, onClose }) {
   const id = useId()
   const [checklist, setChecklist] = useState(settings.creditChecklist || '')
   const [extra, setExtra] = useState(settings.extraInstructions || '')
+  const [particle, setParticle] = useState(settings.particle === 'ค่ะ' ? 'ค่ะ' : 'ครับ')
   const [saving, setSaving] = useState(false)
   const [status, setStatus] = useState({ type: '', message: '' })
 
@@ -18,7 +19,7 @@ export default function AiGuidanceDialog({ settings, callApi, onClose }) {
     setSaving(true)
     setStatus({ type: '', message: '' })
     try {
-      await callApi({ action: 'setAiGuidance', creditChecklist: checklist, extraInstructions: extra })
+      await callApi({ action: 'setAiGuidance', creditChecklist: checklist, extraInstructions: extra, particle })
       setStatus({ type: 'success', message: 'บันทึกแล้ว AI จะใช้ในข้อความถัดไป' })
     } catch (error) {
       setStatus({ type: 'error', message: error.message || 'บันทึกไม่สำเร็จ' })
@@ -38,6 +39,19 @@ export default function AiGuidanceDialog({ settings, callApi, onClose }) {
         </div>
 
         <div className="min-h-0 flex-1 space-y-5 overflow-y-auto p-5 text-sm">
+          <fieldset className="space-y-2">
+            <legend className="font-medium text-slate-800">คำลงท้ายของแอดมิน</legend>
+            <div className="flex flex-wrap gap-2">
+              {[['ครับ', 'ครับ (เรียกตัวเองว่า ผม / แอดมิน)'], ['ค่ะ', 'ค่ะ (เรียกตัวเองว่า แอดมิน / เรา)']].map(([value, label]) => (
+                <label key={value} className={`flex cursor-pointer items-center gap-2 rounded-lg border px-3 py-2 ${particle === value ? 'border-blue-600 bg-blue-50 text-blue-900' : 'border-slate-300 text-slate-700'}`}>
+                  <input type="radio" name={`${id}-particle`} value={value} checked={particle === value} onChange={() => setParticle(value)} />
+                  {label}
+                </label>
+              ))}
+            </div>
+            <p className="text-xs text-slate-500">AI ตอบเหมือนแอดมินเพจ ไม่แนะนำตัวว่าเป็น AI แต่ถ้าลูกค้าถามตรงๆ ว่าเป็นบอทไหม จะตอบตามจริง</p>
+          </fieldset>
+
           <div className="space-y-2">
             <label htmlFor={`${id}-checklist`} className="font-medium text-slate-800">
               เช็กเครดิตเบื้องต้น: ต้องถามอะไรลูกค้า และเอกสารที่ต้องเตรียม

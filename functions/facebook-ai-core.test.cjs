@@ -362,12 +362,17 @@ test('reply text is plain, bounded and never empty', () => {
 
 test('system prompt sets a human tone, the particle, masked-price rules, FAQ and today', () => {
   const first = buildSystemPrompt({ isFirstReply: true })
-  assert.match(first, /ผู้ช่วย AI/)
-  assert.match(first, /แนะนำตัว/)
+  assert.match(first, /แอดมินเพจ/)
+  assert.ok(!first.includes('ผู้ช่วย AI'))
+  assert.match(first, /ไม่ต้องแนะนำตัว/)
+  assert.match(first, /ห้ามโกหกว่าเป็นคน/) // never claims to be a person when asked directly
   assert.match(first, /คำลงท้าย "ครับ"/)
   assert.match(first, /priceApprox/)
   assert.match(first, /ห้ามเดา/)
-  assert.match(buildSystemPrompt({ isFirstReply: false }), /ไม่ต้องแนะนำตัวซ้ำ/)
+  assert.match(buildSystemPrompt({ isFirstReply: false }), /ไม่ต้องทักทายหรือแนะนำตัวซ้ำ/)
+  const female = buildSystemPrompt({ isFirstReply: true, particle: 'ค่ะ' })
+  assert.match(female, /ห้ามใช้ "ผม"/)
+  assert.match(female, /สวัสดีค่ะ/)
   assert.match(buildSystemPrompt({ isFirstReply: false, particle: 'ค่ะ' }), /คำลงท้าย "ค่ะ"/)
   assert.match(buildSystemPrompt({ isFirstReply: false, particle: 'อะไรก็ได้' }), /คำลงท้าย "ครับ"/)
   const full = buildSystemPrompt({
@@ -448,7 +453,7 @@ test('the prompt asks for short human chat, not letters, and examples use placeh
   assert.match(prompt, /\{priceApprox\}/)
   assert.ok(!/ตัวอย่างน้ำเสียง[\s\S]*2\.1xxx/.test(prompt.split('กฎด้านข้อมูล')[0]), 'examples must not contain a copyable price')
   assert.doesNotMatch(prompt, /ไม่เกิน 600 ตัวอักษร/)
-  assert.match(buildSystemPrompt({ isFirstReply: true }), /ประโยคเดียว/)
+  assert.match(buildSystemPrompt({ isFirstReply: true }), /ทักทายสั้นๆ/)
 })
 
 test('the reply length limit ignores links, is configurable and clamped', () => {
