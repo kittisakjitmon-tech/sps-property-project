@@ -44,6 +44,46 @@ function DetectedList({ icon, label, values, href, onUse }) {
   )
 }
 
+const CREDIT_ISSUE = { none: 'ไม่เคยค้างชำระ', some: 'เคยมีประวัติค้างชำระ', unknown: 'ไม่แน่ใจ' }
+const baht = value => (typeof value === 'number' ? `${value.toLocaleString('th-TH')} บาท` : '')
+
+// What the customer told the AI about their finances, for the loan team. Read-only.
+function CreditProfile({ profile, loan }) {
+  const rows = [
+    ['อายุ', profile?.age ? `${profile.age} ปี` : ''],
+    ['อาชีพ', profile?.occupation || ''],
+    ['อายุงาน', profile?.employmentYears != null ? `${profile.employmentYears} ปี` : ''],
+    ['รายได้ต่อเดือน', baht(profile?.monthlyIncome)],
+    ['ภาระผ่อนหนี้ต่อเดือน', baht(profile?.monthlyDebt)],
+    ['เงินดาวน์', baht(profile?.downPayment)],
+    ['วงเงินที่ต้องการ', baht(profile?.wantedLoan)],
+    ['ประวัติค้างชำระ', CREDIT_ISSUE[profile?.creditIssue] || ''],
+    ['ผู้กู้ร่วม', profile?.coBorrower === true ? 'มี' : profile?.coBorrower === false ? 'กู้คนเดียว' : ''],
+    ['หมายเหตุ', profile?.note || ''],
+  ].filter(([, value]) => value)
+  if (!rows.length && !loan?.monthlyPayment) return null
+  return (
+    <section className="rounded-xl border border-indigo-100 bg-indigo-50/60 p-3 text-xs" aria-label="ข้อมูลเช็กเครดิตเบื้องต้น">
+      <h3 className="font-semibold text-indigo-900">ข้อมูลเช็กเครดิตเบื้องต้น (ลูกค้าบอกใน AI)</h3>
+      {loan?.monthlyPayment ? (
+        <p className="mt-1 text-indigo-800">
+          ประเมินค่างวดเบื้องต้น ≈ {baht(loan.monthlyPayment)}/เดือน
+          {loan.verdict === 'likely' ? ' · น่าจะพอเป็นไปได้' : loan.needsTeam ? ' · รอทีมงานตรวจต่อ' : ''}
+        </p>
+      ) : null}
+      <dl className="mt-2 grid grid-cols-[auto_1fr] gap-x-3 gap-y-1">
+        {rows.map(([label, value]) => (
+          <div key={label} className="contents">
+            <dt className="text-slate-500">{label}</dt>
+            <dd className="font-medium text-slate-800">{value}</dd>
+          </div>
+        ))}
+      </dl>
+      <p className="mt-2 text-[11px] text-slate-500">เป็นข้อมูลที่ลูกค้าบอกเอง ยังไม่ได้ตรวจสอบกับเอกสารหรือเครดิตบูโร</p>
+    </section>
+  )
+}
+
 export default function ContactPanel({ conversation, onClose, callApi }) {
   const formId = useId()
   const [form, setForm] = useState(() => emptyForm(conversation.contact))
@@ -133,6 +173,8 @@ export default function ContactPanel({ conversation, onClose, callApi }) {
             <dd className="mt-0.5 break-all font-mono text-slate-800">{conversation.participantId}</dd>
           </div>
         </dl>
+
+        <CreditProfile profile={conversation.creditProfile} loan={conversation.loanEstimate} />
 
         <DetectedList
           icon={<Phone className="h-4 w-4 shrink-0 text-emerald-600" aria-hidden="true" />}

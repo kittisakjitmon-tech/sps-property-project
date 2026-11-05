@@ -12,6 +12,7 @@ const {
   buildCarouselMessage,
   sanitizeCustomerInfo,
   validateAppointment,
+  sanitizeCreditProfile,
   estimateLoan,
   findFocusProperties,
   findPropertyByRef,
@@ -61,6 +62,7 @@ const DEFAULT_MODEL = 'gemini-2.5-flash'
 const DEFAULT_LOCATION = 'us-central1'
 const CACHE_TTL_MS = 5 * 60 * 1000
 const MAX_FAQ_ENTRIES = 40
+const MAX_HOUSE_IMAGES = 4
 const CATALOG_FIELDS = [
   'status', 'displayId', 'title', 'type', 'listingType', 'isRental', 'subListingType',
   'bedrooms', 'bathrooms', 'locationDisplay', 'location', 'project', 'price', 'showPrice',
@@ -288,6 +290,10 @@ const facebookAiReply = functions
       let appointmentRequested = false
       const contactUpdates = {}
       let loanRecord = null // set when estimate_loan ran in this reply
+      let creditProfileUpdate = {} // what the customer said about their finances this reply
+      const staffImages = (Array.isArray(conversation.staffImages) ? conversation.staffImages : [])
+        .filter(image => typeof image?.url === 'string')
+      let houseImagesToSend = []
 
       const handlers = {
         search_properties: args => {
@@ -389,6 +395,19 @@ const facebookAiReply = functions
           }
           return result
         },
+        save_credit_profile: args => {
+          const profile = sanitizeCreditProfile(args)
+          if (!Object.keys(profile).length) return { ok: false, error: 'ไม่มีข้อมูลที่ใช้ได้ ใส่เฉพาะสิ่งที่ลูกค้าบอก' }
+          creditProfileUpdate = { ...creditProfileUpdate, ...profile }
+          return { ok: true, saved: Object.keys(profile) }
+        },
+        send_house_images: () => {
+          if (!staffImages.length) {
+            return { ok: false, error: 'ทีมงานยังไม่ได้แนบรูปแบบบ้านในแชทนี้ ให้บอกลูกค้าว่าทีมงานจะส่งให้ และขอเบอร์ติดต่อ' }
+          }
+          houseImagesToSend = staffImages.slice(0, MAX_HOUSE_IMAGES)
+          return { ok: true, queued: houseImagesToSend.length }
+        },
         request_human: args => {
           handoffReason = String(args?.reason || 'requested').slice(0, 200)
           return { ok: true }
@@ -408,6 +427,8 @@ const facebookAiReply = functions
         focus,
         imagesEnabled: imageCfg.enabled,
         staffNote,
+        creditChecklist: settings.creditChecklist,
+        staffImages,
       })
       const { text: rawText } = await runConversation({
         generate: createGenerate({ settings, systemInstruction, info: servedBy }),
@@ -442,11 +463,13 @@ const facebookAiReply = functions
       const hiddenPrices = catalog.filter(p => p._hidden && p._numericPrice && !visiblePrices.has(p._numericPrice)).map(p => p._numericPrice)
       const customerText = recent.filter(m => m.direction === 'incoming').map(m => m.text).join(' ')
       let sendCards = cardCodes.length > 0
+      let blockedByGuard = false
       if (!text || findPriceLeaks(text, hiddenPrices, customerText)) {
         functions.logger.warn('AI reply blocked by safety check', { ...logContext, empty: !text })
         text = safeFallbackText(settings.particle)
         handoffReason = 'ตรวจพบคำตอบที่อาจเปิดเผยราคาจริง'
         sendCards = false
+        blockedByGuard = true
       }
 
       stage = 'send'
@@ -491,6 +514,33 @@ const facebookAiReply = functions
           functions.logger.warn('AI cards failed', { ...logContext, reason: error.message })
         }
       }
+      // Team-attached house pictures, only when the customer asked (the model called the tool).
+      // Like the cards, a failure here must not undo the reply that was already sent.
+      if (houseImagesToSend.length && !blockedByGuard) {
+        stage = 'house-images'
+        for (const image of houseImagesToSend) {
+          try {
+            const result = await sendFacebookMessage(conversation.pageId, conversation.participantId, {
+              attachment: { type: 'image', payload: { url: image.url, is_reusable: false } },
+            })
+            await storeMessengerMessage({
+              pageId: conversation.pageId,
+              pageName: conversation.pageName,
+              participantId: conversation.participantId,
+              externalId: result.message_id,
+              direction: 'outgoing',
+              text: '',
+              attachments: [{ type: 'image', url: image.url }],
+              timestamp: Date.now(),
+              sentBy: 'ai',
+              extra: { kind: 'images' },
+            })
+          } catch (error) {
+            functions.logger.warn('AI house image failed', { ...logContext, reason: error.message })
+            break
+          }
+        }
+      }
       if (!sendCards) for (const code of lastSearchCodes.slice(0, 3)) if (text.includes(code) || /\/p\//.test(text)) shown.add(code)
 
       stage = 'update'
@@ -507,6 +557,9 @@ const facebookAiReply = functions
       if (Object.keys(contactUpdates).length) {
         update.contact = contactUpdates
         if (contactUpdates.phone || contactUpdates.email) update.leadCapturedAt = FieldValue.serverTimestamp()
+      }
+      if (Object.keys(creditProfileUpdate).length) {
+        update.creditProfile = { ...creditProfileUpdate, updatedAt: FieldValue.serverTimestamp() }
       }
       if (loanRecord || loanHandoff) {
         // Once handed over, clear the flag so resuming the bot does not hand over again.

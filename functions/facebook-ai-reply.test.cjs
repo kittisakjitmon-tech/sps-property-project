@@ -705,3 +705,116 @@ test('the prompt tells the AI not to ask the customer for a listing code first',
   const prompt = await capturePrompt(async () => { model([{ text: 'ครับ' }]); await receive('สวัสดี') })
   assert.match(prompt, /ห้ามขอ "รหัสทรัพย์" จากลูกค้าเป็นอย่างแรก/)
 })
+
+// ─── Credit profile, house images, nearby zones ──────────────────────────────
+
+test('what the customer says about their finances is saved for the team, not decided on', async () => {
+  model(
+    [{ functionCall: { name: 'save_credit_profile', args: { occupation: 'salaried', monthlyIncome: 42000, monthlyDebt: 0, employmentYears: 3, coBorrower: false, creditIssue: 'none', age: 5 } } }],
+    [{ text: 'รับทราบครับ ขอเบอร์ติดต่อให้ทีมงานช่วยเช็กวงเงินได้ไหมครับ' }],
+  )
+  await receive('เป็นพนักงานประจำ เงินเดือน 42000 ไม่มีหนี้ ทำงาน 3 ปี')
+  const profile = conversation().creditProfile
+  assert.equal(profile.occupation, 'พนักงานประจำ')
+  assert.equal(profile.monthlyIncome, 42000)
+  assert.equal(profile.monthlyDebt, 0)
+  assert.equal(profile.employmentYears, 3)
+  assert.equal(profile.coBorrower, false)
+  assert.equal(profile.creditIssue, 'none')
+  assert.equal(profile.age, undefined) // an impossible age is dropped
+  assert.equal(conversation().botPaused, undefined)
+})
+
+test('the team\'s credit checklist reaches the prompt', async () => {
+  store.set('messenger_settings/ai', { enabled: true, creditChecklist: 'ถามแค่ว่าเป็นพนักงานประจำหรือไม่' })
+  const prompt = await capturePrompt(async () => { model([{ text: 'ครับ' }]); await receive('กู้ได้ไหม') })
+  assert.match(prompt, /ถามแค่ว่าเป็นพนักงานประจำหรือไม่/)
+  assert.ok(!prompt.includes('NCB ดึงล่าสุด'))
+})
+
+const HOUSE_IMAGES = [
+  { url: 'https://firebasestorage.googleapis.com/v0/b/x/o/plan1?alt=media', caption: 'แปลนชั้น 1' },
+  { url: 'https://firebasestorage.googleapis.com/v0/b/x/o/plan2?alt=media', caption: 'แปลนชั้น 2' },
+]
+
+test('the team\'s house pictures are sent only when the customer asks, as images after the reply', async () => {
+  store.set('messenger_conversations/conv1', { pageId: 'P1', participantId: 'U1', pageName: 'เพจ', staffImages: HOUSE_IMAGES })
+  const prompt = await capturePrompt(async () => {
+    model(
+      [{ functionCall: { name: 'send_house_images', args: {} } }],
+      [{ text: 'ส่งแบบบ้านให้แล้วครับ' }],
+    )
+    await receive('ขอดูแบบบ้านหน่อยครับ')
+  })
+  assert.match(prompt, /แนบรูปแบบบ้านไว้ในแชทนี้ 2 รูป/)
+  assert.equal(sent.length, 3)
+  assert.equal(sent[0].message.text, 'ส่งแบบบ้านให้แล้วครับ')
+  assert.deepEqual(sent.slice(1).map(item => item.message.attachment.payload.url), HOUSE_IMAGES.map(image => image.url))
+  assert.equal(sent[1].message.attachment.type, 'image')
+  const imageMessages = stored.filter(message => message.extra?.kind === 'images')
+  assert.equal(imageMessages.length, 2)
+  assert.equal(imageMessages[0].attachments[0].url, HOUSE_IMAGES[0].url)
+  assert.equal(imageMessages[0].sentBy, 'ai')
+})
+
+test('house pictures are not sent when the model does not call the tool', async () => {
+  store.set('messenger_conversations/conv1', { pageId: 'P1', participantId: 'U1', pageName: 'เพจ', staffImages: HOUSE_IMAGES })
+  model([{ text: 'สวัสดีครับ' }])
+  await receive('สวัสดี')
+  assert.equal(sent.length, 1)
+})
+
+test('asking for house pictures when the team attached none is told so and sends nothing', async () => {
+  let answer
+  modelScript = [
+    async () => [{ functionCall: { name: 'send_house_images', args: {} } }],
+    async contents => { answer = contents.at(-1).parts[0].functionResponse.response; return [{ text: 'ทีมงานจะส่งให้ครับ ขอเบอร์ติดต่อด้วยนะครับ' }] },
+  ]
+  await receive('ขอแปลนหน่อย')
+  assert.equal(answer.ok, false)
+  assert.equal(sent.length, 1)
+})
+
+test('a failure while sending house pictures does not undo the text reply', async () => {
+  store.set('messenger_conversations/conv1', { pageId: 'P1', participantId: 'U1', pageName: 'เพจ', staffImages: HOUSE_IMAGES })
+  model(
+    [{ functionCall: { name: 'send_house_images', args: {} } }],
+    [{ text: 'ส่งแบบบ้านให้แล้วครับ' }],
+  )
+  const original = sent.push.bind(sent)
+  let count = 0
+  sent.push = item => { count += 1; if (count === 2) throw new Error('image rejected'); return original(item) }
+  await receive('ขอดูแบบบ้าน')
+  assert.equal(count, 2) // the first picture failed and the rest were not tried
+  assert.equal(stored[0].text, 'ส่งแบบบ้านให้แล้วครับ')
+  assert.equal(stored.filter(message => message.extra?.kind === 'images').length, 0)
+})
+
+test('at most four house pictures are sent in one go', async () => {
+  const many = Array.from({ length: 6 }, (_, n) => ({ url: `https://firebasestorage.googleapis.com/v0/b/x/o/p${n}?alt=media`, caption: '' }))
+  store.set('messenger_conversations/conv1', { pageId: 'P1', participantId: 'U1', pageName: 'เพจ', staffImages: many })
+  model([{ functionCall: { name: 'send_house_images', args: {} } }], [{ text: 'ส่งให้แล้วครับ' }])
+  await receive('ขอรูปแบบบ้านทั้งหมด')
+  assert.equal(sent.length, 1 + 4)
+})
+
+test('an area with no listings is not filled with other zones unless the customer agrees', async () => {
+  let first
+  modelScript = [
+    async () => [{ functionCall: { name: 'search_properties', args: { location: 'ภูเก็ต' } } }],
+    async contents => { first = contents.at(-1).parts[0].functionResponse.response; return [{ text: 'ตรงนั้นยังไม่มีครับ สนใจโซนใกล้เคียงไหมครับ' }] },
+  ]
+  await receive('มีบ้านที่ภูเก็ตไหม')
+  assert.equal(first.total, 0)
+  assert.equal(first.nearbyZonesAvailable, true)
+  assert.deepEqual(first.results, [])
+  assert.equal(sent.length, 1) // no cards from another zone
+
+  let second
+  modelScript = [
+    async () => [{ functionCall: { name: 'search_properties', args: { location: 'ภูเก็ต', allowNearbyZones: true } } }],
+    async contents => { second = contents.at(-1).parts[0].functionResponse.response; return [{ text: 'โซนใกล้เคียงมีครับ' }] },
+  ]
+  await receive('ได้ครับ โซนใกล้เคียงก็ได้')
+  assert.ok(second.total > 0)
+})

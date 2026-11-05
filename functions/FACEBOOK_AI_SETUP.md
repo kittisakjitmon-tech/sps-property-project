@@ -20,6 +20,7 @@ apply immediately. The on/off switch is also in the admin Messenger inbox
 | `extraInstructions` | string | Tone or brand notes appended to the prompt, e.g. "เรียกลูกค้าว่าพี่". |
 | `maxRepliesPerHour` | number | Per conversation. Default 8 (property cards don't count). |
 | `maxReplyChars` | number | Longest reply, links not counted. Default 220, allowed 80-1000. A longer reply is rewritten shorter by the model before sending, and cut at a space if that fails. |
+| `creditChecklist` | string | What the AI asks for a credit pre-check and which documents customers should prepare. Empty = the company's standard list (`DEFAULT_CREDIT_CHECKLIST`). Edited in the inbox: **คำแนะนำ AI** (Super Admin). |
 | `requirePropertyForBot` | boolean | `true` = "property first": the AI answers a chat only when it has a property (set by the team in the inbox, named by the customer with a link or listing code) or house details written by the team. Otherwise it stays silent and the chat gets a "รอเลือกทรัพย์" badge. Switch in the inbox (Super Admin). Default off. |
 | `loanBankRate` | number | Loan estimate: bank interest, % per year. Default 3.5 (same as the website calculator). |
 | `loanDirectRate` | number | Loan estimate: direct installment (ผ่อนตรง) interest, % per year. Default 2.5. |
@@ -101,6 +102,28 @@ called) and shows **รอเลือกทรัพย์**; the AI cannot be 
 refuses with 409) until a property is set. If the customer sends a link or listing code
 of an available property, that counts too. A property that is no longer available does not
 count. Customer-named properties replace the team's choice (the saved title is dropped).
+
+## Credit pre-check, house pictures, nearby zones
+
+**Credit pre-check.** When a customer asks whether they can get a loan, the AI follows the
+checklist (`creditChecklist`, default: the company's own list of questions and the documents to
+prepare for a credit-limit check, including spouse documents). It asks one question at a time,
+tells the customer which documents to prepare when asked, and never takes documents or ID
+numbers in the chat (they go to the team directly). What the customer says is saved with
+`save_credit_profile` on the conversation as `creditProfile` (age, occupation, years of work,
+income, monthly debts, down payment, wanted loan, past late payments, co-borrower) and shown
+read-only in the customer panel. It is what the customer said, not a verified fact, and the AI
+never says a loan is approved.
+
+**House pictures.** In each chat the team can attach up to 6 pictures (house plans) in the
+details box. When the customer asks to see the plan or more pictures the AI calls
+`send_house_images` and up to 4 are sent after its text reply (stored as outgoing messages with
+`kind: 'images'`; they do not count against `maxRepliesPerHour`). They are never sent unasked.
+
+**Nearby zones.** If nothing matches the zone the customer asked for, the AI says so and asks
+whether nearby zones are fine. Listings from other zones are only searched, and only then shown,
+after the customer asks for or agrees to nearby zones (`allowNearbyZones`). The search result
+tells the AI whether other zones have matches, but never lists them.
 
 ## Prices
 

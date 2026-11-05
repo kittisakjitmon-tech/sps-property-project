@@ -39,13 +39,23 @@ const collectionRef = (name, filters = [], max = Infinity) => ({
     return { empty: docs.length === 0, docs }
   },
 })
+const files = new Map()
+const storage = () => ({
+  bucket: () => ({
+    name: 'bucket',
+    file: path => ({
+      save: async (buffer, options) => { files.set(path, { buffer, options }) },
+      delete: async () => { if (!files.delete(path)) throw new Error('not found') },
+    }),
+  }),
+})
 const firestore = () => ({ doc: docRef, collection: collectionRef })
 firestore.FieldValue = { serverTimestamp: () => SERVER_TS, delete: () => DELETE, arrayUnion: (...items) => items }
 firestore.Timestamp = { now: () => ({}) }
 
 const originalLoad = Module._load
 Module._load = function patched(request) {
-  if (request === 'firebase-admin') return { firestore, app: () => ({ options: { projectId: 'test' } }) }
+  if (request === 'firebase-admin') return { firestore, storage, app: () => ({ options: { projectId: 'test' } }) }
   return originalLoad.apply(this, arguments)
 }
 const { _private } = require('./facebook-messenger.js')
@@ -59,6 +69,7 @@ const SUPER = { uid: 'u2', role: 'super_admin' }
 const reject = (promise, status) => assert.rejects(promise, error => error.status === status)
 
 beforeEach(() => {
+  files.clear()
   store = new Map()
   store.set(CONV, { pageId: 'P1', participantId: 'U1', botPaused: true, needsProperty: true })
   store.set('properties/prop1', { status: 'available', displayId: 'SPS-TH-1', title: 'ทาวน์โฮมสวย' })
@@ -143,4 +154,52 @@ test('with "property first" on, house details written by the team also let the A
   await adminActions.setConversationNote({ conversationId: 'c1', note: 'ทาวน์โฮม 2 ชั้น ใกล้นิคม' }, ADMIN)
   await adminActions.setBotPaused({ conversationId: 'c1', paused: false })
   assert.equal(conversation().botPaused, false)
+})
+
+
+const PNG_BASE64 = Buffer.from('89504e470d0a1a0a0000', 'hex').toString('base64')
+
+test('a house picture is stored, listed on the chat with its caption, and can be removed', async () => {
+  const added = await adminActions.addConversationImage({ conversationId: 'c1', imageBase64: PNG_BASE64, mimeType: 'image/png', caption: '  แปลนชั้น 1  ' }, ADMIN)
+  assert.equal(added.image.caption, 'แปลนชั้น 1')
+  assert.match(added.image.url, /^https:\/\/firebasestorage\.googleapis\.com\//)
+  assert.match(added.image.path, /^messenger\/c1\/staff-.*\.png$/)
+  assert.equal(files.has(added.image.path), true)
+  assert.equal(conversation().staffImages.length, 1)
+  assert.equal(conversation().staffImages[0].addedBy, 'u1')
+
+  await adminActions.addConversationImage({ conversationId: 'c1', imageBase64: PNG_BASE64, mimeType: 'image/jpeg' }, ADMIN)
+  assert.equal(conversation().staffImages.length, 2)
+
+  await adminActions.removeConversationImage({ conversationId: 'c1', url: added.image.url })
+  assert.deepEqual(conversation().staffImages.map(image => image.caption), [''])
+  assert.equal(files.has(added.image.path), false)
+  await reject(adminActions.removeConversationImage({ conversationId: 'c1', url: added.image.url }), 404)
+})
+
+test('house pictures: only real picture types, a size cap, and a limit of six per chat', async () => {
+  const add = (extra = {}) => adminActions.addConversationImage({ conversationId: 'c1', imageBase64: PNG_BASE64, mimeType: 'image/png', ...extra }, ADMIN)
+  await reject(add({ mimeType: 'application/pdf' }), 400)
+  await reject(add({ imageBase64: '' }), 400)
+  await reject(add({ imageBase64: Buffer.alloc(9 * 1024 * 1024).toString('base64') }), 400)
+  await reject(adminActions.addConversationImage({ conversationId: 'missing', imageBase64: PNG_BASE64, mimeType: 'image/png' }, ADMIN), 404)
+  assert.equal(files.size, 0)
+  for (let n = 0; n < 6; n += 1) await add()
+  await reject(add(), 409)
+  assert.equal(conversation().staffImages.length, 6)
+  assert.equal(files.size, 6)
+})
+
+test('only a super admin edits what the AI is told about credit checks; empty text clears it', async () => {
+  await reject(adminActions.setAiGuidance({ creditChecklist: 'x' }, ADMIN), 403)
+  await adminActions.setAiGuidance({ creditChecklist: '  ถามอาชีพก่อน  ', extraInstructions: 'เรียกลูกค้าว่าพี่' }, SUPER)
+  assert.equal(store.get('messenger_settings/ai').creditChecklist, 'ถามอาชีพก่อน')
+  assert.equal(store.get('messenger_settings/ai').extraInstructions, 'เรียกลูกค้าว่าพี่')
+  await adminActions.setAiGuidance({ creditChecklist: '   ' }, SUPER)
+  assert.equal(store.get('messenger_settings/ai').creditChecklist, undefined)
+  assert.equal(store.get('messenger_settings/ai').extraInstructions, 'เรียกลูกค้าว่าพี่') // untouched
+  await reject(adminActions.setAiGuidance({ creditChecklist: 'ก'.repeat(4001) }, SUPER), 400)
+  await reject(adminActions.setAiGuidance({ extraInstructions: 'ก'.repeat(2001) }, SUPER), 400)
+  await reject(adminActions.setAiGuidance({ creditChecklist: 123 }, SUPER), 400)
+  await reject(adminActions.setAiGuidance({}, SUPER), 400)
 })

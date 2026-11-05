@@ -234,13 +234,32 @@ function searchProperties(index, query = {}, { excludeCodes = [] } = {}) {
   const skip = new Set()
   let matched = applyFilters(all, query, skip)
   const relaxed = []
+  // Other zones are only offered when the customer asked for / agreed to nearby areas.
+  const nearbyAllowed = query.allowNearbyZones === true
   for (const step of RELAX_ORDER) {
     if (matched.length) break
+    if (step === 'location' && !nearbyAllowed) continue
     skip.add(step)
     relaxed.push(step === 'maxPrice' ? 'maxPrice(+20%)' : step)
     matched = applyFilters(all, query, skip)
   }
-  if (!matched.length) return { total: 0, results: [], relaxed: [] }
+  if (!matched.length) {
+    const asked = clean(query.location, 80)
+    if (asked && !nearbyAllowed) {
+      // Say that other zones exist, but never list them.
+      const elsewhere = applyFilters(all, query, new Set([...skip, 'location'])).length > 0
+      return {
+        total: 0,
+        results: [],
+        relaxed,
+        nearbyZonesAvailable: elsewhere,
+        note: elsewhere
+          ? `ไม่มีทรัพย์ในทำเล "${asked}" ที่ตรงเงื่อนไข ห้ามเสนอโซนอื่นเอง ให้บอกตรงๆ แล้วถามว่าสนใจโซนใกล้เคียงไหม ถ้าลูกค้าตอบว่าได้ ค่อยค้นใหม่โดยใส่ allowNearbyZones เป็น true`
+          : `ไม่มีทรัพย์ในทำเล "${asked}" ที่ตรงเงื่อนไข และไม่มีโซนอื่นที่ตรงเงื่อนไขด้วย ให้บอกตรงๆ และถามว่าปรับเงื่อนไขได้ไหม`,
+      }
+    }
+    return { total: 0, results: [], relaxed: [] }
+  }
 
   const shown = new Set(excludeCodes)
   const fresh = matched.filter(p => !shown.has(p.code))
@@ -382,6 +401,61 @@ function sanitizeCustomerInfo(args = {}) {
   return info
 }
 
+// The company's own list of what to ask and which documents to prepare for a credit check
+// (documents as supplied by the team). Editable in the inbox ("คำแนะนำ AI").
+const DEFAULT_CREDIT_CHECKLIST = [
+  'ข้อมูลที่ถามเบื้องต้น (ถามทีละข้อ ข้อที่ลูกค้าบอกแล้วไม่ต้องถามซ้ำ ไม่ต้องถามครบทุกข้อถ้าลูกค้าไม่สะดวก):',
+  '1. ราคาบ้านหรืองบที่สนใจ และเงินดาวน์ที่เตรียมได้',
+  '2. อาชีพ: พนักงานประจำ / ข้าราชการ / เจ้าของกิจการ / อาชีพอิสระ (รายการเอกสารด้านล่างเป็นของพนักงานประจำ ถ้าเป็นอาชีพอื่นให้บอกว่าทีมงานจะแจ้งรายการเอกสารให้)',
+  '3. รายได้ต่อเดือนโดยประมาณ มีโบนัสหรือไม่ และอายุงาน',
+  '4. ภาระผ่อนหนี้อื่นต่อเดือนรวม (บัตรเครดิต รถ สินเชื่อส่วนบุคคล) ถ้าไม่มีให้ถือว่า 0',
+  '5. เคยมีประวัติค้างชำระหรือไม่ (ถามแค่ว่ามี/ไม่มี/ไม่แน่ใจ ไม่ต้องลงรายละเอียด)',
+  '6. สถานะสมรส และจะกู้คนเดียวหรือมีคู่สมรสร่วมกู้ (ถ้ามีคู่สมรสต้องใช้เอกสารคู่สมรสด้วย)',
+  '',
+  'เอกสารที่ต้องเตรียมยื่นเช็ควงเงิน (พนักงานประจำ) บอกลูกค้าเมื่อลูกค้าถามว่าต้องเตรียมอะไร หรือเมื่อทีมงานจะช่วยเช็กวงเงิน ไม่ต้องให้ส่งเอกสารหรือข้อมูลบัตรในแชท ให้ส่งให้ทีมงานโดยตรง:',
+  '1. NCB ดึงล่าสุด',
+  '2. สำเนาบัตรประชาชน หน้า-หลัง 5 ชุด',
+  '3. สำเนาทะเบียนบ้าน 5 ชุด',
+  '4. สลิปเงินเดือน 6 เดือนย้อนหลัง',
+  '5. สลิปโบนัส (ถ้ามี)',
+  '6. หนังสือรับรองเงินเดือน (ส่งตามทีหลังได้)',
+  '7. หน้าสมุดบัญชีรับเงินเดือน',
+  '8. สเตทเมนต์ 6 เดือนย้อนหลัง',
+  '9. สเตทเมนต์โบนัส (ถ้ามี)',
+  'เอกสารคู่สมรส (ถ้ามีคู่สมรส): ทะเบียนสมรส 1 ชุด, บัตรประชาชน 1 ชุด, ทะเบียนบ้าน 1 ชุด',
+  'ย้ำว่านี่คือเอกสารเบื้องต้นสำหรับเช็กเครดิต ทีมงานหรือธนาคารอาจขอเพิ่มเติม ห้ามบอกว่ามีเอกสารครบแล้วจะกู้ผ่านแน่',
+].join('\n')
+
+const OCCUPATIONS = { salaried: 'พนักงานประจำ', government: 'ข้าราชการ', business: 'เจ้าของกิจการ', freelance: 'อาชีพอิสระ', other: 'อื่นๆ' }
+
+// What the customer said about their finances, saved for the team (never a decision).
+function sanitizeCreditProfile(args = {}) {
+  const profile = {}
+  const number = (value, min, max) => {
+    const n = toNumber(value)
+    return n != null && n >= min && n <= max ? Math.round(n) : null
+  }
+  const age = number(args.age, 18, 90)
+  if (age != null) profile.age = age
+  const occupation = clean(args.occupation, 40)
+  if (occupation) profile.occupation = OCCUPATIONS[occupation] || occupation
+  const years = toNumber(args.employmentYears)
+  if (years != null && years >= 0 && years <= 60) profile.employmentYears = Math.round(years * 10) / 10
+  const income = number(args.monthlyIncome, 0, 10000000)
+  if (income != null) profile.monthlyIncome = income
+  const debt = number(args.monthlyDebt, 0, 10000000)
+  if (debt != null) profile.monthlyDebt = debt
+  const down = number(args.downPayment, 0, 1000000000)
+  if (down != null) profile.downPayment = down
+  const wanted = number(args.wantedLoan, 0, 1000000000)
+  if (wanted != null) profile.wantedLoan = wanted
+  if (['none', 'some', 'unknown'].includes(args.creditIssue)) profile.creditIssue = args.creditIssue
+  if (args.coBorrower === true || args.coBorrower === false) profile.coBorrower = args.coBorrower
+  const note = clean(args.note, 300)
+  if (note) profile.note = note
+  return profile
+}
+
 function isoDate(date) {
   return date.toISOString().slice(0, 10)
 }
@@ -457,7 +531,7 @@ function shouldReply({ settings, conversation, text, timestamp, recentMessages, 
   }
   const limit = Number(settings?.maxRepliesPerHour) > 0 ? Number(settings.maxRepliesPerHour) : DEFAULT_MAX_REPLIES_PER_HOUR
   // Property cards belong to the same reply, so they don't count against the limit.
-  const aiLastHour = outgoing.filter(m => m.sentBy === 'ai' && m.kind !== 'cards' && now - m.timestamp < 60 * 60 * 1000).length
+  const aiLastHour = outgoing.filter(m => m.sentBy === 'ai' && m.kind !== 'cards' && m.kind !== 'images' && now - m.timestamp < 60 * 60 * 1000).length
   if (aiLastHour >= limit) return { reply: false, reason: 'rate-limited' }
   return { reply: true, reason: 'ok' }
 }
@@ -700,7 +774,7 @@ function estimateLoan(args = {}, settings = {}) {
 
 // ─── Prompt & tools ──────────────────────────────────────────────────────────
 
-function buildSystemPrompt({ isFirstReply, particle = 'ครับ', extraInstructions = '', faq = [], today, focus = [], imagesEnabled = false, staffNote = '' } = {}) {
+function buildSystemPrompt({ isFirstReply, particle = 'ครับ', extraInstructions = '', faq = [], today, focus = [], imagesEnabled = false, staffNote = '', creditChecklist = '', staffImages = [] } = {}) {
   const p = particle === 'ค่ะ' ? 'ค่ะ' : 'ครับ'
   const faqBlock = (faq || []).length
     ? [
@@ -715,6 +789,13 @@ function buildSystemPrompt({ isFirstReply, particle = 'ครับ', extraInstr
       'ทรัพย์ที่ลูกค้ากำลังพูดถึง (ข้อมูลจริงจากระบบ ใช้ตอบได้ทันทีโดยไม่ต้องค้นใหม่ ห้ามถามกลับว่าหลังไหน ถ้าตรงกับที่ลูกค้าถาม ถ้ามีหลายหลังให้ถือว่าอันแรกคือหลังล่าสุดที่ลูกค้าพูดถึง):',
       ...focus.map(property => JSON.stringify(presentProperty(property))),
       'ถ้าลูกค้าเปลี่ยนไปพูดถึงหลังอื่นหรือถามหาแบบอื่น ให้ใช้ get_property หรือ search_properties ตามปกติ',
+    ]
+    : []
+  const imageCaptions = (Array.isArray(staffImages) ? staffImages : []).map(image => clean(image?.caption, 60)).filter(Boolean)
+  const imagesBlock = Array.isArray(staffImages) && staffImages.length
+    ? [
+      '',
+      `ทีมงานแนบรูปแบบบ้านไว้ในแชทนี้ ${staffImages.length} รูป${imageCaptions.length ? ` (${imageCaptions.join(', ')})` : ''} ถ้าลูกค้าขอดูแบบบ้าน แปลน หรือรูปเพิ่ม ให้เรียก send_house_images แล้วบอกสั้นๆ ว่าส่งให้แล้ว ห้ามส่งรูปเมื่อลูกค้าไม่ได้ขอ`,
     ]
     : []
   const noteText = clean(staffNote, 1500)
@@ -749,6 +830,7 @@ function buildSystemPrompt({ isFirstReply, particle = 'ครับ', extraInstr
     '- ถ้าไม่พบทรัพย์ตรงเงื่อนไข ให้บอกตรงๆ และเสนอตัวเลือกใกล้เคียงหรือถามว่าปรับเงื่อนไขได้ไหม ถ้าผลค้นหาบอกว่าผ่อนเงื่อนไข ให้บอกลูกค้าว่าเป็นตัวเลือกใกล้เคียง',
     '- ถ้าลูกค้าบอกรหัสทรัพย์หรือวางลิงก์ของเว็บ SPS ให้ใช้ get_property ดึงข้อมูลของหลังนั้น ห้ามเดา',
     '- ห้ามขอ "รหัสทรัพย์" จากลูกค้าเป็นอย่างแรก ลูกค้าส่วนใหญ่ไม่รู้ ถ้ายังไม่ทราบว่าลูกค้าหมายถึงหลังไหน ให้ถามสั้นๆ ว่าสนใจทำเลหรือโครงการไหน งบประมาณเท่าไหร่ หรือขอให้ส่งลิงก์ของหลังนั้นมา',
+    '- ถ้าไม่มีทรัพย์ในทำเลที่ลูกค้าต้องการ ให้บอกตรงๆ แล้วถามว่าสนใจโซนใกล้เคียงไหม ห้ามเสนอหรือส่งการ์ดของโซนอื่นเองจนกว่าลูกค้าจะขอหรือตอบตกลง (เมื่อนั้นค้นใหม่ด้วย allowNearbyZones เป็น true)',
     '- แนะนำไม่เกิน 3 รายการ พร้อมลิงก์ url ของแต่ละรายการ ห้ามสร้างลิงก์เอง และใช้ show_property_cards ส่งการ์ดรูปบ้านให้ลูกค้าดูเมื่อแนะนำทรัพย์',
     '- ราคา: ถ้า price เป็นตัวเลข บอกได้ตามนั้น ถ้า price เป็น null และมี priceApprox ให้บอกเป็นราคาโดยประมาณตาม priceApprox ตรงตัว (เช่น "ประมาณ 2.1xxx ล้านบาท") แล้วบอกว่าราคาจริงให้ทีมงานแจ้ง ห้ามเติมเลขแทน x ห้ามเดาหรือคำนวณเพิ่ม ห้ามยืนยันหรือปฏิเสธตัวเลขที่ลูกค้าเดา',
     '- ห้ามสัญญาเรื่องการอนุมัติสินเชื่อ ราคาสุดท้าย ส่วนลด หรือการนัดหมาย ให้ทีมงานเป็นผู้ยืนยัน',
@@ -767,6 +849,10 @@ function buildSystemPrompt({ isFirstReply, particle = 'ครับ', extraInstr
     '- ถ้าคำนวณไม่ได้ (ไม่มีข้อมูลพอ หรือผลลัพธ์ needsTeam เป็น true) ให้บอกว่าทีมงานกำลังดำเนินการให้ รบกวนฝากเบอร์ติดต่อ แล้วบันทึกเบอร์ด้วย save_customer_info',
     '- ทรัพย์ที่ซ่อนราคา ห้ามใช้ราคาจริงคำนวณ ให้ลูกค้าบอกงบเอง หรือบอกว่าทีมงานจะคำนวณให้',
     '- ข้อมูลรายได้ถามเท่าที่จำเป็นและไม่ถามเลขบัตรประชาชนหรือข้อมูลบัญชีธนาคาร',
+    '- เมื่อลูกค้าบอกข้อมูลการเงินของตัวเอง (อายุ อาชีพ รายได้ อายุงาน ภาระหนี้ เงินดาวน์ วงเงินที่ต้องการ ประวัติค้างชำระ ผู้กู้ร่วม) ให้บันทึกด้วย save_credit_profile เฉพาะที่ลูกค้าบอกเอง ห้ามเดา',
+    '',
+    'แนวทางเช็กเครดิตเบื้องต้นของบริษัท (ทำตามนี้):',
+    clean(creditChecklist, 4000) || DEFAULT_CREDIT_CHECKLIST,
     'รูปภาพที่ลูกค้าส่งมา:',
     imagesEnabled
       ? '- คุณมองเห็นรูปที่ลูกค้าส่งมาได้ ใช้รูปเพื่อดูว่าเป็นทรัพย์ของ SPS หรือไม่ (อ่านรหัสทรัพย์ ชื่อโครงการ จากภาพแคปหน้าเว็บหรือโพสต์) แล้วใช้ get_property หรือ search_properties ต่อ และถามลูกค้ายืนยันรหัสที่อ่านได้ก่อนพูดถึงราคา เพราะอ่านพลาดได้'
@@ -784,6 +870,7 @@ function buildSystemPrompt({ isFirstReply, particle = 'ครับ', extraInstr
       : '- ไม่ต้องแนะนำตัวซ้ำ',
     ...focusBlock,
     ...noteBlock,
+    ...imagesBlock,
     ...faqBlock,
     extraInstructions ? `\nคำแนะนำเพิ่มเติมจากทีมงาน:\n${clean(extraInstructions, 2000)}` : '',
   ].filter(line => line !== '').join('\n')
@@ -813,6 +900,7 @@ const TOOL_DECLARATIONS = [
         maxPrice: { type: 'NUMBER', description: 'งบสูงสุดเป็นบาท เช่น 2000000' },
         minBedrooms: { type: 'NUMBER', description: 'จำนวนห้องนอนขั้นต่ำ' },
         keywords: { type: 'STRING', description: 'คำค้นอื่นๆ เช่น ใกล้โรงงาน, ผ่อนตรง' },
+        allowNearbyZones: { type: 'BOOLEAN', description: 'ตั้งเป็น true เฉพาะเมื่อลูกค้าขอดูหรือตอบตกลงว่าสนใจโซนใกล้เคียง ค่าเริ่มต้นคือไม่เสนอโซนอื่น' },
       },
     },
   },
@@ -885,6 +973,30 @@ const TOOL_DECLARATIONS = [
         monthlyDebt: { type: 'NUMBER', description: 'ภาระผ่อนหนี้อื่นต่อเดือน เป็นบาท (0 ถ้าไม่มี)' },
       },
     },
+  },
+  {
+    name: 'save_credit_profile',
+    description: 'บันทึกข้อมูลการเงินเบื้องต้นที่ลูกค้าบอกเองเพื่อให้ทีมงานตรวจสิทธิ์กู้ต่อ ใส่เฉพาะที่ลูกค้าบอก ไม่ใช่การตัดสินสินเชื่อ',
+    parameters: {
+      type: 'OBJECT',
+      properties: {
+        age: { type: 'NUMBER', description: 'อายุ (ปี)' },
+        occupation: { type: 'STRING', description: 'salaried = พนักงานประจำ, government = ข้าราชการ, business = เจ้าของกิจการ, freelance = อาชีพอิสระ, other = อื่นๆ' },
+        employmentYears: { type: 'NUMBER', description: 'อายุงานหรืออายุกิจการ (ปี)' },
+        monthlyIncome: { type: 'NUMBER', description: 'รายได้ต่อเดือน (บาท)' },
+        monthlyDebt: { type: 'NUMBER', description: 'ภาระผ่อนหนี้อื่นต่อเดือน (บาท) 0 ถ้าไม่มี' },
+        downPayment: { type: 'NUMBER', description: 'เงินดาวน์ที่เตรียมได้ (บาท)' },
+        wantedLoan: { type: 'NUMBER', description: 'วงเงินกู้ที่ต้องการ (บาท)' },
+        creditIssue: { type: 'STRING', description: 'none = ไม่เคยค้างชำระ, some = เคยมี, unknown = ไม่แน่ใจ' },
+        coBorrower: { type: 'BOOLEAN', description: 'true = มีผู้กู้ร่วม, false = กู้คนเดียว' },
+        note: { type: 'STRING', description: 'หมายเหตุสั้นๆ ที่เป็นประโยชน์กับทีมสินเชื่อ' },
+      },
+    },
+  },
+  {
+    name: 'send_house_images',
+    description: 'ส่งรูปแบบบ้านที่ทีมงานแนบไว้ในแชทนี้ให้ลูกค้า ใช้เมื่อลูกค้าขอดูแบบบ้าน แปลน หรือรูปเพิ่มเท่านั้น',
+    parameters: { type: 'OBJECT', properties: {} },
   },
   {
     name: 'request_human',
@@ -1046,6 +1158,8 @@ module.exports = {
   normalizeEmail,
   sanitizeCustomerInfo,
   validateAppointment,
+  sanitizeCreditProfile,
+  DEFAULT_CREDIT_CHECKLIST,
   estimateLoan,
   LOAN_DEFAULTS,
   extractPropertyMentions,

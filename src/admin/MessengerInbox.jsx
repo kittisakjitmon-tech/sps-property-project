@@ -7,6 +7,7 @@ import {
   Home,
   ImagePlus,
   Loader2,
+  NotebookPen,
   MessageCircle,
   Paperclip,
   Search,
@@ -18,6 +19,7 @@ import {
 } from 'lucide-react'
 import { useAdminAuth } from '../context/AdminAuthContext'
 import Avatar from './messenger/Avatar'
+import AiGuidanceDialog from './messenger/AiGuidanceDialog'
 import ContactPanel from './messenger/ContactPanel'
 import PageManager from './messenger/PageManager'
 import PropertyBar from './messenger/PropertyBar'
@@ -99,6 +101,7 @@ export default function MessengerInbox() {
   const [mobileChatOpen, setMobileChatOpen] = useState(false)
   const [contactOpen, setContactOpen] = useState(false)
   const [pageManagerOpen, setPageManagerOpen] = useState(false)
+  const [guidanceOpen, setGuidanceOpen] = useState(false)
   const bottomRef = useRef(null)
   const fileInputRef = useRef(null)
 
@@ -234,6 +237,35 @@ export default function MessengerInbox() {
     }
   }
 
+  async function addHouseImage(file, caption) {
+    if (!selectedId) return false
+    setPropertyBusy(true)
+    setActionError('')
+    try {
+      const { base64, mimeType } = await imageFileToJpegBase64(file)
+      await callApi({ action: 'addConversationImage', conversationId: selectedId, imageBase64: base64, mimeType, caption })
+      return true
+    } catch (imageError) {
+      setActionError(imageError.message || 'เพิ่มรูปไม่สำเร็จ')
+      return false
+    } finally {
+      setPropertyBusy(false)
+    }
+  }
+
+  async function removeHouseImage(url) {
+    if (!selectedId || !window.confirm('ลบรูปนี้ออกจากแชท? AI จะไม่ส่งรูปนี้ให้ลูกค้าอีก')) return
+    setPropertyBusy(true)
+    setActionError('')
+    try {
+      await callApi({ action: 'removeConversationImage', conversationId: selectedId, url })
+    } catch (imageError) {
+      setActionError(imageError.message || 'ลบรูปไม่สำเร็จ')
+    } finally {
+      setPropertyBusy(false)
+    }
+  }
+
   function toggleConversationBot() {
     if (!selectedId) return
     runBotAction({
@@ -306,6 +338,16 @@ export default function MessengerInbox() {
               <Home className="h-4 w-4" aria-hidden="true" />
               ต้องมีข้อมูลบ้านก่อน: เปิด
             </span>
+          )}
+          {isSuperAdmin() && (
+            <button
+              type="button"
+              onClick={() => setGuidanceOpen(true)}
+              className="inline-flex items-center gap-2 rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
+            >
+              <NotebookPen className="h-4 w-4" aria-hidden="true" />
+              คำแนะนำ AI
+            </button>
           )}
           <label className="sr-only" htmlFor="messenger-page-filter">กรองตามเพจ</label>
           <select
@@ -476,6 +518,8 @@ export default function MessengerInbox() {
                 onSet={changeConversationProperty}
                 onClear={() => changeConversationProperty('')}
                 onSaveNote={changeConversationNote}
+                onAddImage={addHouseImage}
+                onRemoveImage={removeHouseImage}
               />
 
               {selectedConversation.needsHuman && (
@@ -610,6 +654,14 @@ export default function MessengerInbox() {
           </aside>
         )}
       </div>
+      {guidanceOpen && (
+        <AiGuidanceDialog
+          settings={botSettings}
+          callApi={callApi}
+          onClose={() => setGuidanceOpen(false)}
+        />
+      )}
+
 
       {pageManagerOpen && (
         <PageManager pages={pages} onClose={() => setPageManagerOpen(false)} callApi={callApi} />

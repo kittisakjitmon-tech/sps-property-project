@@ -1,16 +1,21 @@
-import { useState } from 'react'
-import { Check, Home, Loader2, NotebookPen, X } from 'lucide-react'
+import { useRef, useState } from 'react'
+import { Check, Home, ImagePlus, Loader2, NotebookPen, X } from 'lucide-react'
+
+const MAX_IMAGES = 6 // same limit as the server
 
 // The property this chat is about. The AI uses it to answer, and when "property first"
 // is on it will not answer a chat until one is set. The parent keys it by conversation
 // so the form resets when another chat is opened.
-export default function PropertyBar({ conversation, options, required, busy, onSet, onClear, onSaveNote }) {
+export default function PropertyBar({ conversation, options, required, busy, onSet, onClear, onSaveNote, onAddImage, onRemoveImage }) {
   const currentCode = conversation?.currentPropertyCode || ''
   const [editing, setEditing] = useState(false)
   const [value, setValue] = useState('')
   const savedNote = conversation?.staffNote || ''
   const [note, setNote] = useState(savedNote)
   const [noteSaved, setNoteSaved] = useState(false)
+  const [caption, setCaption] = useState('')
+  const fileRef = useRef(null)
+  const images = Array.isArray(conversation?.staffImages) ? conversation.staffImages : []
 
   if (!conversation) return null
 
@@ -27,6 +32,13 @@ export default function PropertyBar({ conversation, options, required, busy, onS
     onSet(chosen.code)
     setEditing(false)
     setValue('')
+  }
+
+  async function pickImage(event) {
+    const file = event.target.files?.[0]
+    event.target.value = ''
+    if (!file || busy) return
+    if (await onAddImage(file, caption.trim())) setCaption('')
   }
 
   async function saveNote(event) {
@@ -140,6 +152,58 @@ export default function PropertyBar({ conversation, options, required, busy, onS
         <span className="ml-auto text-slate-500">{note.length}/1500 · อย่าใส่ราคาที่ตั้งใจซ่อนไว้</span>
       </div>
     </form>
+
+    <div className="space-y-2 border-t border-slate-100 px-4 py-2">
+      <p className="flex items-center gap-2 font-medium">
+        <ImagePlus className="h-4 w-4 shrink-0" aria-hidden="true" />
+        รูปแบบบ้าน / แปลน ที่ AI ส่งให้ลูกค้าได้
+        <span className="font-normal text-slate-500">(AI ส่งเมื่อลูกค้าขอดูเท่านั้น สูงสุด {MAX_IMAGES} รูป)</span>
+      </p>
+      {images.length > 0 && (
+        <ul className="flex flex-wrap gap-2">
+          {images.map(image => (
+            <li key={image.url} className="relative w-24">
+              <a href={image.url} target="_blank" rel="noreferrer">
+                <img src={image.url} alt={image.caption || 'รูปแบบบ้าน'} className="h-20 w-24 rounded-lg border border-slate-200 object-cover" />
+              </a>
+              {image.caption && <p className="mt-0.5 truncate text-[11px] text-slate-600">{image.caption}</p>}
+              <button
+                type="button"
+                onClick={() => onRemoveImage(image.url)}
+                disabled={busy}
+                className="absolute -right-1.5 -top-1.5 rounded-full bg-white p-1 text-slate-600 shadow ring-1 ring-slate-300 hover:bg-red-50 hover:text-red-700 disabled:opacity-50"
+                aria-label={`ลบรูป ${image.caption || ''}`.trim()}
+              >
+                <X className="h-3 w-3" aria-hidden="true" />
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+      {images.length < MAX_IMAGES && (
+        <div className="flex flex-wrap items-center gap-2">
+          <label className="sr-only" htmlFor="conversation-image-caption">ชื่อรูป</label>
+          <input
+            id="conversation-image-caption"
+            value={caption}
+            onChange={event => setCaption(event.target.value)}
+            maxLength={60}
+            placeholder="ชื่อรูป เช่น แปลนชั้น 1"
+            className="min-w-[160px] flex-1 rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs focus:border-blue-600 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-100"
+          />
+          <input ref={fileRef} type="file" accept="image/jpeg,image/png,image/gif,image/webp" className="sr-only" onChange={pickImage} aria-label="เลือกรูปแบบบ้าน" />
+          <button
+            type="button"
+            onClick={() => fileRef.current?.click()}
+            disabled={busy}
+            className="inline-flex items-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3 py-1.5 font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+          >
+            {busy ? <Loader2 className="h-3 w-3 animate-spin" aria-hidden="true" /> : <ImagePlus className="h-3.5 w-3.5" aria-hidden="true" />}
+            เพิ่มรูป
+          </button>
+        </div>
+      )}
+    </div>
     </div>
   )
 }

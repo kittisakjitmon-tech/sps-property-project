@@ -18,6 +18,7 @@ const PROFILE_REFRESH_MS = 24 * 60 * 60 * 1000
 const PAGE_INFO_CACHE_MS = 10 * 60 * 1000
 const MAX_DOWNLOAD_BYTES = 25 * 1024 * 1024
 const MAX_OUTGOING_IMAGE_BYTES = 8 * 1024 * 1024
+const STAFF_IMAGE_LIMIT = 6
 const OUTGOING_IMAGE_TYPES = {
   'image/jpeg': 'jpg',
   'image/png': 'png',
@@ -646,6 +647,60 @@ const adminActions = {
       needsProperty: FieldValue.delete(),
     }, { merge: true })
     return { success: true, length: text.length }
+  },
+
+  // House-plan pictures the team attaches to a chat; the AI sends them when the customer asks.
+  async addConversationImage({ conversationId: id, imageBase64, mimeType, caption }, adminUser) {
+    const { data } = await loadConversation(id)
+    const extension = OUTGOING_IMAGE_TYPES[mimeType]
+    if (!extension) throw httpError(400, 'รองรับเฉพาะไฟล์ JPG, PNG หรือ GIF')
+    if (typeof imageBase64 !== 'string' || !imageBase64) throw httpError(400, 'ไม่พบไฟล์รูปภาพ')
+    const buffer = Buffer.from(imageBase64, 'base64')
+    if (!buffer.length) throw httpError(400, 'ไฟล์รูปภาพไม่ถูกต้อง')
+    if (buffer.length > MAX_OUTGOING_IMAGE_BYTES) throw httpError(400, 'รูปภาพต้องมีขนาดไม่เกิน 8 MB')
+    const existing = Array.isArray(data.staffImages) ? data.staffImages : []
+    if (existing.length >= STAFF_IMAGE_LIMIT) throw httpError(409, `แนบรูปได้ไม่เกิน ${STAFF_IMAGE_LIMIT} รูปต่อแชท กรุณาลบรูปเก่าก่อน`)
+
+    const path = `messenger/${id}/staff-${crypto.randomUUID()}.${extension}`
+    const url = await saveBufferToStorage(path, buffer, mimeType)
+    const image = { url, path, caption: cleanField(caption, 60), addedBy: adminUser.uid, addedAt: Date.now() }
+    await admin.firestore().collection(CONVERSATIONS).doc(id).set({ staffImages: [...existing, image] }, { merge: true })
+    return { success: true, image }
+  },
+
+  async removeConversationImage({ conversationId: id, url }) {
+    const { conversationRef, data } = await loadConversation(id)
+    const existing = Array.isArray(data.staffImages) ? data.staffImages : []
+    const target = existing.find(image => image.url === url)
+    if (!target) throw httpError(404, 'ไม่พบรูปนี้ในแชท')
+    await conversationRef.set({ staffImages: existing.filter(image => image.url !== url) }, { merge: true })
+    if (target.path) {
+      await admin.storage().bucket().file(target.path).delete().catch(error => {
+        functions.logger.warn('Could not delete staff image file', { conversationId: id, reason: error.message })
+      })
+    }
+    return { success: true }
+  },
+
+  // What the AI is told to ask about credit, and the tone notes. Super admins only.
+  async setAiGuidance({ creditChecklist, extraInstructions }, adminUser) {
+    if (adminUser.role !== 'super_admin') throw httpError(403, 'เฉพาะ Super Admin เท่านั้นที่แก้คำแนะนำ AI ได้')
+    const update = {}
+    const FieldValue = admin.firestore.FieldValue
+    for (const [field, value, max] of [['creditChecklist', creditChecklist, 4000], ['extraInstructions', extraInstructions, 2000]]) {
+      if (value === undefined) continue
+      if (typeof value !== 'string') throw httpError(400, 'ข้อความไม่ถูกต้อง')
+      const text = value.trim()
+      if (text.length > max) throw httpError(400, `ข้อความยาวเกิน ${max} ตัวอักษร`)
+      update[field] = text || FieldValue.delete()
+    }
+    if (!Object.keys(update).length) throw httpError(400, 'ไม่มีข้อมูลให้บันทึก')
+    await admin.firestore().doc('messenger_settings/ai').set({
+      ...update,
+      updatedAt: FieldValue.serverTimestamp(),
+      updatedBy: adminUser.uid,
+    }, { merge: true })
+    return { success: true }
   },
 
   // Whether the AI may answer only chats that have a property set. Super admins only.
