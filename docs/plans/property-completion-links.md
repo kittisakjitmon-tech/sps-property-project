@@ -36,3 +36,9 @@ Local verification precedes deployment. Firebase Functions and the admin Hosting
 The production build passed. All 374 existing and new Node tests passed. New client modules and the callable wrapper passed targeted ESLint. Full-project lint still reports existing failures in unrelated files and the existing unused setter/dependency warning in PropertyForm.
 
 The actual public route rendered at a 1280px desktop viewport with simulated completion responses. Filling price and location and submitting reached the completed state. These browser checks used a temporary development-only API substitute and performed no production writes. Browser tools became unavailable before mobile and authenticated import/link controls could be checked visually. Real Firebase transactions and deployment remain to be verified against the live environment.
+
+## Live rollout and internal error fix
+
+On 7 November 2026, the user reported `internal` when creating a link. Firebase's live function inventory confirmed both completion callables were absent. Deployed `propertyCompletionAdmin` and `propertyCompletionPublic` to `sps-property` in `us-central1`, followed by the updated Hosting application at `https://sps-property.web.app`.
+
+Verified live callable responses with the Hosting origin. Anonymous creation returns the expected 401 authentication error, and public lookup of an unknown random token returns the expected 404 with Thai copy after reading Firestore. Both responses permit the expected origin. The `/complete-property` route returns 200 and references the current build. Its deployed JavaScript includes the new Thai fallback for internal transport errors. The targeted 19 tests, targeted lint, and production build pass. Authenticated creation through the user's browser remains a separate check.

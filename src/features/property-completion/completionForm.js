@@ -17,3 +17,10 @@ export function completionValues(missingFields, values, form = {}) {
 export function completionUrl(origin, token) {
   return `${origin}/complete-property#${encodeURIComponent(token)}`
 }
+
+export function completionErrorMessage(error) {
+  if (error?.code === 'functions/internal' || /^internal$/i.test(error?.message || '')) {
+    return 'ติดต่อบริการเติมข้อมูลบ้านไม่สำเร็จ กรุณาลองใหม่ หากยังพบปัญหาให้ติดต่อผู้ดูแล'
+  }
+  return error?.message || 'ติดต่อระบบบ้านไม่สำเร็จ กรุณาลองใหม่อีกครั้ง'
+}

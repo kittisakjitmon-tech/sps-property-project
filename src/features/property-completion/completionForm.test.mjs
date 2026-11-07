@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { completionValues, completionUrl } from './completionForm.js'
+import { completionValues, completionUrl, completionErrorMessage } from './completionForm.js'
 
 test('only requested fields are sent and square wah converts to stored square metres', () => {
   const values = completionValues(['price', 'area', 'province'], { price: '2890000', priceMax: '2900000', area: '50', province: 'ชลบุรี', title: 'เปลี่ยนชื่อ', images: ['foreign'] })
@@ -18,4 +18,13 @@ test('completion token stays in the URL fragment', () => {
   assert.equal(result.pathname, '/complete-property')
   assert.equal(result.search, '')
   assert.equal(result.hash, `#${'a'.repeat(43)}`)
+})
+
+test('callable transport errors use Thai copy and retain useful server validation messages', () => {
+  const message = completionErrorMessage({ code: 'functions/internal', message: 'internal' })
+  assert.match(message, /ติดต่อบริการ/)
+  assert.doesNotMatch(message, /internal/i)
+  assert.equal(completionErrorMessage({ code: 'functions/invalid-argument', message: 'กรุณากรอกราคาให้ครบ' }), 'กรุณากรอกราคาให้ครบ')
+  assert.equal(completionErrorMessage({ message: 'INTERNAL' }), message)
+  assert.match(completionErrorMessage(null), /ลองใหม่/)
 })
