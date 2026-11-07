@@ -4,6 +4,10 @@ rules_version = '2';
 // getUserRole() อ่าน users/(request.auth.uid) — ต้องมี doc นี้ (แอป sync ให้ตอนล็อกอิน)
 service cloud.firestore {
   match /databases/{database}/documents {
+    // Completion links are mediated by callable functions and their scoped token.
+    match /_propertyCompletionRequests/{requestId} {
+      allow read, write: if false;
+    }
     // Helper functions for role checking
     function isAuthenticated() {
       return request.auth != null;

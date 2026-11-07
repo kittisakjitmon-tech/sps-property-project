@@ -49,3 +49,13 @@ test('maps the discounted sale price and undiscounted contract price to separate
   assert.throws(() => validateDraft({ ...draft, price: 1900000 }), /ราคาหลังส่วนลด/)
   assert.throws(() => validateDraft({ ...draft, description: 'ราคาหน้าสัญญา 1900000' }), /ราคาเต็ม/)
 })
+
+test('prepared imports may omit location for completion links while other checks remain enforced', () => {
+  const draft = { title: 'บ้านเดี่ยว 1 ชั้น', price: null, locationDisplay: '' }
+  assert.throws(() => validateDraft(draft), /ทำเล/)
+  validateDraft(draft, { allowMissingLocation: true })
+  validateDraft({ ...draft, title: '', locationDisplay: 'นาป่า' }, { allowMissingLocation: true })
+  assert.throws(() => validateDraft({ ...draft, price: -1 }, { allowMissingLocation: true }))
+  assert.throws(() => validateDraft({ ...draft, description: 'ราคา 2,600,000 บาท' }, { allowMissingLocation: true }), /ราคาเต็ม/)
+  assert.throws(() => validateDraft({ ...draft, title: 'บ้าน โครงการทดสอบ' }, { allowMissingLocation: true }), /โครงการ/)
+})
