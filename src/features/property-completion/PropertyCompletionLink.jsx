@@ -61,7 +61,7 @@ export default function PropertyCompletionLink({ onCreate, link, onLinkChange, d
             <button type="button" onClick={copy} disabled={working} className={`${BUTTON} bg-blue-900 text-white hover:bg-blue-800`}><Copy size={17} aria-hidden="true" />{copied ? 'คัดลอกลิงก์แล้ว' : 'คัดลอกลิงก์'}</button>
             <a href={url} target="_blank" rel="noopener noreferrer" className={`${BUTTON} border border-blue-200 bg-white text-blue-900 hover:bg-blue-100`}>เปิดดูหน้ากรอก</a>
             <button type="button" onClick={checkStatus} disabled={working} className={`${BUTTON} text-blue-900 hover:bg-blue-100`}>ตรวจสถานะ</button>
-            <button type="button" onClick={revoke} disabled={working} className={`${BUTTON} text-rose-700 hover:bg-rose-50`}>ปิดลิงก์เพื่อแก้ไขร่าง</button>
+            <button type="button" onClick={revoke} disabled={working} className={`${BUTTON} text-rose-700 hover:bg-rose-50`}>ปิดลิงก์</button>
           </div>
           <p className="text-sm leading-7 text-slate-600">ลิงก์ใช้ข้อมูลและรูป ณ ตอนสร้าง เปิดได้ถึง {new Date(link.expiresAt).toLocaleDateString('th-TH', { timeZone: 'Asia/Bangkok', dateStyle: 'long' })} ผู้ที่มีลิงก์สามารถเติมข้อมูลและเผยแพร่บ้านได้</p>
           <p className="text-sm leading-7 text-slate-600">ช่องที่ส่งให้เติม ได้แก่ {(link.missingFields || []).map(field => COMPLETION_LABELS[field] || field).join(', ')}</p>
