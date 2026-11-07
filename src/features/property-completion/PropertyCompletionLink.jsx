@@ -54,7 +54,7 @@ export default function PropertyCompletionLink({ onCreate, link, onLinkChange, d
         {!link && <button type="button" onClick={create} disabled={disabled || working} className={`${BUTTON} mt-4 bg-blue-900 text-white hover:bg-blue-800`}>
           <Link2 size={17} aria-hidden="true" />{working ? 'กำลังเตรียมรูปและสร้างลิงก์…' : 'สร้างลิงก์เติมข้อมูลที่ขาด'}
         </button>}
-        {link && !publishedId && <div className="mt-4 space-y-3">
+        {link && <div className="mt-4 space-y-3">
           <label htmlFor="property-completion-url" className="block text-sm font-medium text-blue-950">ลิงก์สำหรับส่งให้หัวหน้า</label>
           <input id="property-completion-url" type="text" value={url} readOnly onFocus={event => event.target.select()} className="min-h-12 w-full rounded-xl border border-blue-200 bg-white px-3 text-sm text-slate-800 focus:outline-none focus:ring-4 focus:ring-blue-100" />
           <div className="flex flex-wrap gap-2">
@@ -66,7 +66,7 @@ export default function PropertyCompletionLink({ onCreate, link, onLinkChange, d
           <p className="text-sm leading-7 text-slate-600">ลิงก์ใช้ข้อมูลและรูป ณ ตอนสร้าง เปิดได้ถึง {new Date(link.expiresAt).toLocaleDateString('th-TH', { timeZone: 'Asia/Bangkok', dateStyle: 'long' })} ผู้ที่มีลิงก์สามารถเติมข้อมูลและเผยแพร่บ้านได้</p>
           <p className="text-sm leading-7 text-slate-600">ช่องที่ส่งให้เติม ได้แก่ {(link.missingFields || []).map(field => COMPLETION_LABELS[field] || field).join(', ')}</p>
         </div>}
-        {publishedId && <div role="status" className="mt-4 flex flex-wrap items-center gap-3 text-emerald-800"><ShieldCheck size={20} aria-hidden="true" /><p>หัวหน้าบันทึกและเผยแพร่บ้านแล้ว</p><a href={`/sps-internal-admin/properties/${publishedId}/edit`} className={`${BUTTON} bg-white text-blue-900 underline`}>เปิดรายการบ้าน</a></div>}
+        {publishedId && <div role="status" className="mt-4 flex flex-wrap items-center gap-3 text-emerald-800"><ShieldCheck size={20} aria-hidden="true" /><p>หัวหน้าบันทึกและเผยแพร่บ้านแล้ว สามารถเปิดลิงก์เดิมเพื่อแก้ไขข้อมูลได้</p><a href={`/sps-internal-admin/properties/${publishedId}/edit`} className={`${BUTTON} bg-white text-blue-900 underline`}>เปิดรายการบ้าน</a></div>}
         {error && <p role="alert" className="mt-3 text-sm leading-7 text-rose-700">{error}</p>}
       </div>
     </div>

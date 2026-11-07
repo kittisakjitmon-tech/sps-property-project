@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { readCompletion, submitCompletion } from './completionApi'
-import { completionValues } from './completionForm'
+import { completedValues, completionValues } from './completionForm'
 
 export default function useCompletionRequest(token) {
   const [request, setRequest] = useState(null)
@@ -10,11 +10,18 @@ export default function useCompletionRequest(token) {
   const [values, setValues] = useState({})
   const [saving, setSaving] = useState(false)
   const submitting = useRef(false)
+  const [notice, setNotice] = useState('')
 
   useEffect(() => {
     let active = true
     readCompletion(token).then(result => {
-      if (active) { setRequest(result); setError(''); setLoading(false) }
+      if (active) {
+        setRequest(result)
+        setValues(completedValues(result))
+        setNotice(result.state === 'completed' ? 'หน้านี้ได้ลงข้อมูลครบแล้ว' : '')
+        setError('')
+        setLoading(false)
+      }
     }).catch(err => {
       if (active) { setError(err.message || 'เปิดข้อมูลบ้านไม่สำเร็จ กรุณาลองอีกครั้ง'); setLoading(false) }
     })
@@ -27,7 +34,13 @@ export default function useCompletionRequest(token) {
     submitting.current = true
     setSaving(true)
     setError('')
-    try { setRequest(await submitCompletion(token, completionValues(request.missingFields, values, request.form))) }
+    try {
+      await submitCompletion(token, completionValues(request.missingFields, values, request.form), request.revision)
+      const result = await readCompletion(token)
+      setRequest(result)
+      setValues(completedValues(result))
+      setNotice(request.state === 'completed' ? 'บันทึกการแก้ไขแล้ว' : 'บันทึกและเผยแพร่บ้านแล้ว')
+    }
     catch (err) { setError(err.message || 'บันทึกไม่สำเร็จ ข้อมูลที่กรอกยังอยู่ กรุณาลองอีกครั้ง') }
     finally { submitting.current = false; setSaving(false) }
   }
@@ -38,5 +51,5 @@ export default function useCompletionRequest(token) {
     setRetry(value => value + 1)
   }
 
-  return { request, loading, error, values, saving, save, reload, change: (key, value) => setValues(current => ({ ...current, [key]: value })) }
+  return { request, loading, error, values, saving, save, reload, notice, dismissNotice: () => setNotice(''), change: (key, value) => setValues(current => ({ ...current, [key]: value })) }
 }

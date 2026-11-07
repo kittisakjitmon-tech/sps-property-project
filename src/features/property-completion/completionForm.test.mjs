@@ -28,3 +28,9 @@ test('callable transport errors use Thai copy and retain useful server validatio
   assert.equal(completionErrorMessage({ message: 'INTERNAL' }), message)
   assert.match(completionErrorMessage(null), /ลองใหม่/)
 })
+
+test('completed forms restore saved values with square metres converted back to square wah', async () => {
+  const { completedValues } = await import('./completionForm.js')
+  assert.deepEqual(completedValues({ state: 'open' }), {})
+  assert.deepEqual(completedValues({ state: 'completed', missingFields: ['price', 'priceMax', 'area', 'province'], form: { price: 2600000, priceMax: null, area: 216, province: 'ชลบุรี' } }), { price: 2600000, priceMax: '', area: 54, province: 'ชลบุรี' })
+})

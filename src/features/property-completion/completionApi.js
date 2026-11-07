@@ -22,6 +22,6 @@ export async function readCompletion(token) {
   return callCompletion(publicCall, { action: 'read', token })
 }
 
-export async function submitCompletion(token, values) {
-  return callCompletion(publicCall, { action: 'submit', token, values })
+export async function submitCompletion(token, values, revision) {
+  return callCompletion(publicCall, { action: revision ? 'update' : 'submit', token, values, ...(revision ? { revision } : {}) })
 }

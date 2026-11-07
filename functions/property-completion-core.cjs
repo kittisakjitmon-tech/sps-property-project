@@ -113,7 +113,7 @@ function requestRef(db, token) {
 function assertOpen(request, now) {
   if (!request) throw new CompletionError('not-found', 'ไม่พบลิงก์นี้ กรุณาขอลิงก์ใหม่จากผู้ส่ง')
   if (request.state === 'revoked') throw new CompletionError('failed-precondition', 'ผู้ส่งยกเลิกลิงก์นี้แล้ว กรุณาขอลิงก์ใหม่')
-  if (request.state !== 'completed' && request.expiresAt <= now) throw new CompletionError('deadline-exceeded', 'ลิงก์หมดอายุแล้ว กรุณาขอลิงก์ใหม่จากผู้ส่ง')
+  if (request.expiresAt <= now) throw new CompletionError('deadline-exceeded', 'ลิงก์หมดอายุแล้ว กรุณาขอลิงก์ใหม่จากผู้ส่ง')
 }
 function nextDisplayId(type, documents) {
   const numbers = documents.flatMap(document => {
@@ -137,7 +137,6 @@ function createService({ db, now = Date.now, tokenFactory = () => randomBytes(32
         const request = (await tx.get(ref)).data()
         if (!request) throw new CompletionError('not-found', 'ไม่พบลิงก์นี้')
         if (request.createdBy !== uid && user.role === 'agent') throw new CompletionError('permission-denied', 'คุณไม่มีสิทธิ์ยกเลิกลิงก์นี้')
-        if (request.state === 'completed') throw new CompletionError('failed-precondition', 'ลิงก์นี้บันทึกข้อมูลสำเร็จแล้ว')
         tx.update(ref, { state: 'revoked', revokedAt: now() })
         return { state: 'revoked' }
       })
@@ -176,14 +175,37 @@ function createService({ db, now = Date.now, tokenFactory = () => randomBytes(32
   }
 
   async function publicAction(data) {
-    if (!['read', 'submit'].includes(data?.action)) fail('คำขอไม่ถูกต้อง')
+    if (!['read', 'submit', 'update'].includes(data?.action)) fail('คำขอไม่ถูกต้อง')
     const ref = requestRef(db, data.token)
     return db.runTransaction(async tx => {
       const request = (await tx.get(ref)).data()
       assertOpen(request, now())
-      if (request.state === 'completed') return { state: 'completed', propertyId: request.propertyId }
       const issuer = (await tx.get(db.collection('users').doc(request.createdBy))).data()
       assertUser(issuer)
+      if (request.state === 'completed') {
+        const propertyRef = db.collection('properties').doc(request.propertyId)
+        const current = (await tx.get(propertyRef)).data()
+        if (!current) throw new CompletionError('not-found', 'ไม่พบบ้านหลังนี้ กรุณาติดต่อผู้ส่งลิงก์')
+        const result = { state: 'completed', propertyId: request.propertyId }
+        // Retried first submissions must never overwrite subsequent corrections.
+        if (data.action === 'submit') return result
+        assertPropertyAccess(issuer, request.createdBy, current)
+        const fields = [...request.missingFields]
+        if (fields.includes('price') && blank(request.form.priceMax)) fields.push('priceMax')
+        if (data.action === 'read') return {
+          ...result, form: publicView(current), missingFields: fields,
+          expiresAt: request.expiresAt, revision: fingerprint(current),
+        }
+        if (request.lastEditRevision === data.revision && request.lastEditValues === fingerprint(data.values || {})) return result
+        if (typeof data.revision !== 'string' || data.revision !== fingerprint(current)) {
+          throw new CompletionError('failed-precondition', 'ข้อมูลบ้านเปลี่ยนแล้ว กรุณาเปิดลิงก์ใหม่ก่อนแก้ไข')
+        }
+        const payload = applySubmission({ ...request, form: current, missingFields: fields }, data.values)
+        tx.set(propertyRef, { ...payload, updatedAt: serverTimestamp() }, { merge: true })
+        tx.update(ref, { lastEditRevision: data.revision, lastEditValues: fingerprint(data.values || {}), updatedAt: now() })
+        return result
+      }
+      if (data.action === 'update') throw new CompletionError('failed-precondition', 'กรุณาเปิดลิงก์ใหม่ก่อนแก้ไข')
       if (data.action === 'read') return { state: 'open', form: publicView(request.form), missingFields: request.missingFields, expiresAt: request.expiresAt }
       const payload = applySubmission(request, data.values)
       const propertyRef = db.collection('properties').doc(request.propertyId)

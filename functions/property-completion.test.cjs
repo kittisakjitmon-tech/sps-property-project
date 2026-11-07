@@ -246,3 +246,71 @@ test('creation rejects an uneditable invalid title even without location while a
   const result = await next.service.admin({ action: 'create', form: { ...FORM, title: 'โครงการทดสอบ', project: 'ทดสอบ' } }, { auth: { uid: 'admin1' } })
   assert(result.missingFields.includes('title'))
 })
+
+test('completed links reopen with saved fields and update the same published property', async () => {
+  const { service, db } = setup()
+  await create(service)
+  const saved = await service.public({ action: 'submit', token: TOKEN, values: { ...VALUES, priceMax: 2900000 } })
+  const view = await service.public({ action: 'read', token: TOKEN })
+  assert.equal(view.state, 'completed')
+  assert.equal(view.form.price, VALUES.price)
+  assert.equal(view.form.province, VALUES.province)
+  assert(view.missingFields.includes('priceMax'))
+  assert.equal(view.form.bankPrice, undefined)
+  const path = `properties/${saved.propertyId}`
+  db.store.set(path, { ...db.store.get(path), views: 42 })
+  const latest = await service.public({ action: 'read', token: TOKEN })
+  const edit = { action: 'update', token: TOKEN, revision: latest.revision, values: { price: 2700000, priceMax: 3100000 } }
+  assert.deepEqual(await service.public(edit), saved)
+  assert.deepEqual(await service.public(edit), saved)
+  const current = db.store.get(path)
+  assert.equal(current.price, 2700000)
+  assert.equal(current.priceMax, 3100000)
+  assert.equal(current.views, 42)
+  assert.equal(current.bankPrice, FORM.bankPrice)
+  assert.equal(current.createdAt, NOW)
+  assert.equal(current.displayId, 'SPS-S-1CLASS-001')
+  await service.public({ action: 'submit', token: TOKEN, values: VALUES })
+  assert.equal(db.store.get(path).price, 2700000)
+  assert.equal([...db.store.keys()].filter(key => key.startsWith('properties/')).length, 1)
+})
+
+test('completed links reject unauthorized fields and stale revisions including concurrent edits', async () => {
+  const { service, db } = setup()
+  await create(service)
+  const saved = await service.public({ action: 'submit', token: TOKEN, values: VALUES })
+  const view = await service.public({ action: 'read', token: TOKEN })
+  for (const values of [{ title: 'เปลี่ยนชื่อ' }, { bankPrice: 1 }, { bedrooms: 9 }, { price: 0 }]) {
+    await rejects(service.public({ action: 'update', token: TOKEN, revision: view.revision, values }), 'invalid-argument')
+  }
+  await rejects(service.public({ action: 'update', token: TOKEN, values: { price: 2800000 } }), 'failed-precondition')
+  const results = await Promise.allSettled([2700000, 2800000].map(price => service.public({ action: 'update', token: TOKEN, revision: view.revision, values: { price } })))
+  assert.equal(results.filter(result => result.status === 'fulfilled').length, 1)
+  assert.equal(results.filter(result => result.status === 'rejected').length, 1)
+  const next = await service.public({ action: 'read', token: TOKEN })
+  const path = `properties/${saved.propertyId}`
+  db.store.set(path, { ...db.store.get(path), description: 'แก้ไขจากหลังบ้าน' })
+  await rejects(service.public({ action: 'update', token: TOKEN, revision: next.revision, values: { price: 2900000 } }), 'failed-precondition')
+})
+
+test('legacy completed links remain editable while expiry revocation issuer and property status are enforced', async () => {
+  for (const scenario of ['legacy', 'expired', 'revoked', 'disabled', 'deleted', 'sold']) {
+    const { service, db, later } = setup()
+    await create(service)
+    const saved = await service.public({ action: 'submit', token: TOKEN, values: VALUES })
+    const view = await service.public({ action: 'read', token: TOKEN })
+    if (scenario === 'expired') later(NOW + 7 * 86400000)
+    if (scenario === 'revoked') await service.admin({ action: 'revoke', token: TOKEN }, { auth: { uid: 'admin1' } })
+    if (scenario === 'disabled') db.store.set('users/admin1', { ...USER, disabled: true })
+    if (scenario === 'deleted') db.store.delete(`properties/${saved.propertyId}`)
+    if (scenario === 'sold') db.store.set(`properties/${saved.propertyId}`, { ...db.store.get(`properties/${saved.propertyId}`), status: 'sold' })
+    const edit = { action: 'update', token: TOKEN, revision: view.revision, values: { price: 2800000 } }
+    if (scenario === 'legacy') {
+      await service.public(edit)
+      assert.equal((await service.public({ action: 'read', token: TOKEN })).form.price, 2800000)
+    } else {
+      await assert.rejects(service.public({ action: 'read', token: TOKEN }))
+      await assert.rejects(service.public(edit))
+    }
+  }
+})

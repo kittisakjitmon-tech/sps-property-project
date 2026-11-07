@@ -1,6 +1,6 @@
 export const COMPLETION_LABELS = {
   title: 'ชื่อประกาศ', type: 'ประเภทบ้าน', listingType: 'ขายหรือให้เช่า',
-  price: 'ราคา (บาท)', locationDisplay: 'ทำเล / จุดสังเกต',
+  price: 'ราคา (บาท)', priceMax: 'ราคาสูงสุด กรณีขายเป็นช่วงราคา', locationDisplay: 'ทำเล / จุดสังเกต',
   province: 'จังหวัด', district: 'อำเภอ / เขต', subDistrict: 'ตำบล / แขวง',
   bedrooms: 'ห้องนอน', bathrooms: 'ห้องน้ำ', area: 'พื้นที่ดิน (ตร.ว.)',
   usableAreaSqm: 'พื้นที่ใช้สอย (ตร.ม.)', mapUrl: 'ลิงก์ Google Maps',
@@ -23,4 +23,11 @@ export function completionErrorMessage(error) {
     return 'ติดต่อบริการเติมข้อมูลบ้านไม่สำเร็จ กรุณาลองใหม่ หากยังพบปัญหาให้ติดต่อผู้ดูแล'
   }
   return error?.message || 'ติดต่อระบบบ้านไม่สำเร็จ กรุณาลองใหม่อีกครั้ง'
+}
+
+export function completedValues(request) {
+  if (request.state !== 'completed' || !request.form) return {}
+  return Object.fromEntries(request.missingFields.map(key => [
+    key, key === 'area' && request.form[key] != null ? request.form[key] / 4 : request.form[key] ?? '',
+  ]))
 }
