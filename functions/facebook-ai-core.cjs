@@ -572,6 +572,16 @@ function asksForOtherHouses(text) {
   return value.length > 0 && OTHER_HOUSES.some(pattern => pattern.test(value))
 }
 
+// An explicit change of intent overrides a house remembered from an earlier turn.
+// Restrict this to choosing a house, not uncertainty about its rooms, location or a bank.
+function asksForHouseGuide(text) {
+  if (typeof text !== 'string') return false
+  const value = text.slice(0, 1500).normalize('NFKC').replace(/\s+/g, '')
+  return /(?:ไม่รู้|ไม่ทราบ|ไม่แน่ใจ|ตัดสินใจไม่ได้)(?:ว่า)?(?:จะ)?(?:เลือก|เอา|ชอบ|อยากได้|ต้องการ)(?:บ้าน|แบบบ้าน|แบบ|หลัง)?(?:แบบไหน|หลังไหน|อะไร|ไหนดี)/.test(value)
+    || /(?:เลือกบ้าน|เลือกแบบบ้าน|เลือกแบบ|เลือกหลัง)(?:ไม่ถูก|ไม่ได้|ไม่เป็น)/.test(value)
+    || /ยังไม่ได้เลือก(?:บ้าน|แบบบ้าน|หลังไหน)/.test(value)
+}
+
 // A card for a house the team typed in: picture, name, rooms, area and price (masked when the
 // team marked the price "do not tell"). No web link, because these houses have no page.
 function buildStaffListingElement(item) {
@@ -792,7 +802,7 @@ function shouldReply({ settings, conversation, text, timestamp, recentMessages, 
   }
   const limit = Number(settings?.maxRepliesPerHour) > 0 ? Number(settings.maxRepliesPerHour) : DEFAULT_MAX_REPLIES_PER_HOUR
   // Property cards belong to the same reply, so they don't count against the limit.
-  const aiLastHour = outgoing.filter(m => m.sentBy === 'ai' && m.kind !== 'cards' && m.kind !== 'images' && now - m.timestamp < 60 * 60 * 1000).length
+  const aiLastHour = outgoing.filter(m => m.sentBy === 'ai' && m.kind !== 'cards' && m.kind !== 'images' && m.kind !== 'house-guide' && now - m.timestamp < 60 * 60 * 1000).length
   if (aiLastHour >= limit) return { reply: false, reason: 'rate-limited' }
   return { reply: true, reason: 'ok' }
 }
@@ -1159,7 +1169,7 @@ function estimateLoan(args = {}, settings = {}) {
 
 // ─── Prompt & tools ──────────────────────────────────────────────────────────
 
-function buildSystemPrompt({ isFirstReply, maxChars = DEFAULT_MAX_REPLY_CHARS, particle = 'ครับ', extraInstructions = '', faq = [], today, focus = [], imagesEnabled = false, staffNote = '', creditChecklist = '', staffImages = [], staffListings = [], calendar = null, attachedProperty = false, followUp = false, financeKnowledge = '', openingGuide = '', documentsEnabled = false } = {}) {
+function buildSystemPrompt({ isFirstReply, maxChars = DEFAULT_MAX_REPLY_CHARS, particle = 'ครับ', extraInstructions = '', faq = [], today, focus = [], imagesEnabled = false, staffNote = '', creditChecklist = '', staffImages = [], staffListings = [], calendar = null, attachedProperty = false, followUp = false, financeKnowledge = '', openingGuide = '', documentsEnabled = false, houseGuideAvailable = false, houseGuideRequested = false } = {}) {
   const p = particle === 'ค่ะ' ? 'ค่ะ' : 'ครับ'
   const faqBlock = (faq || []).length
     ? [
@@ -1234,6 +1244,16 @@ function buildSystemPrompt({ isFirstReply, maxChars = DEFAULT_MAX_REPLY_CHARS, p
     today ? `วันนี้คือ ${today.text} (${today.iso})` : '',
     ...teamBlock,
     ...(!teamInfo && !(focus || []).length ? openingGuideBlock(openingGuide) : []),
+    ...(houseGuideAvailable && !teamInfo && !(focus || []).length && !(staffListings || []).length && !attachedProperty && !followUp ? [
+      '',
+      'ภาพแนะนำประเภทบ้านสำหรับลูกค้าที่ยังเลือกไม่ถูก:',
+      ...(houseGuideRequested ? ['- ข้อความล่าสุดของลูกค้าบอกชัดว่ายังไม่รู้ว่าจะเลือกบ้านแบบไหน ระบบเตรียมแนบภาพตัวอย่างให้แล้ว ตอบประกอบภาพและถามงบหรือทำเลเพียงข้อเดียว ห้ามถือว่าลูกค้าเลือกบ้านที่เคยคุยไว้ ห้ามเลือกบ้านหลังใดหรือส่งการ์ดบ้านแทนภาพนี้'] : []),
+      '- เมื่อลูกค้ายังไม่รู้ว่าต้องการบ้านหลังไหน ยังเลือกแบบบ้านไม่ได้ สนใจบ้านแต่ยังไม่มีหลังที่เลือก หรือขอดูประเภทบ้านเบื้องต้น ให้เรียก send_house_guide เพื่อแนบภาพรวมประเภทบ้านของบริษัท แล้วถามงบหรือทำเลทีละเรื่อง',
+      '- ภาพนี้เป็นภาพตัวอย่างประกอบโฆษณา ช่วงราคาบนภาพเป็นงบประมาณคร่าวๆ เท่านั้น ห้ามยืนยันว่ามีบ้านตรงภาพขายอยู่ ห้ามนำราคาในภาพไปผูกกับบ้านหลังใดหรือใช้คำนวณสินเชื่อ ต้องค้นทรัพย์จริงก่อน',
+      '- บอกลูกค้าสั้นๆ ว่าเป็นภาพตัวอย่างช่วยเลือกแบบบ้าน และถามว่ามีงบประมาณหรือสนใจทำเลไหน โดยถามครั้งละหนึ่งเรื่อง',
+      '- ไม่ส่งภาพนี้เพียงเพราะลูกค้าทักสวัสดี ไม่ส่งเมื่อคุยเรื่องสินเชื่ออย่างเดียว ไม่ส่งแทนการช่วยตรวจบ้านที่ลูกค้าระบุรหัสหรือลิงก์มาแล้วแต่ค้นไม่พบ และไม่ใช้ภาพนี้แทนรูปจริงของทรัพย์',
+      '- ไม่ส่งพร้อมการ์ดบ้านจริงหรือรูปบ้านหลังที่เลือกในคำตอบเดียวกัน ไม่ส่งซ้ำเมื่อเครื่องมือบอกว่าเคยส่งแล้ว หากลูกค้าเลือกบ้านแล้วให้ใช้ข้อมูลและรูปของหลังนั้น',
+    ] : []),
     '',
     'สไตล์การพูด (สำคัญมาก ต้องเหมือนคนพิมพ์แชท ไม่ใช่เขียนจดหมาย):',
     `- พูดเหมือนเซลส์อสังหาที่เป็นกันเองและสุภาพ ใช้คำลงท้าย "${p}" ภาษาพูดธรรมชาติ เช่น "ได้${p}" "มี${p}" "โอเค${p}" "เดี๋ยว...ให้นะ${p}" ห้ามใช้คำแข็งๆ เช่น "ท่าน" "กรุณา" "ขออนุญาต" "ยินดีให้บริการ" "หากมีข้อสงสัยเพิ่มเติม"`,
@@ -1552,6 +1572,11 @@ const TOOL_DECLARATIONS = [
     },
   },
   {
+    name: 'send_house_guide',
+    description: 'ส่งภาพตัวอย่างรวมประเภทบ้านและช่วงงบประมาณโฆษณาที่บริษัทกำหนดไว้ เพื่อช่วยลูกค้าที่ยังไม่มีบ้านหลังที่เลือกหรือขอดูแบบบ้านเบื้องต้น ไม่ใช่รูปทรัพย์จริง ไม่ส่งซ้ำและไม่ใช้เมื่อมีบ้านที่กำลังคุยอยู่แล้ว',
+    parameters: { type: 'OBJECT', properties: {} },
+  },
+  {
     name: 'send_house_images',
     description: 'ส่งรูปแบบบ้านที่ทีมงานแนบไว้ในแชทนี้ให้ลูกค้า ใช้เมื่อลูกค้าขอดูแบบบ้าน แปลน หรือรูปเพิ่มเท่านั้น ถ้าทีมงานกรอกบ้านหลายหลัง ให้ระบุ listingId ของหลังที่ลูกค้าถาม',
     parameters: {
@@ -1712,6 +1737,7 @@ module.exports = {
   MAX_CARDS,
   DEFAULT_CARDS,
   asksForOtherHouses,
+  asksForHouseGuide,
   buildStaffListingElement,
   buildAttachedElements,
   TYPE_LABELS,

@@ -46,12 +46,15 @@ function descriptionPriceIssues(description, prices = []) {
   return [...new Set(issues)]
 }
 
-function listingContentIssues({ title, project, locationDisplay, location, description, price, priceMax, bankPrice }) {
+function listingContentIssues({ title, project, locationDisplay, location, description, price, priceMax, bankPrice }, { allowMissingLocation = false } = {}) {
   const issues = []
   const projectName = comparable(project).replace(/^(?:โครงการ|หมู่บ้าน)/u, '')
   if ((projectName && comparable(title).includes(projectName)) || /โครงการ/u.test(clean(title))) issues.push('ชื่อประกาศห้ามมีชื่อโครงการ กรุณาเก็บไว้ในช่องชื่อโครงการเท่านั้น')
-  if (!clean(locationDisplay)) issues.push('กรุณาระบุทำเลเพื่อนำไปต่อท้ายชื่อประกาศ')
-  else if (!comparable(title).endsWith(comparable(titleLocation(title, locationDisplay, location)))) issues.push('ชื่อประกาศต้องลงท้ายด้วยทำเลที่ระบุ')
+  if (!clean(locationDisplay)) {
+    if (!allowMissingLocation) issues.push('กรุณาระบุทำเลเพื่อนำไปต่อท้ายชื่อประกาศ')
+  } else if (!comparable(title).endsWith(comparable(titleLocation(title, locationDisplay, location)))) {
+    issues.push('ชื่อประกาศต้องลงท้ายด้วยทำเลที่ระบุ')
+  }
   return [...issues, ...descriptionPriceIssues(description, [price, priceMax, bankPrice])]
 }
 

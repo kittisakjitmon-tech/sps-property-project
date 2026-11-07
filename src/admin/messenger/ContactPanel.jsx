@@ -187,7 +187,7 @@ export default function ContactPanel({ conversation, onClose, callApi }) {
           </button>
           {conversation.profileError && (
             <div className="w-full rounded-lg bg-amber-50 px-3 py-2 text-left text-xs text-amber-800">
-              <p className="font-medium">ยังดึงชื่อจาก Facebook ไม่ได้</p>
+              <p className="font-medium">ข้อมูลโปรไฟล์ Facebook ยังไม่ครบ</p>
               <p className="mt-1 break-words font-mono text-[11px] text-amber-700">{conversation.profileError}</p>
             </div>
           )}

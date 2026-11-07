@@ -33,7 +33,7 @@ export function missingFields(draft) {
   ].filter(Boolean)
 }
 
-export function validateDraft(draft) {
+export function validateDraft(draft, { allowMissingLocation = false } = {}) {
   for (const field of ['price', 'priceMax', 'bankPrice', 'discountAmount', 'landAreaSqw', 'usableAreaSqm', 'bedrooms', 'bathrooms']) {
     const v = draft[field]
     if (v != null && v !== '' && (!Number.isFinite(Number(v)) || Number(v) < 0)) throw new Error('ราคา พื้นที่ และจำนวนห้องต้องเป็นตัวเลขตั้งแต่ศูนย์ขึ้นไป')
@@ -47,7 +47,9 @@ export function validateDraft(draft) {
     if (expected < 0 || (draft.price != null && draft.price !== '' && Math.abs(Number(draft.price) - expected) > 0.005)) throw new Error('ราคาหลังส่วนลดต้องเท่ากับราคาก่อนส่วนลดลบส่วนลด กรุณาตรวจตัวเลขของแปลงเดียวกัน')
   }
   const form = draftToForm(draft)
-  const issues = listingContentIssues({ ...draft, title: form.title, description: form.description })
+  const issues = listingContentIssues({ ...draft, title: form.title, description: form.description,
+    locationDisplay: allowMissingLocation && !form.title ? '' : form.locationDisplay,
+  }, { allowMissingLocation })
   if (issues.length) throw new Error(issues.join('\n'))
 }
 

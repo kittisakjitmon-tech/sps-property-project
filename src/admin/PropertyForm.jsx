@@ -33,6 +33,8 @@ import GoogleMapsInputWithPreview from '../components/GoogleMapsInputWithPreview
 import PropertyExporter from './components/PropertyExporter'
 import PropertyQuotation from '../features/quotation/PropertyQuotation'
 import { PROPERTY_TYPES, getPropertyLabel } from '../constants/propertyTypes'
+import PropertyCompletionLink from '../features/property-completion/PropertyCompletionLink'
+import { createCompletionLink } from '../features/property-completion/completionApi'
 
 // CATEGORIES removed, using PROPERTY_TYPES from constants
 
@@ -128,6 +130,10 @@ export default function PropertyForm() {
   const isEdit = Boolean(id)
   const [form, setForm] = useState(defaultForm)
   const originalPrice = useRef(null)
+  const originalVersion = useRef(null)
+  const uploadedCompletionPhotos = useRef(new WeakMap())
+  const [sharing, setSharing] = useState(false)
+  const [completionLink, setCompletionLink] = useState(null)
   const [loading, setLoading] = useState(isEdit || Boolean(aiDraftId))
   const [permissionDenied, setPermissionDenied] = useState(false)
   const [saving, setSaving] = useState(false)
@@ -203,6 +209,7 @@ export default function PropertyForm() {
       // No permission check needed here anymore
 
       originalPrice.current = Number(p.price) || 0
+      originalVersion.current = p.updatedAt?.toMillis?.() ?? null
       const loc = p.location || {}
 
       // Determine listingType from existing data
@@ -448,11 +455,12 @@ export default function PropertyForm() {
       if (file.size > 30 * 1024 * 1024) throw new Error('ไฟล์ร่างต้องไม่เกิน 30 MB')
       const data = JSON.parse(await file.text())
       if (data.schema !== 'sps-property-intake-v1' || !data.property || !Array.isArray(data.photos)) throw new Error('ไฟล์ร่างไม่ตรงรูปแบบที่รองรับ')
-      validateDraft(data.property)
+      validateDraft(data.property, { allowMissingLocation: true })
       if (data.photos.length > 15) throw new Error('นำเข้ารูปได้สูงสุด 15 รูป')
       const fields = draftToForm(data.property)
       let files = data.photos.map(attachmentToFile)
-      if (data.makeCover && files.length) {
+      const generateCover = Boolean(data.makeCover && files.length && fields.title && fields.locationDisplay)
+      if (generateCover) {
         const cover = await renderCoverImage({ ...data.property, ...fields, landAreaSqw: data.property.landAreaSqw }, data.photos[0])
         files[0] = attachmentToFile(cover)
       }
@@ -460,11 +468,40 @@ export default function PropertyForm() {
       setForm({ ...defaultForm, ...fields })
       setNewFiles(files)
       setCommittedLocationDisplay(fields.locationDisplay)
-      setAiReview({ questions: data.questions || [], coverGenerated: Boolean(data.makeCover && files.length), originalPhotoCount: files.length - (data.makeCover && files.length ? 1 : 0) })
+      setAiReview({ questions: data.questions || [], coverGenerated: generateCover, originalPhotoCount: files.length - (generateCover ? 1 : 0) })
       setAiReviewed(false)
       setAiImportError('')
     } catch (err) { alert('นำเข้าร่างไม่สำเร็จ: ' + err.message) }
     finally { setCompressing(false) }
+  }
+
+  const prepareCompletionLink = async () => {
+    if (saving || compressing || deleting || sharing) throw new Error('กรุณารอให้การทำงานปัจจุบันเสร็จก่อน')
+    const title = normalizeListingTitle(form.title, form.project, form.locationDisplay, form.location)
+    const contentIssues = listingContentIssues({ ...form, title, locationDisplay: title ? form.locationDisplay : '' }, { allowMissingLocation: true })
+    if (contentIssues.length) throw new Error(contentIssues.join('\n'))
+    if (!form.images.length && !newFiles.length) throw new Error('กรุณาแนบรูปบ้านก่อนสร้างลิงก์')
+    if (form.images.length + newFiles.length > 15) throw new Error('รูปในประกาศรวมภาพหน้าปกต้องไม่เกิน 15 รูป')
+    setSharing(true)
+    try {
+      const uploaded = []
+      for (const file of newFiles) {
+        let url = uploadedCompletionPhotos.current.get(file)
+        if (!url) {
+          url = await uploadPropertyImageWithProgress(file, id || 'completion-draft')
+          uploadedCompletionPhotos.current.set(file, url)
+        }
+        uploaded.push(url)
+      }
+      const images = [...form.images, ...uploaded]
+      const coverImageUrl = images.includes(form.coverImageUrl) ? form.coverImageUrl : uploaded[0] || images[0]
+      const snapshot = { ...form, title, images, coverImageUrl }
+      setForm(snapshot)
+      setNewFiles([])
+      setManualCoverSource(null)
+      setManualCoverReady(false)
+      return await createCompletionLink(snapshot, id, originalVersion.current)
+    } finally { setSharing(false) }
   }
 
   const makeAnnouncementCover = async () => {
@@ -852,12 +889,13 @@ export default function PropertyForm() {
         </Link>
         {!isEdit && <div className="mb-4 flex flex-wrap items-center gap-3">
           <label htmlFor="property-prepared-draft" className="inline-flex min-h-11 cursor-pointer items-center rounded-xl border border-blue-200 bg-white px-4 py-2 text-sm font-semibold text-blue-900">นำเข้าข้อมูลที่เตรียมไว้พร้อมรูป</label>
-          <input id="property-prepared-draft" type="file" accept="application/json,.json" className="sr-only" disabled={compressing} onChange={importPreparedDraft} />
+          <input id="property-prepared-draft" type="file" accept="application/json,.json" className="sr-only" disabled={compressing || sharing || Boolean(completionLink)} onChange={importPreparedDraft} />
           <span className="text-xs text-slate-500">จับคู่ข้อมูลกับชื่อช่อง ราคา หน่วยพื้นที่ และรูปภาพให้ในครั้งเดียว</span>
         </div>}
         <h1 className="text-2xl font-bold text-blue-900 mb-6">
           {isEdit ? 'แก้ไขทรัพย์' : 'เพิ่มทรัพย์'}
         </h1>
+        {['admin', 'super_admin', 'agent'].includes(userRole) && <PropertyCompletionLink onCreate={prepareCompletionLink} link={completionLink} onLinkChange={setCompletionLink} disabled={saving || compressing || deleting || sharing} />}
         {isEdit && <PropertyQuotation property={form} newFiles={newFiles} />}
         {aiImportError && <div role="alert" className="mb-5 rounded-xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-800">{aiImportError} <Link to="/sps-internal-admin/ai-property" className="underline">กลับไปหน้าผู้ช่วย AI</Link></div>}
         {aiReview && <div className="mb-5 space-y-3 rounded-xl border border-blue-200 bg-blue-50 p-4 text-sm text-blue-900">
@@ -869,6 +907,7 @@ export default function PropertyForm() {
           <Link to="/sps-internal-admin/ai-property" className="inline-block underline">กลับไปคุยกับ AI / เตรียมแบบบ้านถัดไป</Link>
         </div>}
         <form onSubmit={handleSubmit} className="property-form space-y-6">
+          <fieldset disabled={sharing || Boolean(completionLink)} className="min-w-0 space-y-6 disabled:opacity-60">
           <p className="text-sm text-slate-500">กรอกข้อมูลบ้าน ทำเล และรูปภาพ · ช่องที่มี * จำเป็นต้องระบุ</p>
           <div className="grid gap-5 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:p-6 md:grid-cols-2">
             <h2 className="form-section-title md:col-span-2">ข้อมูลทรัพย์</h2>
@@ -1522,6 +1561,7 @@ export default function PropertyForm() {
               </button>
             )}
           </div>
+          </fieldset>
         </form>
       </div>
     </>

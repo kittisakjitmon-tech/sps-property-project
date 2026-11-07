@@ -964,3 +964,7 @@ exports.facebookWebhook = require('./facebook-messenger').facebookWebhook
 exports.facebookMessengerAdmin = require('./facebook-messenger').facebookMessengerAdmin
 exports.facebookAiReply = require('./facebook-ai-reply').facebookAiReply
 exports.facebookAiRetry = require('./facebook-ai-reply').facebookAiRetry
+
+// Scoped, expiring completion links for a property with missing listing details.
+exports.propertyCompletionAdmin = require('./property-completion').propertyCompletionAdmin
+exports.propertyCompletionPublic = require('./property-completion').propertyCompletionPublic

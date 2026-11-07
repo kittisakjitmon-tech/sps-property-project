@@ -25,6 +25,7 @@ const AdminBlogs = lazy(() => import('./admin/AdminBlogs'))
 const AdminPortfolio = lazy(() => import('./admin/AdminPortfolio'))
 const PrivacyPolicy = lazy(() => import('./features/legal/PrivacyPolicy'))
 const DataDeletion = lazy(() => import('./features/legal/DataDeletion'))
+const PropertyCompletionPage = lazy(() => import('./features/property-completion/PropertyCompletionPage'))
 
 // ─── Route Loading Fallback ───────────────────────────────────────────────────
 function RouteLoading() {
@@ -50,6 +51,7 @@ function App() {
         {/* Public legal pages (required by Meta app review). */}
         <Route path="/privacy" element={<PrivacyPolicy />} />
         <Route path="/data-deletion" element={<DataDeletion />} />
+        <Route path="/complete-property" element={<PropertyCompletionPage />} />
 
         {/* Public agent catalogue: browsing and local PDF generation only. */}
         <Route path="/agent" element={<AgentPropertiesPage />} />

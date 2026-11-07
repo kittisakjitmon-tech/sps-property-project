@@ -388,9 +388,9 @@ test('system prompt sets a human tone, the particle, masked-price rules, FAQ and
   assert.match(full, /2026-11-04/)
 })
 
-test('all twelve tools are declared', () => {
+test('all thirteen tools are declared', () => {
   assert.deepEqual(TOOL_DECLARATIONS.map(t => t.name), [
-    'search_properties', 'get_property', 'show_attached_houses', 'show_property_cards', 'save_customer_info', 'check_availability', 'request_appointment', 'estimate_loan', 'save_credit_profile', 'save_document_review', 'send_house_images', 'request_human',
+    'search_properties', 'get_property', 'show_attached_houses', 'show_property_cards', 'save_customer_info', 'check_availability', 'request_appointment', 'estimate_loan', 'save_credit_profile', 'save_document_review', 'send_house_guide', 'send_house_images', 'request_human',
   ])
 })
 
@@ -1070,3 +1070,35 @@ test('the prompt allows reading documents only when switched on, and never repea
   assert.ok(!off.includes('เอกสารที่ลูกค้าส่งมาในแชท'))
   assert.match(off, /ห้ามอ่านหรือทวนข้อมูลในรูป/)
 })
+
+
+test('house guide is offered only when configured and no house is selected', () => {
+  const prompt = buildSystemPrompt({ houseGuideAvailable: true });
+  assert.match(prompt, /send_house_guide/);
+  assert.match(prompt, /ภาพตัวอย่าง/);
+  assert.match(prompt, /งบประมาณคร่าวๆ/);
+  assert.match(prompt, /ห้ามยืนยัน/);
+  assert.doesNotMatch(buildSystemPrompt({}), /send_house_guide/);
+  assert.doesNotMatch(buildSystemPrompt({ houseGuideAvailable: true, focus: [toIndexedProperty('a', base)] }), /send_house_guide/);
+  assert.doesNotMatch(buildSystemPrompt({ houseGuideAvailable: true, staffNote: 'บ้านพานทอง 2 ห้องนอน' }), /send_house_guide/);
+  assert.doesNotMatch(buildSystemPrompt({ houseGuideAvailable: true, staffListings: [{ id: 'one', text: 'บ้านพานทอง' }] }), /send_house_guide/);
+  assert.doesNotMatch(buildSystemPrompt({ houseGuideAvailable: true, attachedProperty: true }), /send_house_guide/);
+  assert.doesNotMatch(buildSystemPrompt({ houseGuideAvailable: true, followUp: true }), /send_house_guide/);
+});
+
+test('a house guide attachment is part of an answer, not another hourly AI reply', () => {
+  const now = Date.now();
+  const result = shouldReply({ settings: { enabled: true, maxRepliesPerHour: 1 }, conversation: {}, text: 'สนใจบ้าน', timestamp: now, now,
+    recentMessages: [{ direction: 'outgoing', sentBy: 'ai', kind: 'house-guide', timestamp: now - 1000 }] });
+  assert.equal(result.reply, true);
+});
+
+test('explicit indecision about choosing a house is distinct from questions about a selected house', () => {
+  const { asksForHouseGuide } = require('./facebook-ai-core.cjs');
+  for (const text of ['คือผมยังไม่รู้ว่าจะเลือกบ้านแบบไหน', 'ยังไม่รู้จะเลือกบ้านแบบไหนดี', 'ยังเลือกบ้านไม่ถูก', 'เลือกแบบบ้านไม่ได้เลย', 'ยังไม่ได้เลือกบ้าน', 'ยังตัดสินใจไม่ได้ว่าจะเลือกบ้านแบบไหน']) {
+    assert.equal(asksForHouseGuide(text), true, text);
+  }
+  for (const text of ['สวัสดีครับ', 'ไม่รู้ว่าบ้านหลังนี้กี่ห้อง', 'บ้านหลังนี้อยู่ที่ไหน', 'ขอข้อมูล SPS-TH-1', 'ไม่รู้จะเลือกธนาคารไหนดี', 'ผมรู้แล้วว่าจะเลือกบ้านแบบไหน', 'ขอดูรูปบ้านหลังนี้']) {
+    assert.equal(asksForHouseGuide(text), false, text);
+  }
+});

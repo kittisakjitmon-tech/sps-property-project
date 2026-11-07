@@ -308,3 +308,47 @@ AI sees the post, and it is given only the masked price (e.g. 2.1xxx ล้า�
   houses or cards, no greeting). It is saved with `followUp: true`, and the chat gets
   `lastFollowUpAt`. One follow-up until the customer writes again, and only within Facebook's
   24 hours after the customer's last message.
+
+## House selection guide image
+
+`messenger_settings/ai.houseGuideImageUrl` configures the company-approved advertising
+image used by `send_house_guide`. Only HTTPS Firebase Storage URLs for the
+`sps-property.firebasestorage.app` bucket (or its `storage.googleapis.com` URL) are accepted.
+Unset the field to disable the guide without deploying again.
+
+The AI is instructed to offer the guide when a customer is interested in houses but
+has not chosen one, is unsure which type to choose, or asks for a general overview.
+A greeting alone or a credit-only question does not call for this image. The guide
+is illustrative advertising with approximate budget ranges, not an available listing
+or an exact property price; replies describe it that way and ask one follow-up question.
+
+An explicit message such as “คือผมยังไม่รู้ว่าจะเลือกบ้านแบบไหน” automatically queues
+the guide even when an earlier house is remembered or attached by the team. For that turn,
+the old property is not treated as the customer’s choice, and real-house search/cards
+cannot replace the overview. A real property code in the same newest message takes priority.
+A new explicit request can send the guide again; the same incoming message is deduplicated.
+Earlier references remain saved for later questions. New property assignments during a run
+are checked again before sending.
+
+Otherwise, the server blocks the guide for property-focused/team-attached conversations, follow-ups,
+hand-offs, guarded replies, and replies already sending house cards or pictures. A
+transaction lease prevents concurrent sends and a delivery marker prevents unsolicited repeats.
+Resetting the conversation context allows the guide once again. Failed image delivery
+leaves the text response intact and allows a later retry. Stored image bubbles have
+`kind: 'house-guide'` and do not count as an extra reply toward the hourly limit.
+
+Source artwork: `public/images/messenger/house-selection-guide.png` (provided by the owner).
+
+## Messenger participant names and profile photos
+
+The direct User Profile API remains the primary source for names and avatars. If it
+cannot return a name, the inbox reads `/{pageId}/conversations` filtered by the same
+participant ID and uses only the exact matching participant's name. It does not use
+the Page's name or another person's profile. Names recovered this way are marked
+`profileNameSource: 'conversation-participants'`.
+
+A recovered name without a newly returned avatar is reported as a partial profile;
+existing avatars are preserved and `profileError` explains what is still missing.
+Failed/partial profiles retry after five minutes rather than the normal 24-hour cache.
+This fallback does not grant Business Asset User Profile Access or bypass Meta's
+approval requirements for fields that Meta still refuses to return.
