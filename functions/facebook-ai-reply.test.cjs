@@ -87,10 +87,10 @@ const firestore = () => ({
     const transaction = {
       get: async ref => ref.snap(),
       update: (ref, data) => updates.push([ref, data, 'update']),
-      set: (ref, data) => updates.push([ref, data, 'set']),
+      set: (ref, data, options) => updates.push([ref, data, 'set', options]),
     }
     const result = await run(transaction)
-    for (const [ref, data, kind] of updates) await (kind === 'set' ? ref.set(data) : ref.update(data))
+    for (const [ref, data, kind, options] of updates) await (kind === 'set' ? ref.set(data, options) : ref.update(data))
     return result
   },
 })
@@ -2218,3 +2218,92 @@ test('a new explicit request can show the guide again, but the same customer mes
   await facebookAiReply.run(snapshot, { params: { conversationId: CID, messageDocId: second } });
   assert.equal(guideImages().length, 2);
 });
+
+test('an unknown ad blocks replies even when property-first is off and an old manual house exists', async () => {
+  Object.assign(conversation(), {
+    currentPropertyCode: 'SPS-TH-1', staffNote: 'บ้านหลังเดิม',
+    facebookReferral: { adId: '999', status: 'unmapped', timestamp: NOW },
+  })
+  await receive('ยังอยู่ไหม')
+  assert.equal(sent.length, 0)
+  assert.equal(conversation().needsProperty, true)
+})
+
+test('a mapped ad supplies the house before the first AI reply, excluding previous house entries', async () => {
+  Object.assign(conversation(), {
+    currentPropertyCode: 'SPS-CD-9', currentPropertySetBy: 'facebook-referral',
+    facebookReferral: { adId: '101', status: 'matched', timestamp: NOW },
+    staffNote: 'บ้านเก่าที่ไม่ควรใช้',
+    staffListings: [{ id: 'old', title: 'บ้านเก่าจากโพสต์', details: 'บ้านเก่าจากโพสต์' }],
+  })
+  store.set(`messenger_conversations/${CID}/messages/old`, { direction: 'incoming', text: 'SPS-TH-1', timestamp: new Ts(NOW - 60000) })
+  const prompt = await capturePrompt(async () => {
+    model([{ text: 'บ้านที่สอบถามยังมีข้อมูลในระบบครับ' }])
+    await receive('ยังอยู่ไหม')
+  })
+  assert.match(prompt, /SPS-CD-9/)
+  assert.ok(!prompt.includes('บ้านเก่าที่ไม่ควรใช้'))
+  assert.ok(!prompt.includes('บ้านเก่าจากโพสต์'))
+  assert.deepEqual(stored[0].extra.aiContext.properties, ['SPS-CD-9'])
+  assert.ok(sent.length > 0)
+})
+
+test('a new ad arriving during generation prevents the answer for the old house from being sent', async () => {
+  Object.assign(conversation(), {
+    currentPropertyCode: 'SPS-TH-1', currentPropertySetBy: 'facebook-referral',
+    facebookReferral: { adId: '101', status: 'matched', timestamp: NOW },
+  })
+  modelScript = [async () => {
+    Object.assign(conversation(), { currentPropertyCode: 'SPS-CD-9', facebookReferral: { adId: '102', status: 'matched', timestamp: NOW + 1 } })
+    return [{ text: 'บ้านหลังแรกยังอยู่ครับ' }]
+  }]
+  await receive('ยังอยู่ไหม')
+  assert.equal(sent.length, 0)
+})
+
+test('automatic referral retries respect human activity instead of using the staff override', async () => {
+  Object.assign(conversation(), {
+    currentPropertyCode: 'SPS-TH-1', currentPropertySetBy: 'facebook-referral',
+    facebookReferral: { adId: '101', status: 'matched', timestamp: NOW },
+    lastOutboundAt: new Ts(NOW - 1000),
+  })
+  store.set(`messenger_conversations/${CID}/messages/human`, { direction: 'outgoing', text: 'สวัสดีครับ', timestamp: new Ts(NOW - 1000), sentBy: 'human' })
+  store.set(`messenger_conversations/${CID}/messages/incoming`, { direction: 'incoming', text: 'ยังอยู่ไหม', timestamp: new Ts(NOW) })
+  const ref = new DocRef('ai_retry_requests/referral1')
+  await ref.set({ conversationId: CID, automaticReferral: true })
+  await facebookAiRetry.run(ref.snap())
+  assert.equal(sent.length, 0)
+})
+
+test('team notes and listings added after the ad click are still fed to the model', async () => {
+  Object.assign(conversation(), {
+    currentPropertyCode: 'SPS-CD-9', currentPropertySetBy: 'facebook-referral',
+    facebookReferral: { adId: '101', status: 'matched', timestamp: NOW },
+    staffNote: 'หมายเหตุใหม่หลังคลิกโฆษณา', staffNoteAt: new Ts(NOW + 1000),
+    staffListings: [{ id: 'new', title: 'บ้านใหม่ที่กรอกหลังคลิก', details: 'รายละเอียดบ้านใหม่หลังคลิก', updatedAt: NOW + 1000 }],
+  })
+  const prompt = await capturePrompt(async () => {
+    model([{ text: 'ครับ' }])
+    await receive('รายละเอียดบ้านหน่อย')
+  })
+  assert.match(prompt, /หมายเหตุใหม่หลังคลิกโฆษณา/)
+  assert.match(prompt, /บ้านใหม่ที่กรอกหลังคลิก/)
+  assert.ok(sent.length > 0)
+})
+
+test('a source change during generation queues an automatic retry instead of going silent', async () => {
+  Object.assign(conversation(), {
+    currentPropertyCode: 'SPS-TH-1', currentPropertySetBy: 'facebook-referral',
+    facebookReferral: { adId: '101', status: 'matched', timestamp: NOW },
+  })
+  modelScript = [async () => {
+    Object.assign(conversation(), { currentPropertyCode: 'SPS-CD-9', facebookReferral: { adId: '102', status: 'matched', timestamp: NOW + 1 } })
+    return [{ text: 'บ้านหลังแรกยังอยู่ครับ' }]
+  }]
+  await receive('ยังอยู่ไหม')
+  assert.equal(sent.length, 0)
+  const retry = [...store.entries()].find(([key]) => key.startsWith('ai_retry_requests/'))
+  assert.ok(retry, 'a retry request is queued')
+  assert.equal(retry[1].automaticReferral, true)
+  assert.equal(retry[1].reason, 'source-changed')
+})

@@ -4,6 +4,7 @@ const admin = require('firebase-admin')
 const functions = require('firebase-functions')
 const { sanitizeStaffListing, cleanPost, MAX_STAFF_LISTINGS } = require('./facebook-ai-core.cjs')
 const { extractListingFields } = require('./facebook-ai-extract')
+const { SOURCE_COLLECTION, REFERRAL_FIELDS, sourceKey, readReferral, resolveReferral } = require('./facebook-referral.cjs')
 
 const CONVERSATIONS = 'messenger_conversations'
 const PAGES = 'messenger_pages'
@@ -476,8 +477,56 @@ function summarizeWebhook(body) {
   }
 }
 
+// Commit the source/house BEFORE creating a message: the message onCreate can run immediately.
+async function persistReferral(pageId, pageName, event, { queueRetry = true } = {}) {
+  const referral = readReferral(event)
+  if (!referral) return
+  const db = admin.firestore()
+  const resolved = await resolveReferral(db, pageId, referral)
+  const id = conversationId(pageId, event.sender.id)
+  const ref = db.collection(CONVERSATIONS).doc(id)
+  await db.runTransaction(async transaction => {
+    const snapshot = await transaction.get(ref)
+    const current = snapshot.data() || {}
+    // Delayed deliveries and webhook retries must not undo a newer click or a staff correction.
+    if (current.facebookReferral && resolved.timestamp <= current.facebookReferral.timestamp) return
+    if (resolved.timestamp < (current.contextResetAt?.toMillis?.() || 0)) return
+    const FieldValue = admin.firestore.FieldValue
+    const matched = resolved.status === 'matched'
+    const update = {
+      channel: 'facebook', pageId, participantId: event.sender.id,
+      displayName: current.displayName || fallbackDisplayName(event.sender.id),
+      ...(pageName ? { pageName } : {}),
+      ...(!snapshot.exists ? { createdAt: FieldValue.serverTimestamp() } : {}),
+      facebookReferral: resolved,
+      currentPropertyCode: matched ? resolved.propertyCode : FieldValue.delete(),
+      currentPropertyId: matched ? resolved.propertyId : FieldValue.delete(),
+      currentPropertyTitle: matched ? resolved.propertyTitle : FieldValue.delete(),
+      currentPropertySetBy: matched ? 'facebook-referral' : FieldValue.delete(),
+      currentPropertySetAt: FieldValue.serverTimestamp(),
+      needsProperty: matched ? FieldValue.delete() : true,
+      attachedShownAt: FieldValue.delete(),
+      othersRequestedAt: FieldValue.delete(),
+      updatedAt: FieldValue.serverTimestamp(),
+    }
+    transaction.set(ref, update, { merge: true })
+    // A source may arrive after the AI has already waited for a house. Retry with ordinary
+    // bot rules (not the staff override); do not reopen paused or already answered chats.
+    if (queueRetry && matched && current.needsProperty && !current.botPaused
+      && toMillisValue(current.lastInboundAt) > toMillisValue(current.lastOutboundAt)) {
+      transaction.set(db.collection('ai_retry_requests').doc(`referral-${sourceKey(id, 'time', String(resolved.timestamp))}`), {
+        conversationId: id, automaticReferral: true, reason: 'facebook-referral',
+        createdAt: FieldValue.serverTimestamp(),
+      })
+    }
+  })
+}
+
 async function handleMessagingEvent(pageId, pageName, event) {
-  const message = event.message
+  const message = event.message || (event.postback?.title ? {
+    mid: event.postback.mid || `postback-${sourceKey(pageId, event.sender?.id, JSON.stringify([event.timestamp, event.postback.payload]))}`,
+    text: event.postback.title,
+  } : null)
   const senderId = event.sender?.id
   const recipientId = event.recipient?.id
   if (!message?.mid || !senderId || !recipientId) return
@@ -519,7 +568,10 @@ async function handleMessagingEvent(pageId, pageName, event) {
     text: message.text || '',
     attachments,
     timestamp,
-    ...(automated ? { extra: { automated: true } } : {}),
+    extra: {
+      ...(automated ? { automated: true } : {}),
+      ...(readReferral(event) ? { facebookReferral: readReferral(event) } : {}),
+    },
   })
 
   if (!isEcho) await refreshCustomerProfile(id)
@@ -559,13 +611,28 @@ const facebookWebhook = functions
     if (body.object !== 'page') return res.status(200).json({ received: true })
 
     try {
+      const pageNames = new Map()
       for (const entry of body.entry || []) {
         const pageId = entry.id
         if (!pageId || !(entry.messaging || []).length) continue
         const page = await ensurePageInfo(pageId)
-
-        for (const event of entry.messaging) {
-          await handleMessagingEvent(pageId, page.name, event)
+        pageNames.set(pageId, page.name)
+      }
+      // Pre-process the entire delivery (including multiple entries for one page). A fresh
+      // incoming message will trigger its own answer, so do not also queue an automatic retry.
+      const entries = body.entry || []
+      for (const entry of entries) {
+        if (!pageNames.has(entry.id)) continue
+        for (const event of entry.messaging || []) {
+          const hasMessage = entries.some(other => other.id === entry.id && (other.messaging || []).some(item =>
+            item.sender?.id === event.sender?.id && !item.message?.is_echo && (item.message?.mid || item.postback?.title)))
+          await persistReferral(entry.id, pageNames.get(entry.id), event, { queueRetry: !hasMessage })
+        }
+      }
+      for (const entry of entries) {
+        if (!pageNames.has(entry.id)) continue
+        for (const event of entry.messaging || []) {
+          await handleMessagingEvent(entry.id, pageNames.get(entry.id), event)
         }
       }
       return res.status(200).json({ received: true })
@@ -682,6 +749,81 @@ async function deleteStaffImageFile(conversationId, image) {
 }
 
 const adminActions = {
+  async listPropertySources({ pageId }) {
+    const id = cleanField(pageId, 64)
+    if (!id || !/^\d+$/.test(id)) throw httpError(400, 'รหัสเพจไม่ถูกต้อง')
+    const result = await admin.firestore().collection(SOURCE_COLLECTION).where('pageId', '==', id).limit(200).get()
+    return { sources: result.docs.map(doc => ({ id: doc.id, ...doc.data() })) }
+  },
+
+  async savePropertySource({ pageId, kind, value, propertyCode }, adminUser) {
+    const id = cleanField(pageId, 64)
+    const sourceValue = cleanField(value, 200)
+    const code = cleanField(propertyCode, 60)
+    if (!/^\d+$/.test(id) || !['ad', 'post', 'ref'].includes(kind) || !sourceValue
+      || (kind === 'ad' && !/^\d+$/.test(sourceValue))
+      || (kind === 'post' && !/^\d+(?:_\d+)?$/.test(sourceValue))) {
+      throw httpError(400, 'กรุณาระบุเพจและรหัสโฆษณา / โพสต์ / ลิงก์ให้ถูกต้อง')
+    }
+    const db = admin.firestore()
+    const ref = db.collection(SOURCE_COLLECTION).doc(sourceKey(id, kind, sourceValue))
+    if (!code) { await ref.delete(); return { success: true, removed: true } }
+    const found = await db.collection('properties').where('displayId', '==', code).limit(1).get()
+    if (!found.docs.length || found.docs[0].data().status !== 'available') throw httpError(409, 'กรุณาเลือกทรัพย์ที่ยังว่างในระบบ')
+    if (!(await ref.get()).exists) {
+      const existing = await db.collection(SOURCE_COLLECTION).where('pageId', '==', id).limit(200).get()
+      if (existing.docs.length >= 200) throw httpError(409, 'เพจนี้มีต้นทางครบ 200 รายการแล้ว กรุณาลบต้นทางที่ไม่ใช้ก่อน')
+    }
+    const revision = crypto.randomUUID()
+    const FieldValue = admin.firestore.FieldValue
+    await db.runTransaction(async transaction => {
+      transaction.set(ref, { pageId: id, kind, value: sourceValue, propertyCode: code, revision,
+        propertyTitle: cleanField(found.docs[0].data().title, 120),
+        backfill: { status: 'queued', updated: 0, skipped: 0, scanned: 0 },
+        updatedBy: adminUser.uid, updatedAt: FieldValue.serverTimestamp() })
+      transaction.set(db.collection('messenger_property_backfills').doc(sourceKey(ref.id, 'backfill', revision)), {
+        mappingId: ref.id, revision, kind, value: sourceValue, status: 'queued',
+        createdAt: FieldValue.serverTimestamp(),
+      })
+    })
+    return { success: true, backfillQueued: true }
+  },
+
+  async enableReferralTracking({ pageId }) {
+    const id = cleanField(pageId, 64)
+    if (!/^\d+$/.test(id)) throw httpError(400, 'รหัสเพจไม่ถูกต้อง')
+    const token = await getPageToken(id)
+    await axios.post(graphUrl(`${id}/subscribed_apps`), null, {
+      params: { subscribed_fields: REFERRAL_FIELDS, access_token: token }, timeout: 15000,
+    })
+    await admin.firestore().collection(PAGES).doc(id).set({ referralTrackingEnabledAt: admin.firestore.FieldValue.serverTimestamp() }, { merge: true })
+    return { success: true }
+  },
+
+  async applyConversationReferral({ conversationId: id }) {
+    const { data, conversationRef } = await loadConversation(id)
+    const source = data.facebookReferral
+    if (!source) throw httpError(400, 'แชทนี้ยังไม่มีข้อมูลต้นทางจาก Facebook')
+    // Re-resolve after the team creates a mapping, without pretending it is a new ad click.
+    const resolved = await resolveReferral(admin.firestore(), data.pageId, source)
+    if (resolved.status !== 'matched') throw httpError(409, 'ยังจับคู่บ้านไม่ได้ กรุณาผูกต้นทางกับทรัพย์ที่ยังว่างก่อน')
+    const FieldValue = admin.firestore.FieldValue
+    await admin.firestore().runTransaction(async transaction => {
+      const latest = (await transaction.get(conversationRef)).data()
+      if (JSON.stringify(latest?.facebookReferral) !== JSON.stringify(source)) {
+        throw httpError(409, 'ต้นทางของแชทเปลี่ยนแล้ว กรุณาตรวจบ้านและลองใหม่')
+      }
+      transaction.set(conversationRef, {
+        facebookReferral: resolved,
+        currentPropertyCode: resolved.propertyCode, currentPropertyId: resolved.propertyId,
+        currentPropertyTitle: resolved.propertyTitle, currentPropertySetBy: 'facebook-referral',
+        currentPropertySetAt: FieldValue.serverTimestamp(), needsProperty: FieldValue.delete(),
+      }, { merge: true })
+    })
+    const retry = await retryIfWaiting(id, data, { uid: 'facebook-referral' }, 'property-source-mapped')
+    return { success: true, ...retry }
+  },
+
   // Pause or resume the AI assistant for one conversation. Resuming also clears the
   // "needs a human" flag and tells the bot to ignore earlier human replies.
   async setBotPaused({ conversationId: id, paused }) {
@@ -719,6 +861,7 @@ const adminActions = {
         currentPropertyTitle: FieldValue.delete(),
         currentPropertySetBy: FieldValue.delete(),
         currentPropertySetAt: FieldValue.delete(),
+        ...(before.facebookReferral ? { facebookReferral: { ...before.facebookReferral, status: 'unmapped', propertyCode: null, propertyId: null, propertyTitle: null }, needsProperty: true } : {}),
       }, { merge: true })
       return { success: true, cleared: true }
     }
@@ -734,6 +877,7 @@ const adminActions = {
       currentPropertySetBy: adminUser.uid,
       currentPropertySetAt: FieldValue.serverTimestamp(),
       needsProperty: FieldValue.delete(),
+      ...(before.facebookReferral ? { facebookReferral: { ...before.facebookReferral, status: 'manual', propertyCode: property.displayId, propertyId: found.docs[0].id, propertyTitle: title } } : {}),
     }, { merge: true })
     const retry = await retryIfWaiting(id, before, adminUser, 'property-set')
     return { success: true, code: property.displayId, title, ...retry }
@@ -913,6 +1057,7 @@ const adminActions = {
       currentPropertyId: FieldValue.delete(),
       currentPropertyTitle: FieldValue.delete(),
       currentPropertySetBy: FieldValue.delete(),
+      facebookReferral: FieldValue.delete(),
       currentPropertySetAt: FieldValue.delete(),
       loanEstimate: FieldValue.delete(),
       creditProfile: FieldValue.delete(),
@@ -1109,7 +1254,7 @@ const adminActions = {
 
     try {
       await axios.post(graphUrl(`${pageId}/subscribed_apps`), null, {
-        params: { subscribed_fields: 'messages,message_echoes', access_token: token },
+        params: { subscribed_fields: REFERRAL_FIELDS, access_token: token },
         timeout: 15000,
       })
     } catch (error) {
@@ -1206,5 +1351,7 @@ module.exports = {
     isAutomaticReply,
     refreshCustomerProfile,
     adminActions,
+    persistReferral,
+    handleMessagingEvent,
   },
 }

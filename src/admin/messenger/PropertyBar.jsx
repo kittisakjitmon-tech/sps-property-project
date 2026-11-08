@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { Check, ChevronDown, Home, Loader2, NotebookPen, PencilLine, X } from 'lucide-react'
 import ListingsEditor from './ListingsEditor'
 import PropertyPicker from './PropertyPicker'
+import ReferralPanel from './ReferralPanel'
 import { searchPropertyOptions } from './propertySearch'
 
 const MAX_LISTINGS = 10 // same limit as the server
@@ -142,6 +143,8 @@ export default function PropertyBar({
           </span>
         )}
       </div>
+
+      <ReferralPanel conversation={conversation} options={options} />
 
       {panelOpen && (
         <div className="max-h-[50vh] space-y-4 overflow-y-auto border-t border-slate-100 px-4 py-3">

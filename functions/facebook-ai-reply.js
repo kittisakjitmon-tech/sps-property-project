@@ -2,6 +2,7 @@ const functions = require('firebase-functions')
 const { randomUUID } = require('node:crypto')
 const admin = require('firebase-admin')
 const axios = require('axios')
+const { referralNeedsProperty, referralContext } = require('./facebook-referral.cjs')
 const calendarRules = require('./facebook-ai-calendar.cjs')
 const { createGoogleCalendarClient } = require('./google-calendar')
 const { VertexAI } = require('@google-cloud/vertexai')
@@ -378,7 +379,7 @@ async function loadImageParts(urls, maxBytes, logContext, { allowDocuments = fal
 // With followUp (only with retry), when the customer has not written since the last reply the AI
 // writes first: one message that carries on from the conversation. If the customer has written
 // in the meantime, it is an ordinary answer.
-async function answerCustomer({ conversationId, message, messageRef, retry = false, followUp = false }) {
+async function answerCustomer({ conversationId, message, messageRef, retry = false, followUp = false, automaticReferral = false }) {
   if (message?.direction !== 'incoming') return null
 
   const db = admin.firestore()
@@ -406,6 +407,10 @@ async function answerCustomer({ conversationId, message, messageRef, retry = fal
     stage = 'history'
     const conversation = (await conversationRef.get()).data()
     if (!conversation?.pageId || !conversation?.participantId) return null
+    if (referralNeedsProperty(conversation)) {
+      await conversationRef.set({ needsProperty: true }, { merge: true })
+      return null
+    }
 
     const imageCfg = imageSettings(settings)
     const calendarCfg = calendarRules.calendarSettings(settings)
@@ -456,7 +461,7 @@ async function answerCustomer({ conversationId, message, messageRef, retry = fal
       timestamp: message.timestamp?.toMillis?.() || Date.now(),
       recentMessages: recent,
       hasImages: incomingImages.length + incomingDocuments.length > 0,
-      override: retry,
+      override: retry && !automaticReferral,
     })
     if (!decision.reply) {
       functions.logger.info('AI reply skipped', { ...logContext, reason: decision.reason })
@@ -478,15 +483,28 @@ async function answerCustomer({ conversationId, message, messageRef, retry = fal
     // Everything the model may reference in this reply.
     const seen = new Map() // code -> indexed property (from search results)
     // Listings the customer named (link or code) or that we were already discussing.
-    const staffNote = typeof conversation.staffNote === 'string' ? conversation.staffNote.trim() : ''
+    const fromFacebook = conversation.currentPropertySetBy === 'facebook-referral'
+    // A fresh ad click establishes a new house. Team notes/listings/pictures saved for a
+    // previous house (before this click) stay in the inbox, but are not fed to the model.
+    // Data the team adds after the click (for this ad's house) is still used.
+    const sourceAt = conversation.facebookReferral?.timestamp || 0
+    const teamDataSince = fromFacebook ? sourceAt : 0
+    const teamDataIsCurrent = atMs => !teamDataSince || (atMs ?? 0) >= teamDataSince
+    const staffNote = teamDataIsCurrent(conversation.staffNoteAt?.toMillis?.())
+      && typeof conversation.staffNote === 'string' ? conversation.staffNote.trim() : ''
     const staffListings = (Array.isArray(conversation.staffListings) ? conversation.staffListings : [])
-      .filter(item => item && typeof item.id === 'string')
+      .filter(item => item && typeof item.id === 'string' && teamDataIsCurrent(item.updatedAt))
       .map(completeStaffListing)
     const hasTeamInfo = Boolean(staffNote || staffListings.length)
     // A property the AI itself remembered from an earlier answer must not push aside the house
     // the team wrote down for this chat; one the team picked in the inbox still counts.
     const currentCode = hasTeamInfo && !conversation.currentPropertySetBy ? null : conversation.currentPropertyCode
-    const focus = explicitGuideRequest ? [] : findFocusProperties({ messages: recent, catalog, currentCode })
+    const contextRecent = sourceAt ? recent.filter(item => item.timestamp >= Math.min(sourceAt, messageTimestamp)) : recent
+    const focus = explicitGuideRequest ? [] : findFocusProperties({ messages: contextRecent, catalog, currentCode })
+    if (fromFacebook && !catalogByCode.has(currentCode)) {
+      await conversationRef.set({ needsProperty: true }, { merge: true })
+      return null
+    }
     for (const property of focus) seen.set(property.code, property)
     let focusCode = focus[0]?.code || null
 
@@ -507,7 +525,7 @@ async function answerCustomer({ conversationId, message, messageRef, retry = fal
     let creditProfileUpdate = {} // what the customer said about their finances this reply
     let documentReviewUpdate = null // what the AI noticed in the documents this reply
     const staffImages = (Array.isArray(conversation.staffImages) ? conversation.staffImages : [])
-      .filter(image => typeof image?.url === 'string')
+      .filter(image => typeof image?.url === 'string' && teamDataIsCurrent(image.addedAt))
     let houseImagesToSend = []
     const guideShownBefore = (conversation.houseGuideSentAt?.toMillis?.() || 0) > resetAtMs
       || recent.some(item => item.direction === 'outgoing' && item.kind === 'house-guide')
@@ -518,7 +536,7 @@ async function answerCustomer({ conversationId, message, messageRef, retry = fal
     // Which houses are "attached" to this chat: set by the team, typed in by the team, or named by
     // the customer (link or code). A property the AI only remembers from earlier does not count.
     const namedByCustomer = new Set(
-      recent.filter(item => item.direction === 'incoming')
+      contextRecent.filter(item => item.direction === 'incoming')
         .flatMap(item => extractPropertyMentions(item.text, catalog))
         .map(property => property.code),
     )
@@ -908,7 +926,7 @@ async function answerCustomer({ conversationId, message, messageRef, retry = fal
     })
     const conversationResult = await runConversation({
       generate: createGenerate({ settings, systemInstruction, info: servedBy }),
-      contents: followingUp ? withFollowUpCue(historyToContents(recent)) : withImages(historyToContents(recent), imageParts),
+      contents: followingUp ? withFollowUpCue(historyToContents(contextRecent)) : withImages(historyToContents(contextRecent), imageParts),
       handlers,
     })
 
@@ -961,6 +979,27 @@ async function answerCustomer({ conversationId, message, messageRef, retry = fal
     }
 
     stage = 'send'
+    // A separate referral can arrive while the model is writing. Never send an answer
+    // generated for the previous ad/house after the source has changed.
+    const currentConversation = (await conversationRef.get()).data() || {}
+    if (currentConversation.botPaused === true) return null
+    const sourceChanged = referralNeedsProperty(currentConversation)
+      || referralContext(currentConversation) !== referralContext(conversation)
+    if (sourceChanged) {
+      // The customer is still waiting; answer again under normal rules with the new house.
+      // An unmapped source just waits for the team to pick the house.
+      functions.logger.info('AI reply dropped: source changed while writing', { ...logContext })
+      await noteAiStatus(conversationRef, { result: 'skipped', reason: 'source-changed' })
+      if (!referralNeedsProperty(currentConversation)) {
+        await db.collection('ai_retry_requests').add({
+          conversationId,
+          automaticReferral: true,
+          reason: 'source-changed',
+          createdAt: FieldValue.serverTimestamp(),
+        })
+      }
+      return null
+    }
     const sent = await sendFacebookMessage(conversation.pageId, conversation.participantId, { text })
     replied = true
     stage = 'store'
@@ -1166,7 +1205,12 @@ async function answerCustomer({ conversationId, message, messageRef, retry = fal
       update.handoffReason = handoffReason
       update.handoffAt = FieldValue.serverTimestamp()
     }
-    if (Object.keys(update).length) await conversationRef.set(update, { merge: true })
+    if (Object.keys(update).length) await db.runTransaction(async transaction => {
+      const current = (await transaction.get(conversationRef)).data() || {}
+      // Sending cards/storage may take time too. Do not overwrite the house selected by
+      // another ad click while this older answer was finishing.
+      if (referralContext(current) === referralContext(conversation)) transaction.set(conversationRef, update, { merge: true })
+    })
 
     functions.logger.info('AI reply sent', {
       ...logContext,
@@ -1244,7 +1288,8 @@ const facebookAiRetry = functions
           functions.logger.info('AI retry skipped', { conversationId, reason: followUp ? 'no-customer-message' : 'nothing-waiting' })
           return null
         }
-        result = await answerCustomer({ conversationId, message: base.data(), messageRef: base.ref, retry: true, followUp })
+        result = await answerCustomer({ conversationId, message: base.data(), messageRef: base.ref, retry: true, followUp,
+          automaticReferral: request.automaticReferral === true })
         return result
       } finally {
         // Not answered (skipped or failed): let the team's next "answer what is waiting" through
