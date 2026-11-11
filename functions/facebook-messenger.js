@@ -4,7 +4,7 @@ const admin = require('firebase-admin')
 const functions = require('firebase-functions')
 const { sanitizeStaffListing, cleanPost, MAX_STAFF_LISTINGS } = require('./facebook-ai-core.cjs')
 const { extractListingFields } = require('./facebook-ai-extract')
-const { SOURCE_COLLECTION, REFERRAL_FIELDS, sourceKey, readReferral, resolveReferral } = require('./facebook-referral.cjs')
+const { SOURCE_COLLECTION, REFERRAL_FIELDS, sourceKey, readReferral, resolveReferral, normalizePostValue } = require('./facebook-referral.cjs')
 
 const CONVERSATIONS = 'messenger_conversations'
 const PAGES = 'messenger_pages'
@@ -760,8 +760,12 @@ const adminActions = {
 
   async savePropertySource({ pageId, kind, value, propertyCode }, adminUser) {
     const id = cleanField(pageId, 64)
-    const sourceValue = cleanField(value, 200)
+    const rawValue = cleanField(value, 200)
+    // Store a post under the webhook page ID even when it was pasted with the profile ID.
+    const sourceValue = kind === 'post' && /^\d+(?:_\d+)?$/.test(rawValue) && /^\d+$/.test(id) ? normalizePostValue(id, rawValue) : rawValue
     const code = cleanField(propertyCode, 60)
+    // Old chats may hold the post under the pasted (profile) page ID; the backfill looks for both.
+    const aliases = kind === 'post' && rawValue.includes('_') && rawValue !== sourceValue ? [rawValue] : []
     if (!/^\d+$/.test(id) || !['ad', 'post', 'ref'].includes(kind) || !sourceValue
       || (kind === 'ad' && !/^\d+$/.test(sourceValue))
       || (kind === 'post' && !/^\d+(?:_\d+)?$/.test(sourceValue))) {
@@ -779,12 +783,12 @@ const adminActions = {
     const revision = crypto.randomUUID()
     const FieldValue = admin.firestore.FieldValue
     await db.runTransaction(async transaction => {
-      transaction.set(ref, { pageId: id, kind, value: sourceValue, propertyCode: code, revision,
+      transaction.set(ref, { pageId: id, kind, value: sourceValue, aliases, propertyCode: code, revision,
         propertyTitle: cleanField(found.docs[0].data().title, 120),
         backfill: { status: 'queued', updated: 0, skipped: 0, scanned: 0 },
         updatedBy: adminUser.uid, updatedAt: FieldValue.serverTimestamp() })
       transaction.set(db.collection('messenger_property_backfills').doc(sourceKey(ref.id, 'backfill', revision)), {
-        mappingId: ref.id, revision, kind, value: sourceValue, status: 'queued',
+        mappingId: ref.id, revision, kind, value: sourceValue, aliases, status: 'queued',
         createdAt: FieldValue.serverTimestamp(),
       })
     })

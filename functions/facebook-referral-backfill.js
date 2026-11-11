@@ -1,10 +1,16 @@
 const admin = require('firebase-admin')
 const functions = require('firebase-functions')
-const { SOURCE_COLLECTION, sourceKey, resolveReferral } = require('./facebook-referral.cjs')
+const { SOURCE_COLLECTION, sourceKey, resolveReferral, postNumber } = require('./facebook-referral.cjs')
 
 const JOBS = 'messenger_property_backfills'
 const PAGE_SIZE = 100
 const SOURCE_FIELDS = { ad: 'adId', post: 'postId', ref: 'ref' }
+
+// A post may arrive with either of the page's two IDs in front, so compare the post number.
+function sameSource(kind, actual, expected) {
+  if (kind === 'post') return !!postNumber(actual) && postNumber(actual) === postNumber(expected)
+  return actual === expected
+}
 
 // These are context updates only. Backfilling must never send messages, resume a paused
 // bot, or change a house which staff/the customer selected after the original ad click.
@@ -16,7 +22,7 @@ async function backfillConversation(db, ref, mappingId, revision) {
     const current = snapshot.data()
     const source = current?.facebookReferral
     if (!current || current.pageId !== mapping.pageId || !source
-      || source[SOURCE_FIELDS[mapping.kind]] !== mapping.value
+      || !sameSource(mapping.kind, source[SOURCE_FIELDS[mapping.kind]], mapping.value)
       || source.status === 'manual'
       || (current.currentPropertyCode && current.currentPropertySetBy !== 'facebook-referral')
       || (current.currentPropertySetBy && current.currentPropertySetBy !== 'facebook-referral')
@@ -66,7 +72,7 @@ async function runBackfill(jobRef) {
   if (!lease) return null
   try {
     let query = db.collection('messenger_conversations')
-      .where(`facebookReferral.${SOURCE_FIELDS[lease.kind]}`, '==', lease.value)
+      .where(`facebookReferral.${SOURCE_FIELDS[lease.kind]}`, 'in', [lease.value, ...(lease.aliases || [])])
       .orderBy(admin.firestore.FieldPath.documentId())
       .limit(PAGE_SIZE)
     if (lease.cursor) query = query.startAfter(lease.cursor)
@@ -95,7 +101,7 @@ async function runBackfill(jobRef) {
         const nextRef = db.collection(JOBS).doc(sourceKey(lease.mappingId, lease.revision, cursor))
         transaction.set(nextRef, {
           mappingId: lease.mappingId, revision: lease.revision, kind: lease.kind,
-          value: lease.value, cursor, ...counts, status: 'queued', createdAt: FieldValue.serverTimestamp(),
+          value: lease.value, aliases: lease.aliases || [], cursor, ...counts, status: 'queued', createdAt: FieldValue.serverTimestamp(),
         })
       }
       transaction.set(jobRef, { status: 'completed', ...counts, leaseUntil: 0, completedAt: FieldValue.serverTimestamp() }, { merge: true })
