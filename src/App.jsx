@@ -11,6 +11,7 @@ const AIPropertyPage = lazy(() => import('./features/ai-property/AIPropertyPage'
 const PropertyForm = lazy(() => import('./admin/PropertyForm'))
 const LeadsInbox = lazy(() => import('./admin/LeadsInbox'))
 const MessengerInbox = lazy(() => import('./admin/MessengerInbox'))
+const AdMappingsPage = lazy(() => import('./admin/AdMappingsPage'))
 const HeroSlidesAdmin = lazy(() => import('./admin/HeroSlidesAdmin'))
 const HomepageSectionsAdmin = lazy(() => import('./admin/HomepageSectionsAdmin'))
 const PopularLocationsAdmin = lazy(() => import('./admin/PopularLocationsAdmin'))
@@ -66,6 +67,7 @@ function App() {
           <Route path="property-form" element={<PropertyForm />} />
           <Route path="leads" element={<LeadsInbox />} />
           <Route path="messenger" element={<MessengerInbox />} />
+          <Route path="ad-mappings" element={<AdMappingsPage />} />
           <Route path="hero-slides" element={<HeroSlidesAdmin />} />
           <Route path="homepage-sections" element={<HomepageSectionsAdmin />} />
           <Route path="popular-locations" element={<PopularLocationsAdmin />} />

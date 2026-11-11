@@ -3,7 +3,9 @@
  */
 
 /** แบบแผน URL Google Maps ที่ใช้ดึง URL แรกจากข้อความ */
-const MAP_URL_PATTERN = /https?:\/\/(?:www\.)?(?:google\.com\/maps|maps\.google|goo\.gl\/maps|maps\.app\.goo\.gl)[^\s"'<>]*/i
+// Single quotes are part of Google's DMS place names (13°24'09.4"N), so they cannot end
+// the match; trailing quotes/punctuation from a pasted sentence are trimmed after matching.
+const MAP_URL_PATTERN = /https?:\/\/(?:www\.)?(?:google\.com\/maps|maps\.google|goo\.gl\/maps|maps\.app\.goo\.gl)[^\s"<>]*/i
 
 /**
  * ดึง URL ออกจาก input (รองรับลิงก์ธรรมดา และโค้ด iframe)
@@ -28,7 +30,8 @@ export function extractMapUrl(input) {
   // กรณีเป็นลิงก์ธรรมดา - ดึง URL แรกถ้ามีหลายค่า
   const urlMatch = s.match(MAP_URL_PATTERN)
   if (urlMatch) {
-    const url = deduplicateUrl(urlMatch[0])
+    // A URL pasted inside quotes keeps its closing quote; punctuation after a link is not part of it.
+    const url = deduplicateUrl(urlMatch[0].replace(/[.,;:!?)\]"'`]+$/, ''))
     return { url, isEmbed: url.includes('/embed') }
   }
 
@@ -58,12 +61,12 @@ export function toEmbedUrl(url) {
     if (s.includes('/embed')) return s
 
     if (s.includes('google.com/maps') || s.includes('maps.google')) {
-      let query = '';
-      
-      const coordMatch = s.match(/@(-?\d+\.?\d*),(-?\d+\.?\d*)/)
-      if (coordMatch) {
-        query = `${coordMatch[1]},${coordMatch[2]}`
-      } else {
+      // Prefer the place marker (!3d/!4d) over the map viewport centre (@), which can sit
+      // a few hundred metres away from the property.
+      const coords = parseCoordinatesFromUrl(s)
+      let query = coords ? `${coords.lat},${coords.lng}` : '';
+
+      if (!query) {
         const placeMatch = s.match(/place\/([^/?#]+)/)
         if (placeMatch) {
           query = decodeURIComponent(placeMatch[1].replace(/\+/g, ' '))
@@ -151,14 +154,9 @@ export function parseCoordinatesFromUrl(url) {
         if (!Number.isNaN(lat) && !Number.isNaN(lng)) return { lat, lng }
       }
     }
-    // รูปแบบ /@13.7563,100.5018,17z
-    const atMatch = s.match(/@(-?\d+\.?\d*),(-?\d+\.?\d*)/)
-    if (atMatch) {
-      const lat = parseFloat(atMatch[1])
-      const lng = parseFloat(atMatch[2])
-      if (!Number.isNaN(lat) && !Number.isNaN(lng)) return { lat, lng }
-    }
     // รูปแบบ !3d13.7563!4d100.5018 หรือ !2d100.5018!3d13.7563 (embed)
+    // Google เก็บพิกัดของ "หมุดสถานที่" ไว้ใน !3d/!4d ซึ่งแม่นกว่าจุดกึ่งกลางแผนที่ @
+    // (ลิงก์ place มักมี @ เป็นจุดกึ่งกลาง ซึ่งห่างจากตัวบ้านได้หลายร้อยเมตร)
     const d3 = s.match(/!3d(-?\d+\.?\d*)/)
     const d4 = s.match(/!4d(-?\d+\.?\d*)/)
     const d2 = s.match(/!2d(-?\d+\.?\d*)/)
@@ -167,6 +165,13 @@ export function parseCoordinatesFromUrl(url) {
       const lngMatch = d4 || d2
       const lng = lngMatch ? parseFloat(lngMatch[1]) : null
       if (!Number.isNaN(lat) && lng != null && !Number.isNaN(lng)) return { lat, lng }
+    }
+    // รูปแบบ /@13.7563,100.5018,17z (จุดกึ่งกลางแผนที่)
+    const atMatch = s.match(/@(-?\d+\.?\d*),(-?\d+\.?\d*)/)
+    if (atMatch) {
+      const lat = parseFloat(atMatch[1])
+      const lng = parseFloat(atMatch[2])
+      if (!Number.isNaN(lat) && !Number.isNaN(lng)) return { lat, lng }
     }
   } catch { return null }
   return null
