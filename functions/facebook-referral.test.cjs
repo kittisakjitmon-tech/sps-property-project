@@ -29,12 +29,12 @@ const fieldValue = (data, field) => field.split('.').reduce((value, key) => valu
 const collection = (path, filters = [], max = Infinity, cursor = null, ordered = false) => ({
   doc: id => doc(`${path}/${id}`),
   async add(data) { const ref = doc(`${path}/auto${store.size}`); await ref.set(data); return ref },
-  where: (key, op, value) => collection(path, [...filters, { key, value }], max, cursor, ordered),
+  where: (key, op, value) => collection(path, [...filters, { key, op, value }], max, cursor, ordered),
   limit: count => collection(path, filters, count, cursor, ordered),
   orderBy: () => collection(path, filters, max, cursor, true),
   startAfter: value => collection(path, filters, max, value, ordered),
   async get() {
-    let entries = [...store.entries()].filter(([key, data]) => key.split('/').slice(0, -1).join('/') === path && filters.every(f => fieldValue(data, f.key) === f.value))
+    let entries = [...store.entries()].filter(([key, data]) => key.split('/').slice(0, -1).join('/') === path && filters.every(f => f.op === 'in' ? f.value.includes(fieldValue(data, f.key)) : fieldValue(data, f.key) === f.value))
     if (ordered) entries.sort(([a], [b]) => a.localeCompare(b))
     if (cursor) entries = entries.filter(([key]) => key.split('/').pop() > cursor)
     const docs = entries.slice(0, max).map(([key, data]) => ({ id: key.split('/').pop(), ref: doc(key), data: () => data }))
@@ -347,4 +347,20 @@ test('backfill continues beyond one page, totals results, and ignores repeated d
   assert.equal(result.updated, 105)
   assert.equal(await runBackfill(doc(first)), null)
   assert.equal(await runBackfill(doc(second)), null)
+})
+
+test('a post pasted with the page profile ID is saved under the webhook page and matches either prefix', async () => {
+  const PROFILE = '61595039907598'
+  oldChat('viaProfile', { facebookReferral: { adId: null, postId: `${PROFILE}_456`, ref: null, source: 'ADS', status: 'unmapped', timestamp: TIME } })
+  oldChat('viaPage', { facebookReferral: { adId: null, postId: `${PAGE}_456`, ref: null, source: 'ADS', status: 'unmapped', timestamp: TIME } })
+  const job = await queueMapping({ kind: 'post', value: `${PROFILE}_456` })
+  const saved = store.get(`${SOURCE_COLLECTION}/${sourceKey(PAGE, 'post', `${PAGE}_456`)}`)
+  assert.equal(saved.value, `${PAGE}_456`)
+  assert.deepEqual(saved.aliases, [`${PROFILE}_456`])
+  const counts = await runBackfill(doc(job))
+  assert.equal(counts.updated, 2)
+  for (const postId of [`${PROFILE}_456`, `${PAGE}_456`]) {
+    const result = await resolveReferral(db, PAGE, readReferral(event({ ads_context_data: { post_id: postId }, source: 'ADS' })))
+    assert.equal(result.propertyCode, 'SPS-TH-1')
+  }
 })

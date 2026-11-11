@@ -49,7 +49,11 @@ export default function AdMappingsPage() {
   const optionByCode = useMemo(() => new Map(options.map(option => [option.code, option])), [options])
   const bareNumber = /^\d+$/.test(input.trim())
   const otherPage = parsed?.linkPageId && parsed.linkPageId !== activePageId ? pages.find(page => page.id === parsed.linkPageId) : null
-  const unknownPage = parsed?.linkPageId && parsed.linkPageId !== activePageId && !otherPage
+  // A page on the new Pages experience shows a different (profile) ID in facebook.com links than
+  // the page ID the system connected with. A link ID that matches no connected page is treated
+  // as the selected page; the server stores it under the selected page and matches both IDs.
+  const profileId = parsed?.linkPageId && parsed.linkPageId !== activePageId && !otherPage ? parsed.linkPageId : ''
+  const activePageName = pages.find(page => page.id === activePageId)?.name || activePageId
 
   const load = useCallback(async (id, { quiet } = {}) => {
     if (!id) return
@@ -75,7 +79,8 @@ export default function AdMappingsPage() {
   }, [backfillPending, activePageId, load])
 
   // Ad clicks that reached a chat but have no house yet, grouped by ad (or post).
-  const mappedValues = useMemo(() => new Set(sources.map(item => `${item.kind}:${item.value}`)), [sources])
+  const sourceId = (kind, value) => `${kind}:${kind === 'post' ? String(value).split('_').pop() : value}`
+  const mappedValues = useMemo(() => new Set(sources.flatMap(item => [item.value, ...(item.aliases || [])].map(value => sourceId(item.kind, value)))), [sources])
   const unmapped = useMemo(() => {
     const groups = new Map()
     for (const conversation of conversations) {
@@ -84,7 +89,7 @@ export default function AdMappingsPage() {
       if (!['unmapped', 'unavailable'].includes(referral.status)) continue
       const kind = referral.adId ? 'ad' : referral.postId ? 'post' : referral.ref ? 'ref' : ''
       const value = referral.adId || referral.postId || referral.ref
-      if (!kind || mappedValues.has(`${kind}:${value}`)) continue
+      if (!kind || mappedValues.has(sourceId(kind, value))) continue
       const key = `${kind}:${value}`
       const group = groups.get(key) || { key, kind, value, title: referral.title, postId: referral.postId, status: referral.status, propertyCode: referral.propertyCode, count: 0 }
       group.count += 1
@@ -118,7 +123,7 @@ export default function AdMappingsPage() {
 
   async function save(event) {
     event.preventDefault()
-    if (!parsed || parsed.error || !chosen || otherPage || unknownPage) return
+    if (!parsed || parsed.error || !chosen || otherPage) return
     await run(async () => {
       const editing = sources.find(item => item.id === editingId)
       // Editing to a different ad/post moves the mapping: drop the old one.
@@ -127,7 +132,7 @@ export default function AdMappingsPage() {
       }
       await callApi({ action: 'savePropertySource', pageId: activePageId, kind: parsed.kind, value: parsed.value, propertyCode: chosen.code })
       await load(activePageId, { quiet: true })
-      setNotice(`ผูก${SOURCE_LABELS[parsed.kind]} ${parsed.value} กับ ${chosen.code} แล้ว กำลังผูกบ้านให้แชทเก่าที่มาจากต้นทางนี้ (ไม่ส่งข้อความหาลูกค้า)`)
+      setNotice(`ผูก${SOURCE_LABELS[parsed.kind]} ${parsed.kind === 'post' && parsed.postId ? parsed.postId : parsed.value} กับ ${chosen.code} แล้ว กำลังผูกบ้านให้แชทเก่าที่มาจากต้นทางนี้ (ไม่ส่งข้อความหาลูกค้า)`)
       resetForm()
     })
   }
@@ -168,7 +173,7 @@ export default function AdMappingsPage() {
     } catch { /* clipboard blocked; the link is visible to select */ }
   }
 
-  const canSave = parsed && !parsed.error && chosen && !otherPage && !unknownPage && !busy
+  const canSave = parsed && !parsed.error && chosen && !otherPage && !busy
 
   return (
     <div className="mx-auto max-w-6xl space-y-5 p-4 text-sm sm:p-6">
@@ -237,7 +242,11 @@ export default function AdMappingsPage() {
               <button type="button" onClick={() => setPageId(otherPage.id)} className="font-medium text-blue-700 underline">สลับไปเพจนั้น</button>
             </p>
           )}
-          {unknownPage && <p className="text-amber-800">โพสต์นี้เป็นของเพจ {parsed.linkPageId} ซึ่งยังไม่ได้เชื่อมกับระบบ</p>}
+          {profileId && (
+            <p className="text-slate-500">
+              ลิงก์ใช้รหัสโปรไฟล์ของเพจ ({profileId}) ระบบจะผูกโพสต์นี้กับเพจ “{activePageName}” ที่เลือกอยู่ ถ้าโพสต์นี้ไม่ใช่ของเพจนี้ ให้เปลี่ยนเพจด้านบนก่อน
+            </p>
+          )}
           {!input && (
             <details className="text-slate-500">
               <summary className="cursor-pointer select-none">หารหัสได้จากไหน</summary>

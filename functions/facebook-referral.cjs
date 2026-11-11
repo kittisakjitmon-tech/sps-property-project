@@ -4,6 +4,20 @@ const SOURCE_COLLECTION = 'messenger_property_sources'
 const REFERRAL_FIELDS = 'messages,message_echoes,messaging_referrals,messaging_postbacks'
 const text = (value, max = 200) => typeof value === 'string' ? value.trim().slice(0, max) : ''
 
+// A Page on the new Pages experience has two IDs: the one the Graph API and webhooks use
+// (also in m.me links) and the profile ID shown in facebook.com links and post insights.
+// A post can arrive as either PAGEID_POSTID, so post mappings are keyed by the webhook page
+// plus the post number, and matched on the post number.
+function postNumber(value) {
+  const match = /^(?:\d+_)?(\d+)$/.exec(String(value || '').trim())
+  return match ? match[1] : ''
+}
+
+function normalizePostValue(pageId, value) {
+  const number = postNumber(value)
+  return number ? `${pageId}_${number}` : ''
+}
+
 function sourceKey(pageId, kind, value) {
   return createHash('sha256').update(JSON.stringify([pageId, kind, value])).digest('hex')
 }
@@ -34,7 +48,9 @@ async function resolveReferral(db, pageId, referral, { transaction } = {}) {
   const read = ref => transaction ? transaction.get(ref) : ref.get()
   // Ad-specific mappings win over a post reused in several ads, then explicit link refs.
   let code = ''
-  for (const [kind, value] of [['ad', referral.adId], ['post', referral.postId], ['ref', referral.ref]]) {
+  const postValues = [...new Set([referral.postId, normalizePostValue(pageId, referral.postId)].filter(Boolean))]
+  const candidates = [['ad', referral.adId], ...postValues.map(value => ['post', value]), ['ref', referral.ref]]
+  for (const [kind, value] of candidates) {
     if (!value) continue
     const mapping = (await read(db.collection(SOURCE_COLLECTION).doc(sourceKey(pageId, kind, value)))).data()
     if (mapping) { code = mapping.propertyCode; break }
@@ -58,4 +74,4 @@ function referralNeedsProperty(conversation) {
   return ['unmapped', 'unavailable'].includes(conversation.facebookReferral?.status)
 }
 
-module.exports = { SOURCE_COLLECTION, REFERRAL_FIELDS, sourceKey, readReferral, resolveReferral, referralContext, referralNeedsProperty }
+module.exports = { postNumber, normalizePostValue, SOURCE_COLLECTION, REFERRAL_FIELDS, sourceKey, readReferral, resolveReferral, referralContext, referralNeedsProperty }
