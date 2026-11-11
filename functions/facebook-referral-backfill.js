@@ -1,6 +1,6 @@
 const admin = require('firebase-admin')
 const functions = require('firebase-functions')
-const { SOURCE_COLLECTION, sourceKey, resolveReferral, postNumber } = require('./facebook-referral.cjs')
+const { SOURCE_COLLECTION, sourceKey, resolveReferral, postNumber, shouldApplyReferral } = require('./facebook-referral.cjs')
 
 const JOBS = 'messenger_property_backfills'
 const PAGE_SIZE = 100
@@ -12,8 +12,8 @@ function sameSource(kind, actual, expected) {
   return actual === expected
 }
 
-// These are context updates only. Backfilling must never send messages, resume a paused
-// bot, or change a house which staff/the customer selected after the original ad click.
+// These are context updates only. Backfilling must never send messages or resume a paused bot.
+// The mapped ad house wins over houses typed in by staff (see shouldApplyReferral).
 async function backfillConversation(db, ref, mappingId, revision) {
   return db.runTransaction(async transaction => {
     const mapping = (await transaction.get(db.collection(SOURCE_COLLECTION).doc(mappingId))).data()
@@ -23,12 +23,7 @@ async function backfillConversation(db, ref, mappingId, revision) {
     const source = current?.facebookReferral
     if (!current || current.pageId !== mapping.pageId || !source
       || !sameSource(mapping.kind, source[SOURCE_FIELDS[mapping.kind]], mapping.value)
-      || source.status === 'manual'
-      || (current.currentPropertyCode && current.currentPropertySetBy !== 'facebook-referral')
-      || (current.currentPropertySetBy && current.currentPropertySetBy !== 'facebook-referral')
-      || (typeof current.staffNote === 'string' && current.staffNote.trim())
-      || current.staffListings?.length || current.staffImages?.length
-      || source.timestamp < (current.contextResetAt?.toMillis?.() || 0)) return 'skipped'
+      || !shouldApplyReferral(current, source)) return 'skipped'
     // Re-resolve all priorities in the same transaction: an ad-specific mapping wins over
     // a post mapping, even when that higher-priority mapping changes during the backfill.
     const resolved = await resolveReferral(db, mapping.pageId, source, { transaction })

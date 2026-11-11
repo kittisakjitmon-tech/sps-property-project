@@ -4,7 +4,7 @@ const admin = require('firebase-admin')
 const functions = require('firebase-functions')
 const { sanitizeStaffListing, cleanPost, MAX_STAFF_LISTINGS } = require('./facebook-ai-core.cjs')
 const { extractListingFields } = require('./facebook-ai-extract')
-const { SOURCE_COLLECTION, REFERRAL_FIELDS, sourceKey, readReferral, resolveReferral, normalizePostValue } = require('./facebook-referral.cjs')
+const { SOURCE_COLLECTION, REFERRAL_FIELDS, sourceKey, readReferral, resolveReferral, normalizePostValue, shouldApplyReferral } = require('./facebook-referral.cjs')
 
 const CONVERSATIONS = 'messenger_conversations'
 const PAGES = 'messenger_pages'
@@ -522,6 +522,34 @@ async function persistReferral(pageId, pageName, event, { queueRetry = true } = 
   })
 }
 
+// A chat that clicked an ad before the ad was mapped keeps "unmapped". On the customer's next
+// message, check the mappings again so the mapped ad house is used from then on.
+async function refreshReferral(pageId, event) {
+  if (event.message?.is_echo || !event.sender?.id || readReferral(event)) return
+  if (!event.message?.mid && !event.postback?.title) return
+  const db = admin.firestore()
+  const ref = db.collection(CONVERSATIONS).doc(conversationId(pageId, event.sender.id))
+  const current = (await ref.get()).data()
+  const source = current?.facebookReferral
+  if (!source || !['unmapped', 'unavailable'].includes(source.status) || !shouldApplyReferral(current, source)) return
+  const resolved = await resolveReferral(db, pageId, source)
+  if (resolved.status !== 'matched') return
+  const FieldValue = admin.firestore.FieldValue
+  await db.runTransaction(async transaction => {
+    const latest = (await transaction.get(ref)).data()
+    if (JSON.stringify(latest?.facebookReferral) !== JSON.stringify(source)) return
+    transaction.set(ref, {
+      facebookReferral: resolved,
+      currentPropertyCode: resolved.propertyCode, currentPropertyId: resolved.propertyId,
+      currentPropertyTitle: resolved.propertyTitle, currentPropertySetBy: 'facebook-referral',
+      currentPropertySetAt: FieldValue.serverTimestamp(), needsProperty: FieldValue.delete(),
+      ...(latest.currentPropertyCode !== resolved.propertyCode
+        ? { attachedShownAt: FieldValue.delete(), othersRequestedAt: FieldValue.delete() } : {}),
+      updatedAt: FieldValue.serverTimestamp(),
+    }, { merge: true })
+  })
+}
+
 async function handleMessagingEvent(pageId, pageName, event) {
   const message = event.message || (event.postback?.title ? {
     mid: event.postback.mid || `postback-${sourceKey(pageId, event.sender?.id, JSON.stringify([event.timestamp, event.postback.payload]))}`,
@@ -632,6 +660,7 @@ const facebookWebhook = functions
       for (const entry of entries) {
         if (!pageNames.has(entry.id)) continue
         for (const event of entry.messaging || []) {
+          await refreshReferral(entry.id, event)
           await handleMessagingEvent(entry.id, pageNames.get(entry.id), event)
         }
       }

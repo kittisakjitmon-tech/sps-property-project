@@ -274,21 +274,46 @@ test('saving a source atomically queues backfill, which updates old chats withou
   assert.equal([...store.keys()].filter(key => key.startsWith('ai_retry_requests/')).length, 0)
 })
 
-test('backfill preserves manual selections, customer switches, staff details, reset chats and other pages', async () => {
-  oldChat('manual', { currentPropertyCode: 'SPS-TH-2', currentPropertySetBy: 'staff' })
-  oldChat('customer', { currentPropertyCode: 'SPS-TH-2' })
+test('the mapped ad house wins over staff-typed houses, but not over a team confirmation, a later customer switch, a reset or another page', async () => {
+  oldChat('staffSet', { currentPropertyCode: 'SPS-TH-2', currentPropertySetBy: 'staff' })
   oldChat('notes', { staffNote: 'บ้านที่ทีมยืนยัน' })
   oldChat('listings', { staffListings: [{ id: 'one' }] })
+  oldChat('manual', { facebookReferral: { adId: '101', postId: null, ref: null, source: 'ADS', status: 'manual', timestamp: TIME } })
+  oldChat('switched', { facebookReferral: { adId: '101', postId: null, ref: null, source: 'ADS', status: 'matched', propertyCode: 'SPS-TH-2', timestamp: TIME }, currentPropertyCode: 'SPS-TH-3', currentPropertySetBy: 'ai' })
   oldChat('otherPage', { pageId: '999' })
   oldChat('reset', { contextResetAt: new Ts(TIME + 1) })
   store.set('messenger_conversations/noSource', { pageId: PAGE })
   const job = await queueMapping()
   const counts = await runBackfill(doc(job))
-  assert.equal(counts.updated, 0)
-  assert.equal(counts.skipped, 6)
-  assert.equal(store.get('messenger_conversations/manual').currentPropertyCode, 'SPS-TH-2')
-  assert.equal(store.get('messenger_conversations/customer').currentPropertyCode, 'SPS-TH-2')
+  assert.equal(counts.updated, 3)
+  assert.equal(counts.skipped, 4)
+  for (const id of ['staffSet', 'notes', 'listings']) {
+    const chat = store.get(`messenger_conversations/${id}`)
+    assert.equal(chat.currentPropertyCode, 'SPS-TH-1')
+    assert.equal(chat.currentPropertySetBy, 'facebook-referral')
+  }
+  assert.deepEqual(store.get('messenger_conversations/listings').staffListings, [{ id: 'one' }])
+  assert.equal(store.get('messenger_conversations/manual').currentPropertyCode, undefined)
+  assert.equal(store.get('messenger_conversations/switched').currentPropertyCode, 'SPS-TH-3')
+  assert.equal(store.get('messenger_conversations/reset').currentPropertyCode, undefined)
   assert.equal(store.get('messenger_conversations/noSource').currentPropertyCode, undefined)
+})
+
+test('a chat that clicked an ad before it was mapped gets the ad house on the next customer message', async () => {
+  store.set(path, { ...current(), facebookReferral: { adId: '101', postId: null, ref: null, source: 'ADS', status: 'unmapped', timestamp: TIME - 5000 }, needsProperty: true, staffListings: [{ id: 'typed' }] })
+  mapping()
+  const incoming = { sender: { id: USER }, recipient: { id: PAGE }, timestamp: TIME, message: { mid: 'mid-later', text: 'ขอรายละเอียดครับ' } }
+  const body = { object: 'page', entry: [{ id: PAGE, messaging: [incoming] }] }
+  process.env.FACEBOOK_APP_SECRET = 'test-secret'
+  const rawBody = Buffer.from(JSON.stringify(body))
+  const signature = `sha256=${crypto.createHmac('sha256', 'test-secret').update(rawBody).digest('hex')}`
+  const response = { status(code) { this.code = code; return this }, json(value) { this.body = value; return this } }
+  await facebookWebhook({ method: 'POST', body, rawBody, get: () => signature }, response)
+  assert.equal(response.code, 200)
+  assert.equal(current().facebookReferral.status, 'matched')
+  assert.equal(current().currentPropertyCode, 'SPS-TH-1')
+  assert.equal(current().needsProperty, undefined)
+  assert.equal(messageWrites[0].conversation.currentPropertyCode, 'SPS-TH-1')
 })
 
 test('an ad-specific mapping takes priority over a shared post during backfill', async () => {

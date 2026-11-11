@@ -66,6 +66,18 @@ async function resolveReferral(db, pageId, referral, { transaction } = {}) {
   return { ...referral, status: 'matched', propertyCode: code, propertyId: result.docs[0].id, propertyTitle: text(property.title, 120) }
 }
 
+// The house from a mapped ad/post is the primary house. Apply it when the chat's ad house was
+// never applied (unmapped/unavailable), or when the chat is still on the ad house and the
+// mapping changed. Do not undo a team confirmation (manual), a later customer switch away
+// from the ad house, or a chat reset after the click.
+function shouldApplyReferral(current, source) {
+  if (!current || !source) return false
+  if (source.status === 'manual') return false
+  if (source.timestamp < (current.contextResetAt?.toMillis?.() || 0)) return false
+  if (['unmapped', 'unavailable'].includes(source.status)) return true
+  return source.status === 'matched' && (!current.currentPropertySetBy || current.currentPropertySetBy === 'facebook-referral')
+}
+
 function referralContext(conversation) {
   return JSON.stringify([conversation.facebookReferral || null, conversation.currentPropertyCode || null])
 }
@@ -74,4 +86,4 @@ function referralNeedsProperty(conversation) {
   return ['unmapped', 'unavailable'].includes(conversation.facebookReferral?.status)
 }
 
-module.exports = { postNumber, normalizePostValue, SOURCE_COLLECTION, REFERRAL_FIELDS, sourceKey, readReferral, resolveReferral, referralContext, referralNeedsProperty }
+module.exports = { shouldApplyReferral, postNumber, normalizePostValue, SOURCE_COLLECTION, REFERRAL_FIELDS, sourceKey, readReferral, resolveReferral, referralContext, referralNeedsProperty }
