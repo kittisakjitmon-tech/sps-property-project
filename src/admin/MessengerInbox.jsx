@@ -597,7 +597,7 @@ export default function MessengerInbox() {
                       )}
                       {conversation.needsProperty && !conversation.currentPropertyCode && !conversation.staffNote && !conversation.staffListings?.length && (
                         <span className="inline-flex items-center rounded-full bg-blue-100 px-2 py-0.5 text-[10px] font-semibold text-blue-800">
-                          รอรายละเอียดบ้าน
+                          รอเลือกบ้าน
                         </span>
                       )}
                     </div>
@@ -644,7 +644,7 @@ export default function MessengerInbox() {
                   className={`inline-flex items-center gap-1.5 rounded-lg px-3 py-2 text-xs font-medium disabled:opacity-50 ${selectedConversation.botPaused === true ? 'bg-amber-50 text-amber-800 hover:bg-amber-100' : 'bg-emerald-50 text-emerald-800 hover:bg-emerald-100'}`}
                 >
                   <Bot className="h-4 w-4" aria-hidden="true" />
-                  <span className="hidden sm:inline">{selectedConversation.botPaused === true ? 'AI หยุด · เปิดต่อ' : (botSettings.requirePropertyForBot === true && !selectedConversation.currentPropertyCode && !selectedConversation.staffNote && !selectedConversation.staffListings?.length) ? 'AI รอรายละเอียดบ้าน · หยุด' : 'AI ตอบอยู่ · หยุด'}</span>
+                  <span className="hidden sm:inline">{selectedConversation.botPaused === true ? 'AI หยุด · เปิดต่อ' : (botSettings.requirePropertyForBot === true && !selectedConversation.currentPropertyCode && !selectedConversation.staffNote && !selectedConversation.staffListings?.length) ? 'AI รอเลือกบ้าน · หยุด' : 'AI ตอบอยู่ · หยุด'}</span>
                 </button>
                 {/* Always there, so it is never "gone": disabled with the reason when it cannot answer. */}
                 <button
