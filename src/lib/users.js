@@ -112,6 +112,7 @@ export async function createUserWithPassword({
   password,
   role = 'member',
   status = 'active',
+  firestore,
 }) {
   const normalized = normalizeEmail(email)
   const pass = String(password || '')
@@ -133,8 +134,9 @@ export async function createUserWithPassword({
     // สร้าง username จาก email (ส่วนหน้า @)
     const emailUsername = normalized.split('@')[0] || normalized.replace(/[^a-zA-Z0-9]/g, '')
     
-    // เขียน users/{uid} ด้วย token ของ user ที่เพิ่งสร้าง
-    await setDoc(doc(tempDb, USERS, createdUid), {
+    // เขียน users/{uid} ด้วยสิทธิ์ Super Admin ที่ล็อกอินอยู่ (ส่ง adminDb มา)
+    // ผู้ใช้ใหม่เขียนโปรไฟล์ตัวเองได้เฉพาะบทบาท member ตาม Firestore Rules
+    await setDoc(doc(firestore || tempDb, USERS, createdUid), {
       email: normalized,
       role,
       status,

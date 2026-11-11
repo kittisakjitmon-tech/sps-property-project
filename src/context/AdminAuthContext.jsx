@@ -2,16 +2,20 @@ import { createContext, useContext, useState, useEffect } from 'react'
 import { signInWithEmailAndPassword, signOut, onAuthStateChanged } from 'firebase/auth'
 import { doc, getDoc, setDoc, serverTimestamp, collection, query, where, getDocs } from 'firebase/firestore'
 import { adminAuth, adminDb } from '../lib/firebase'
+import { BLOCKED_STATUSES, SUSPENDED_ROLE, adminSessionExpired } from '../lib/adminSession'
 
 const AdminAuthContext = createContext(null)
 
-/** ดึงและ sync role จาก Firestore สำหรับ u (หรือ null). คืนค่า role หรือ null ถ้า sign out */
+
+/** ดึงและ sync role จาก Firestore สำหรับ u (หรือ null). คืนค่า role, SUSPENDED_ROLE ถ้าบัญชีถูกระงับ, หรือ null ถ้า sign out */
 async function resolveUserRole(u) {
   if (!u) return null
   try {
     let userDoc = await getDoc(doc(adminDb, 'users', u.uid))
     if (userDoc.exists()) {
-      const role = userDoc.data().role || 'member'
+      const data = userDoc.data()
+      if (data.disabled === true || BLOCKED_STATUSES.includes(data.status)) return SUSPENDED_ROLE
+      const role = data.role || 'member'
       if (role === 'agent') return 'agent'
       return role
     }
@@ -23,12 +27,19 @@ async function resolveUserRole(u) {
       const snap = await getDocs(q)
       byEmail = snap.docs[0] || null
       if (byEmail) {
+        if (byEmail.data().disabled === true || BLOCKED_STATUSES.includes(byEmail.data().status)) return SUSPENDED_ROLE
         role = byEmail.data().role || 'member'
-        await setDoc(doc(adminDb, 'users', u.uid), {
-          ...byEmail.data(),
-          email: u.email,
-          updatedAt: serverTimestamp(),
-        })
+        try {
+          await setDoc(doc(adminDb, 'users', u.uid), {
+            ...byEmail.data(),
+            email: u.email,
+            updatedAt: serverTimestamp(),
+          })
+        } catch (copyError) {
+          // Rules ไม่ให้ผู้ใช้ตั้งบทบาทสูงกว่า member ให้ตัวเอง ต้องให้ Super Admin ตั้งบทบาทในหน้าจัดการสมาชิก
+          console.error('ย้ายโปรไฟล์ตามอีเมลไม่สำเร็จ', copyError)
+          return 'member'
+        }
       }
     }
     if (role === 'agent') return 'agent'
@@ -53,8 +64,17 @@ export function AdminAuthProvider({ children }) {
 
   useEffect(() => {
     const unsub = onAuthStateChanged(adminAuth, async (u) => {
+      if (u && adminSessionExpired(u)) {
+        // ครบ 30 วัน: ออกจากระบบ แล้ว callback นี้จะถูกเรียกอีกครั้งด้วย u = null
+        await signOut(adminAuth).catch(() => {})
+        return
+      }
       if (u) {
         const role = await resolveUserRole(u)
+        if (role === SUSPENDED_ROLE) {
+          await signOut(adminAuth).catch(() => {})
+          return
+        }
         setUserRole(role)
       } else {
         setUserRole(null)
@@ -65,10 +85,23 @@ export function AdminAuthProvider({ children }) {
     return () => unsub()
   }, [])
 
+  // แท็บที่เปิดค้างไว้เกิน 30 วันก็ต้องหมดอายุเช่นกัน ตรวจทุกชั่วโมงและตอนกลับมาที่แท็บ
+  useEffect(() => {
+    if (!user) return undefined
+    const check = () => { if (adminSessionExpired(adminAuth.currentUser)) signOut(adminAuth).catch(() => {}) }
+    const timer = setInterval(check, 60 * 60 * 1000)
+    document.addEventListener('visibilitychange', check)
+    return () => { clearInterval(timer); document.removeEventListener('visibilitychange', check) }
+  }, [user])
+
   const login = async (email, password) => {
     const cred = await signInWithEmailAndPassword(adminAuth, email, password)
 
     const role = await resolveUserRole(cred.user)
+    if (role === SUSPENDED_ROLE) {
+      await signOut(adminAuth).catch(() => {})
+      throw Object.assign(new Error('บัญชีนี้ถูกระงับการใช้งาน'), { code: 'auth/user-disabled' })
+    }
     setUser(cred.user)
     setUserRole(role)
     setLoading(false)

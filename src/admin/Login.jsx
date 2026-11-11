@@ -1,5 +1,5 @@
 import { useState, useId } from 'react'
-import { useNavigate, useLocation } from 'react-router-dom'
+import { Navigate, useNavigate, useLocation } from 'react-router-dom'
 import { useAdminAuth } from '../context/AdminAuthContext'
 import { getAuthErrorMessage } from '../lib/authErrorMessages'
 import { LogIn } from 'lucide-react'
@@ -9,12 +9,15 @@ export default function Login() {
   const [password, setPassword] = useState('')
   const [error, setError] = useState('')
   const [submitting, setSubmitting] = useState(false)
-  const { login } = useAdminAuth()
+  const { login, user, loading } = useAdminAuth()
   const navigate = useNavigate()
   const location = useLocation()
   const from = location.state?.from?.pathname ?? '/sps-internal-admin'
   const idEmail = useId()
   const idPassword = useId()
+
+  // ล็อกอินค้างไว้แล้ว ไม่ต้องกรอกใหม่
+  if (!loading && user && !submitting) return <Navigate to={from} replace />
 
   const handleSubmit = async (e) => {
     e.preventDefault()

@@ -674,8 +674,10 @@ async function requireAdmin(req) {
   }
 
   const userSnapshot = await admin.firestore().collection('users').doc(decoded.uid).get()
-  const role = userSnapshot.data()?.role
-  if (role !== 'admin' && role !== 'super_admin') {
+  const profile = userSnapshot.data() || {}
+  const role = profile.role
+  const blocked = profile.disabled === true || ['disabled', 'suspended', 'inactive', 'pending', 'blocked'].includes(profile.status)
+  if (blocked || (role !== 'admin' && role !== 'super_admin')) {
     throw httpError(403, 'บัญชีนี้ไม่มีสิทธิ์จัดการข้อความ')
   }
   return { ...decoded, role }

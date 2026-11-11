@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { Mail, X, UserPlus, Lock } from 'lucide-react'
 import { createUserWithPassword } from '../lib/users'
+import { adminDb } from '../lib/firebase'
 
 const ROLE_OPTIONS = [
   { value: 'super_admin', label: 'Super Admin' },
@@ -60,6 +61,7 @@ export default function AddMemberModal({ isOpen, onClose, onSuccess }) {
         password,
         role,
         status: 'active',
+        firestore: adminDb,
       })
       onSuccess?.(`เพิ่มสมาชิก ${normalizedEmail} สำเร็จ`)
       handleClose()

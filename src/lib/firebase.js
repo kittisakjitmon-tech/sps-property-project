@@ -1,7 +1,7 @@
 import { initializeApp, getApps } from 'firebase/app'
 import { initializeFirestore, persistentLocalCache, persistentMultipleTabManager } from 'firebase/firestore'
 import { getStorage } from 'firebase/storage'
-import { initializeAuth, browserLocalPersistence, browserSessionPersistence } from 'firebase/auth'
+import { initializeAuth, browserLocalPersistence } from 'firebase/auth'
 
 const firebaseConfig = {
   apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
@@ -39,7 +39,8 @@ export const publicAuth = initializeAuth(publicApp, {
 })
 
 export const adminAuth = initializeAuth(adminApp, {
-  persistence: browserSessionPersistence, // sessionStorage สำหรับหลังบ้าน (ปิด tab หาย)
+  // localStorage: ปิดแท็บ/เบราว์เซอร์แล้วยังล็อกอินอยู่ หมดอายุ 30 วันหลังล็อกอิน (ดู AdminAuthContext)
+  persistence: browserLocalPersistence,
 })
 
 // Firestore: แยก instance ตาม app เพื่อให้ request.auth ตรงกับ auth ที่ใช้ล็อกอิน

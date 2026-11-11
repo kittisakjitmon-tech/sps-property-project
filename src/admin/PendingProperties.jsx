@@ -41,7 +41,6 @@ export default function PendingProperties() {
     }
 
     setProcessingId(id)
-    setRejectingId(id)
     try {
       await rejectPendingProperty(id, finalReason, adminDb)
       alert('ปฏิเสธประกาศสำเร็จ')
@@ -50,7 +49,6 @@ export default function PendingProperties() {
       alert('เกิดข้อผิดพลาดในการปฏิเสธ: ' + error.message)
     } finally {
       setProcessingId(null)
-      setRejectingId(null)
     }
   }
 

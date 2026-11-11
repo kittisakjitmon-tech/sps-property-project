@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { NavLink, Outlet, useNavigate } from 'react-router-dom'
+import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom'
 import { useAdminAuth } from '../context/AdminAuthContext'
 import {
   LayoutDashboard,
@@ -101,14 +101,15 @@ function SidebarContent({ navItems, userRole, getRoleDisplayName, handleLogout, 
 export default function AdminLayout() {
   const { user, loading, logout, userRole, hasRole } = useAdminAuth()
   const navigate = useNavigate()
+  const location = useLocation()
   const [drawerOpen, setDrawerOpen] = useState(false)
 
-  // Redirect to login if not authenticated
+  // Redirect to login if not authenticated; come back to the same page after logging in
   useEffect(() => {
     if (!loading && !user) {
-      navigate('/login', { replace: true })
+      navigate('/login', { replace: true, state: { from: location } })
     }
-  }, [loading, user, navigate])
+  }, [loading, user, navigate, location])
 
   const handleLogout = async () => {
     await logout()
