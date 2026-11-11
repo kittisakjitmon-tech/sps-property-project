@@ -2,7 +2,7 @@ import { createContext, useContext, useState, useEffect } from 'react'
 import { signInWithEmailAndPassword, signOut, onAuthStateChanged } from 'firebase/auth'
 import { doc, getDoc, setDoc, serverTimestamp, collection, query, where, getDocs } from 'firebase/firestore'
 import { adminAuth, adminDb } from '../lib/firebase'
-import { BLOCKED_STATUSES, SUSPENDED_ROLE, adminSessionExpired } from '../lib/adminSession'
+import { BLOCKED_STATUSES, GUEST_ROLE, STAFF_ROLES, SUSPENDED_ROLE, adminSessionExpired } from '../lib/adminSession'
 
 const AdminAuthContext = createContext(null)
 
@@ -15,12 +15,12 @@ async function resolveUserRole(u) {
     if (userDoc.exists()) {
       const data = userDoc.data()
       if (data.disabled === true || BLOCKED_STATUSES.includes(data.status)) return SUSPENDED_ROLE
-      const role = data.role || 'member'
+      const role = data.role || GUEST_ROLE
       if (role === 'agent') return 'agent'
       return role
     }
     const email = (u.email || '').trim().toLowerCase()
-    let role = 'member'
+    let role = GUEST_ROLE
     let byEmail = null
     if (email) {
       const q = query(collection(adminDb, 'users'), where('email', '==', email))
@@ -28,25 +28,22 @@ async function resolveUserRole(u) {
       byEmail = snap.docs[0] || null
       if (byEmail) {
         if (byEmail.data().disabled === true || BLOCKED_STATUSES.includes(byEmail.data().status)) return SUSPENDED_ROLE
-        role = byEmail.data().role || 'member'
-        try {
-          await setDoc(doc(adminDb, 'users', u.uid), {
-            ...byEmail.data(),
-            email: u.email,
-            updatedAt: serverTimestamp(),
-          })
-        } catch (copyError) {
-          // Rules ไม่ให้ผู้ใช้ตั้งบทบาทสูงกว่า member ให้ตัวเอง ต้องให้ Super Admin ตั้งบทบาทในหน้าจัดการสมาชิก
-          console.error('ย้ายโปรไฟล์ตามอีเมลไม่สำเร็จ', copyError)
-          return 'member'
-        }
+        // ผู้ใช้ตั้งบทบาทให้ตัวเองไม่ได้ (Firestore Rules) ย้ายโปรไฟล์มาเป็น guest แล้วให้ Super Admin กำหนดบทบาท
+        await setDoc(doc(adminDb, 'users', u.uid), {
+          ...byEmail.data(),
+          role: GUEST_ROLE,
+          status: 'active',
+          email: u.email,
+          updatedAt: serverTimestamp(),
+        })
+        return GUEST_ROLE
       }
     }
     if (role === 'agent') return 'agent'
     if (!byEmail) {
       await setDoc(doc(adminDb, 'users', u.uid), {
         email: u.email,
-        role: 'member',
+        role: GUEST_ROLE,
         createdAt: serverTimestamp(),
       })
     }
@@ -71,7 +68,7 @@ export function AdminAuthProvider({ children }) {
       }
       if (u) {
         const role = await resolveUserRole(u)
-        if (role === SUSPENDED_ROLE) {
+        if (role === SUSPENDED_ROLE || role === GUEST_ROLE) {
           await signOut(adminAuth).catch(() => {})
           return
         }
@@ -101,6 +98,10 @@ export function AdminAuthProvider({ children }) {
     if (role === SUSPENDED_ROLE) {
       await signOut(adminAuth).catch(() => {})
       throw Object.assign(new Error('บัญชีนี้ถูกระงับการใช้งาน'), { code: 'auth/user-disabled' })
+    }
+    if (!STAFF_ROLES.includes(role)) {
+      await signOut(adminAuth).catch(() => {})
+      throw Object.assign(new Error('บัญชีนี้ยังไม่ได้รับสิทธิ์'), { code: 'auth/no-role' })
     }
     setUser(cred.user)
     setUserRole(role)

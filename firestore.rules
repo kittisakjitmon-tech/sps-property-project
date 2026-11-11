@@ -24,9 +24,21 @@ service cloud.firestore {
     }
 
     function getUserRole() {
+      // ไม่มีโปรไฟล์ = guest (ยังไม่ได้รับสิทธิ์) ใครก็สมัครบัญชีได้ จึงห้ามถือว่าเป็นทีมงาน
       return exists(/databases/$(database)/documents/users/$(request.auth.uid))
-        ? (isBlocked() ? 'blocked' : userData().get('role', 'member'))
-        : 'member';
+        ? (isBlocked() ? 'blocked' : userData().get('role', 'guest'))
+        : 'guest';
+    }
+
+    // ทีมงานที่ Super Admin เพิ่มเข้าระบบ (member = ทีมงาน)
+    function isStaff() {
+      return isAuthenticated() && getUserRole() in ['super_admin', 'admin', 'member', 'agent'];
+    }
+
+    // ประกาศที่ขึ้นแสดงบนเว็บ (ตรงกับ isAvailable ฝั่งเว็บ: ไม่มีสถานะถือว่าว่าง)
+    function isLive(data) {
+      return data.get('status', '') in ['available', 'ว่าง', '']
+        || data.get('availability', '') == 'available';
     }
     
     function isSuperAdmin() {
@@ -57,11 +69,11 @@ service cloud.firestore {
         || (resource != null && resource.data.email == request.auth.token.email)
         || (resource != null && (getUserRole() == 'super_admin' || getUserRole() == 'admin'))
       );
-      // สร้างโปรไฟล์ตัวเองได้เฉพาะบทบาท member เท่านั้น บทบาทอื่นต้องให้ Super Admin ตั้ง
+      // สร้างโปรไฟล์ตัวเองได้เฉพาะบทบาท guest (ยังไม่มีสิทธิ์) Super Admin เป็นคนกำหนดบทบาทจริง
       // (เดิมใครสมัครบัญชีก็ตั้งตัวเองเป็น super_admin ได้)
       allow create: if isSuperAdmin() || (
         isOwner(userId)
-        && request.resource.data.get('role', 'member') == 'member'
+        && request.resource.data.get('role', 'guest') == 'guest'
         && request.resource.data.get('status', 'active') == 'active'
         && request.resource.data.get('disabled', false) == false
       );
@@ -73,15 +85,24 @@ service cloud.firestore {
     }
     
     // properties: อ่านได้ทุกคน, เขียนได้เฉพาะ Admin หรือ Agent/Member สำหรับทรัพย์ตัวเอง
+    // member (ทีมงาน) ลงประกาศได้ แต่ต้องรอแอดมินอนุมัติก่อนขึ้นเว็บ
     match /properties/{id} {
       allow read: if true;
       allow create: if isAuthenticated() && (
-        isAdmin() || 
-        (isMember() && request.resource.data.createdBy == request.auth.uid) ||
+        isAdmin() ||
+        (isMember() && request.resource.data.createdBy == request.auth.uid && !isLive(request.resource.data)) ||
         (isAgent() && request.resource.data.createdBy == request.auth.uid)
       );
-      allow update, delete: if isAuthenticated() && (
-        isAdmin() || 
+      allow update: if isAuthenticated() && (
+        isAdmin() ||
+        (isMember() && resource.data.createdBy == request.auth.uid
+          && request.resource.data.get('createdBy', null) == resource.data.createdBy
+          && (!isLive(request.resource.data) || isLive(resource.data))) ||
+        (isAgent() && resource.data.createdBy == request.auth.uid
+          && request.resource.data.get('createdBy', null) == resource.data.createdBy)
+      );
+      allow delete: if isAuthenticated() && (
+        isAdmin() ||
         (isMember() && resource.data.createdBy == request.auth.uid) ||
         (isAgent() && resource.data.createdBy == request.auth.uid)
       );
@@ -124,23 +145,23 @@ service cloud.firestore {
     }
     // leads: อ่าน/เขียนได้เฉพาะ Admin และ Member, สร้างได้ทุกคน (ฟอร์มส่งข้อความ)
     match /leads/{id} {
-      allow read: if isAdmin() || isMember();
+      allow read: if isAdmin() || isMember();  // member = ทีมงาน
       allow write: if isAdmin();
       allow create: if true;
     }
     // viewing_requests: อ่านได้เฉพาะ Admin, สร้างได้ทุกคน (ฟอร์มจองเยี่ยมชม)
     match /viewing_requests/{id} {
-      allow read, write: if request.auth != null;
+      allow read, write: if isStaff();
       allow create: if true;
     }
     // appointments: นัดหมายเข้าชม - สร้างได้ทุกคน, อ่าน/เขียนได้เฉพาะผู้ที่ login
     match /appointments/{id} {
       allow create: if true;
-      allow read, update, delete: if request.auth != null;
+      allow read, update, delete: if isStaff();
     }
     // inquiries: อ่านได้เฉพาะ Admin, สร้างได้ทุกคน (ฟอร์มติดต่อเรา)
     match /inquiries/{id} {
-      allow read, write: if request.auth != null;
+      allow read, write: if isStaff();
       allow create: if true;
     }
     // hero_slides: อ่านได้ทุกคน, เขียนได้เฉพาะ Admin
@@ -177,7 +198,7 @@ service cloud.firestore {
     }
     // activities: สร้างได้เฉพาะผู้ที่ login, อ่านได้เฉพาะ Admin
     match /activities/{id} {
-      allow create: if isAuthenticated();
+      allow create: if isStaff();
       allow read: if isAdmin();
       allow update, delete: if isSuperAdmin();
     }

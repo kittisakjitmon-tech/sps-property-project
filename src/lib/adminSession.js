@@ -14,3 +14,7 @@ export function adminSessionExpired(user, now = Date.now()) {
   if (!Number.isFinite(signedIn)) return false
   return now - signedIn > SESSION_MS
 }
+
+// บัญชีที่สมัครเองแต่ Super Admin ยังไม่ได้กำหนดบทบาท ไม่มีสิทธิ์ใด ๆ
+export const GUEST_ROLE = 'guest'
+export const STAFF_ROLES = ['super_admin', 'admin', 'member', 'agent']

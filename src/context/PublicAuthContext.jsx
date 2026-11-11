@@ -25,12 +25,12 @@ export function PublicAuthProvider({ children }) {
             // ถ้ายังไม่มีข้อมูลใน users collection ให้สร้างใหม่
             const initialProfile = {
               email: u.email,
-              role: 'member',
+              role: 'guest', // Super Admin เป็นคนกำหนดบทบาทจริง
               username: u.email?.split('@')[0] || '',
               createdAt: serverTimestamp(),
             }
             await setDoc(doc(publicDb, 'users', u.uid), initialProfile)
-            setUserRole('member')
+            setUserRole('guest')
             setUserProfile(initialProfile)
           }
         } catch (error) {
@@ -55,7 +55,8 @@ export function PublicAuthProvider({ children }) {
     // ห้าม admin, super_admin login หน้าบ้าน
     try {
       const userDoc = await getDoc(doc(publicDb, 'users', cred.user.uid))
-      const role = userDoc.exists() ? (userDoc.data().role || 'member') : 'member'
+      const data = userDoc.exists() ? userDoc.data() : {}
+      const role = data.role || 'guest'
 
       // Block admin และ super_admin จาก login หน้าบ้าน
       if (role === 'admin' || role === 'super_admin') {
@@ -65,11 +66,16 @@ export function PublicAuthProvider({ children }) {
         throw error
       }
 
-      // อนุญาต agent และ member
-      // role: 'agent', 'member' -> OK
+      // อนุญาตเฉพาะ agent และ member ที่ยังใช้งานอยู่
+      if (!['agent', 'member'].includes(role) || data.disabled === true || ['disabled', 'suspended', 'inactive', 'pending', 'blocked'].includes(data.status)) {
+        await signOut(publicAuth)
+        const error = new Error('บัญชีนี้ยังไม่ได้รับสิทธิ์หรือถูกระงับ กรุณาติดต่อผู้ดูแลระบบ')
+        error.code = 'auth/role-not-allowed'
+        throw error
+      }
     } catch (err) {
       // ถ้าดึง role ไม่ได้หรือ error อื่น ๆ
-      if (err.code === 'auth/admin-not-allowed') {
+      if (err.code === 'auth/admin-not-allowed' || err.code === 'auth/role-not-allowed') {
         throw err
       }
       await signOut(publicAuth)

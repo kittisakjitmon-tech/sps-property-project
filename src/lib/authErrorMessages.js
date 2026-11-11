@@ -8,6 +8,7 @@ export function getAuthErrorMessage(err) {
     'auth/invalid-credential': 'อีเมลหรือรหัสผ่านไม่ถูกต้อง',
     'auth/invalid-email': 'รูปแบบอีเมลไม่ถูกต้อง',
     'auth/user-disabled': 'บัญชีนี้ถูกปิดใช้งาน',
+    'auth/no-role': 'บัญชีนี้ยังไม่ได้รับสิทธิ์ใช้งาน กรุณาให้ Super Admin กำหนดสิทธิ์ในหน้าจัดการสมาชิก',
     'auth/user-not-found': 'ไม่พบผู้ใช้กับอีเมลนี้',
     'auth/wrong-password': 'รหัสผ่านไม่ถูกต้อง',
     'auth/not-agent': 'บัญชีนี้ไม่ใช่ Agent ไม่สามารถเข้าสู่ระบบฝั่งหน้าบ้านได้',

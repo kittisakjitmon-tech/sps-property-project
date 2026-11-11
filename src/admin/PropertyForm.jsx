@@ -38,6 +38,9 @@ import { createCompletionLink } from '../features/property-completion/completion
 
 // CATEGORIES removed, using PROPERTY_TYPES from constants
 
+// ประกาศที่ขึ้นแสดงบนเว็บ (ตรงกับ Firestore Rules: ไม่มีสถานะถือว่าว่าง)
+const isLiveListing = (data) => ['available', 'ว่าง', ''].includes(data?.status ?? '') || data?.availability === 'available'
+
 const STATUS_OPTIONS = [
   { value: 'available', label: 'ว่าง', color: 'bg-green-100 text-green-900' },
   { value: 'reserved', label: 'ติดจอง', color: 'bg-yellow-100 text-yellow-900' },
@@ -130,6 +133,8 @@ export default function PropertyForm() {
   const isEdit = Boolean(id)
   const [form, setForm] = useState(defaultForm)
   const originalPrice = useRef(null)
+  // ประกาศนี้ขึ้นเว็บอยู่แล้วหรือยัง (member แก้ประกาศที่อนุมัติแล้วได้โดยไม่ต้องอนุมัติใหม่)
+  const [originalLive, setOriginalLive] = useState(false)
   const originalVersion = useRef(null)
   const uploadedCompletionPhotos = useRef(new WeakMap())
   const [sharing, setSharing] = useState(false)
@@ -209,6 +214,7 @@ export default function PropertyForm() {
       // No permission check needed here anymore
 
       originalPrice.current = Number(p.price) || 0
+      setOriginalLive(isLiveListing(p))
       originalVersion.current = p.updatedAt?.toMillis?.() ?? null
       const loc = p.location || {}
 
@@ -710,6 +716,14 @@ export default function PropertyForm() {
       lng: form.lng ? Number(form.lng) : null,
       nearbyPlace: form.nearbyPlace || [],
     }
+    // member (ทีมงาน) ลงประกาศใหม่ หรือเปิดประกาศที่ยังไม่อนุมัติให้ขึ้นเว็บ ต้องรอแอดมินอนุมัติก่อน
+    const needsApproval = userRole === 'member' && isLiveListing(payload) && !(isEdit && originalLive)
+    if (needsApproval) {
+      payload.availability = 'pending'
+      payload.status = 'pending'
+    }
+    const listPath = userRole === 'member' ? '/sps-internal-admin/my-properties' : '/sps-internal-admin/properties'
+
     let imageUrls = [...(form.images || [])]
     const totalNew = newFiles.length
 
@@ -773,7 +787,8 @@ export default function PropertyForm() {
             mapUrl: payload.mapUrl,
           }).catch(() => { })
         }
-        navigate('/sps-internal-admin/properties')
+        if (needsApproval) alert('บันทึกแล้ว ประกาศจะขึ้นเว็บหลังแอดมินอนุมัติ')
+        navigate(listPath)
       } else {
         const newId = await createProperty({
           ...payload,
@@ -828,7 +843,8 @@ export default function PropertyForm() {
             mapUrl: payload.mapUrl,
           }).catch(() => { })
         }
-        navigate('/sps-internal-admin/properties')
+        if (needsApproval) alert('ส่งประกาศแล้ว ประกาศจะขึ้นเว็บหลังแอดมินอนุมัติ ดูสถานะได้ที่ "ประกาศของฉัน"')
+        navigate(listPath)
       }
     } catch (err) {
       console.error(err)
@@ -1018,6 +1034,9 @@ export default function PropertyForm() {
                 {/* สถานะการขาย (ว่าง/ขายแล้ว) - แสดงเฉพาะเมื่อเลือก 'ซื้อ' */}
                 <div>
                   <label className="block text-sm font-medium text-slate-700 mb-2">สถานะการขาย *</label>
+                  {userRole === 'member' && !originalLive && (
+                    <p className="-mt-1 mb-2 text-xs text-orange-700">ประกาศของทีมงานจะขึ้นเว็บหลังแอดมินอนุมัติ</p>
+                  )}
                   <div className="flex flex-wrap gap-3">
                     {SALE_AVAILABILITY_OPTIONS.map((opt) => (
                       <button
@@ -1062,6 +1081,9 @@ export default function PropertyForm() {
                 {/* สถานะการจอง (ว่าง/ติดจอง) - แสดงเฉพาะเมื่อเลือก 'เช่า/ผ่อนตรง' */}
                 <div>
                   <label className="block text-sm font-medium text-slate-700 mb-2">สถานะการจอง *</label>
+                  {userRole === 'member' && !originalLive && (
+                    <p className="-mt-1 mb-2 text-xs text-orange-700">ประกาศของทีมงานจะขึ้นเว็บหลังแอดมินอนุมัติ</p>
+                  )}
                   <div className="flex flex-wrap gap-3">
                     {RENT_AVAILABILITY_OPTIONS.map((opt) => (
                       <button

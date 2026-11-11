@@ -6,6 +6,7 @@ import {
   rejectPendingProperty,
 } from '../lib/firestore'
 import { adminDb } from '../lib/firebase'
+import TeamPendingListings from './TeamPendingListings'
 
 export default function PendingProperties() {
   const [pendingProperties, setPendingProperties] = useState([])
@@ -62,6 +63,8 @@ export default function PendingProperties() {
           </p>
         </div>
       </div>
+
+      <TeamPendingListings />
 
       {pendingProperties.length === 0 ? (
         <div className="bg-white rounded-xl border border-slate-200 p-12 text-center">

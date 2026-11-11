@@ -23,10 +23,10 @@ export function AuthProvider({ children }) {
             // ถ้ายังไม่มีข้อมูลใน users collection ให้สร้างใหม่
             await setDoc(doc(db, 'users', u.uid), {
               email: u.email,
-              role: 'member',
+              role: 'guest', // Super Admin เป็นคนกำหนดบทบาทจริง
               createdAt: serverTimestamp(),
             })
-            setUserRole('member')
+            setUserRole('guest')
           }
         } catch (error) {
           console.error('Error fetching user role:', error)

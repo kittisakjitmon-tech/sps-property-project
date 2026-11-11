@@ -25,6 +25,7 @@ const ROLE_LABELS = {
   admin: 'Admin',
   member: 'สมาชิก',
   agent: 'Agent',
+  guest: 'ยังไม่ได้รับสิทธิ์',
 }
 
 const ROLE_COLORS = {
@@ -32,6 +33,7 @@ const ROLE_COLORS = {
   admin: 'bg-blue-100 text-blue-900 border-blue-300',
   member: 'bg-slate-100 text-slate-900 border-slate-300',
   agent: 'bg-emerald-100 text-emerald-900 border-emerald-300',
+  guest: 'bg-amber-50 text-amber-900 border-amber-300',
 }
 
 const STATUS_COLORS = {
@@ -602,6 +604,7 @@ export default function UserManagement() {
                         className={`px-3 py-1.5 rounded-lg text-sm font-semibold border-2 transition ${ROLE_COLORS[currentRole]
                           } disabled:opacity-50 disabled:cursor-not-allowed`}
                       >
+                        {currentRole === 'guest' && <option value="guest" disabled>ยังไม่ได้รับสิทธิ์</option>}
                         <option value="member">สมาชิก</option>
                         <option value="admin">Admin</option>
                         <option value="super_admin">Super Admin</option>
