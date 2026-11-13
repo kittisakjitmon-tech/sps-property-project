@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Check, Copy, Link2, Loader2, Megaphone, Pencil, Search, Trash2, X } from 'lucide-react'
 import PropertyPicker from './messenger/PropertyPicker'
 import { useConversations, useMessengerApi, useMessengerPages, usePropertyOptions } from './messenger/useMessengerData'
-import { SOURCE_LABELS, parseFacebookSource } from './messenger/facebookSource'
+import { SOURCE_LABELS, facebookSourceLink, parseFacebookSource } from './messenger/facebookSource'
 
 const BADGE = {
   ad: 'bg-violet-50 text-violet-800 ring-violet-200',
@@ -94,6 +94,7 @@ export default function AdMappingsPage() {
       const group = groups.get(key) || { key, kind, value, title: referral.title, postId: referral.postId, status: referral.status, propertyCode: referral.propertyCode, count: 0 }
       group.count += 1
       if (!group.title && referral.title) group.title = referral.title
+      if (!group.postId && referral.postId) group.postId = referral.postId
       groups.set(key, group)
     }
     return [...groups.values()].sort((a, b) => b.count - a.count)
@@ -289,18 +290,27 @@ export default function AdMappingsPage() {
           <h2 className="font-semibold text-amber-900">ลูกค้าทักจากโฆษณาที่ยังไม่ผูกบ้าน</h2>
           <p className="text-amber-800">ผูกครั้งเดียว แชททั้งหมดจากโฆษณานั้นจะได้บ้านทันที</p>
           <ul className="divide-y divide-amber-200">
-            {unmapped.map(group => (
-              <li key={group.key} className="flex flex-wrap items-center gap-2 py-2">
-                <SourceBadge kind={group.kind} />
-                <span className="min-w-0 flex-1">
-                  <span className="block truncate font-medium text-slate-900">{group.title || 'ไม่มีชื่อโฆษณา'}</span>
-                  <span className="block break-all font-mono text-xs text-slate-500">{group.value}</span>
-                  {group.status === 'unavailable' && <span className="block text-xs text-amber-800">บ้านที่ผูกไว้ ({group.propertyCode}) ขายแล้วหรือไม่พบ</span>}
-                </span>
-                <span className="shrink-0 rounded-full bg-white px-2 py-0.5 text-xs text-slate-700 ring-1 ring-amber-200">{group.count} แชท</span>
-                <button type="button" onClick={() => prefill(group)} className="min-h-10 shrink-0 rounded-lg bg-white px-3 py-1.5 font-medium text-blue-700 ring-1 ring-blue-200 hover:bg-blue-50">ผูกบ้าน</button>
-              </li>
-            ))}
+            {unmapped.map(group => {
+              const link = facebookSourceLink(group, activePageId)
+              return (
+                <li key={group.key} className="flex flex-wrap items-center gap-2 py-2">
+                  <SourceBadge kind={group.kind} />
+                  <span className="min-w-0 flex-1">
+                    <span className="block truncate font-medium text-slate-900">{group.title || 'ไม่มีชื่อโฆษณา'}</span>
+                    <span className="block break-all font-mono text-xs text-slate-500">{group.value}</span>
+                    {group.status === 'unavailable' && <span className="block text-xs text-amber-800">บ้านที่ผูกไว้ ({group.propertyCode}) ขายแล้วหรือไม่พบ</span>}
+                  </span>
+                  <span className="shrink-0 rounded-full bg-white px-2 py-0.5 text-xs text-slate-700 ring-1 ring-amber-200">{group.count} แชท</span>
+                  {link && (
+                    <a href={link.href} target="_blank" rel="noopener noreferrer"
+                      className="inline-flex min-h-10 shrink-0 items-center rounded-lg px-3 py-1.5 font-medium text-blue-700 underline hover:bg-white">
+                      {link.label}
+                    </a>
+                  )}
+                  <button type="button" onClick={() => prefill(group)} className="min-h-10 shrink-0 rounded-lg bg-white px-3 py-1.5 font-medium text-blue-700 ring-1 ring-blue-200 hover:bg-blue-50">ผูกบ้าน</button>
+                </li>
+              )
+            })}
           </ul>
         </section>
       )}

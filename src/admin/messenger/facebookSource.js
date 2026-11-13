@@ -90,3 +90,23 @@ export function parseFacebookSource(input, { pageId = '', kindHint = 'ad' } = {}
 }
 
 export const SOURCE_LABELS = { ad: 'โฆษณา', post: 'โพสต์', ref: 'ลิงก์ m.me' }
+
+export function facebookSourceLink({ kind, value, postId }, pageId) {
+  const post = String(postId || (kind === 'post' ? value : ''))
+  const qualified = /^(\d+)_(\d+)$/.exec(post)
+  const owner = qualified?.[1] || pageId
+  const story = qualified?.[2] || post
+  if (digits.test(owner || '') && digits.test(story)) {
+    return {
+      href: `https://www.facebook.com/permalink.php?story_fbid=${story}&id=${owner}`,
+      label: 'ดูโพสต์ต้นฉบับ',
+    }
+  }
+  if (kind === 'ad' && digits.test(value)) {
+    return {
+      href: `https://adsmanager.facebook.com/adsmanager/manage/ads?selected_ad_ids=${value}`,
+      label: 'ดูในตัวจัดการโฆษณา',
+    }
+  }
+  return null
+}
