@@ -1113,3 +1113,40 @@ test('explicit indecision about choosing a house is distinct from questions abou
     assert.equal(asksForHouseGuide(text), false, text);
   }
 });
+
+// ─── OpenRouter (e.g. MiniMax M3.1 Flash) ────────────────────────────────────
+test('a pinned paid OpenRouter model answers first, free models are the backup', () => {
+  const { selectChatModels, selectFreeChatModels } = require('./facebook-ai-core.cjs');
+  const tools = { supported_parameters: ['tools'], architecture: { input_modalities: ['text', 'image'], output_modalities: ['text'] }, context_length: 1000000 };
+  const models = [
+    { id: 'minimax/minimax-m3.1-flash', pricing: { prompt: '0.00000015', completion: '0.0000006' }, ...tools },
+    { id: 'qwen/qwen3-x:free', pricing: { prompt: '0', completion: '0' }, ...tools },
+    { id: 'no-tools/model', pricing: { prompt: '0.1', completion: '0.1' }, architecture: tools.architecture, supported_parameters: [] },
+  ];
+  assert.deepEqual(selectChatModels(models, { pinned: 'minimax/minimax-m3.1-flash' }), ['minimax/minimax-m3.1-flash', 'qwen/qwen3-x:free']);
+  assert.deepEqual(selectChatModels(models), ['qwen/qwen3-x:free'], 'paid models only when pinned');
+  assert.deepEqual(selectChatModels(models, { pinned: 'no-tools/model' }), ['qwen/qwen3-x:free'], 'a pin without tool support is skipped');
+  assert.deepEqual(selectChatModels(models, { pinned: 'missing/model' }), ['qwen/qwen3-x:free']);
+  assert.deepEqual(selectFreeChatModels(models, { pinned: 'minimax/minimax-m3.1-flash' }), ['qwen/qwen3-x:free']);
+});
+
+test('customer pictures and PDFs reach an OpenRouter model', () => {
+  const { toOpenAiMessages } = require('./facebook-ai-core.cjs');
+  const messages = toOpenAiMessages([{ role: 'user', parts: [
+    { text: 'สลิปเงินเดือนค่ะ' },
+    { inlineData: { mimeType: 'image/jpeg', data: 'AAA' } },
+    { inlineData: { mimeType: 'application/pdf', data: 'BBB' } },
+  ] }], 'sys');
+  assert.deepEqual(messages[1], { role: 'user', content: [
+    { type: 'text', text: 'สลิปเงินเดือนค่ะ' },
+    { type: 'image_url', image_url: { url: 'data:image/jpeg;base64,AAA' } },
+    { type: 'file', file: { filename: 'document.pdf', file_data: 'data:application/pdf;base64,BBB' } },
+  ] });
+  assert.deepEqual(toOpenAiMessages([{ role: 'user', parts: [{ text: 'สวัสดี' }] }])[0], { role: 'user', content: 'สวัสดี' });
+});
+
+test('thinking text from a reasoning model never reaches the customer', () => {
+  const { fromOpenAiMessage } = require('./facebook-ai-core.cjs');
+  assert.deepEqual(fromOpenAiMessage({ content: '<think>ลูกค้าถามราคา</think>\nราคาเริ่มต้น 1.89 ล้านค่ะ' }), [{ text: 'ราคาเริ่มต้น 1.89 ล้านค่ะ' }]);
+  assert.deepEqual(fromOpenAiMessage({ content: '<think>ยังคิดไม่จบ' }), []);
+});

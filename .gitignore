@@ -46,3 +46,7 @@ functions/.env
 *.sw?
 .continueignore
 .env
+
+# Local exports of customer chats (personal data)
+chat-exports/
+.env.json

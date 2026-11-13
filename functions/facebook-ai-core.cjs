@@ -1687,7 +1687,16 @@ function toOpenAiMessages(contents, systemInstruction) {
           content: JSON.stringify(part.functionResponse.response ?? {}),
         })
       }
-      if (text) messages.push({ role: 'user', content: text })
+      // Pictures and PDFs the customer sent go along as content parts; without them the
+      // model would be told it can read pictures while never seeing one.
+      const media = parts.filter(item => item.inlineData?.data && item.inlineData?.mimeType).map(({ inlineData }) => {
+        const url = `data:${inlineData.mimeType};base64,${inlineData.data}`
+        return inlineData.mimeType === 'application/pdf'
+          ? { type: 'file', file: { filename: 'document.pdf', file_data: url } }
+          : { type: 'image_url', image_url: { url } }
+      })
+      if (media.length) messages.push({ role: 'user', content: [...(text ? [{ type: 'text', text }] : []), ...media] })
+      else if (text) messages.push({ role: 'user', content: text })
     }
   }
   return messages
@@ -1695,7 +1704,11 @@ function toOpenAiMessages(contents, systemInstruction) {
 
 function fromOpenAiMessage(message) {
   const parts = []
-  if (typeof message?.content === 'string' && message.content.trim()) parts.push({ text: message.content })
+  // Reasoning models (MiniMax, DeepSeek, Qwen) may put their thinking in the answer text.
+  const content = typeof message?.content === 'string'
+    ? message.content.replace(/<think>[\s\S]*?(<\/think>|$)/gi, '').trim()
+    : ''
+  if (content) parts.push({ text: content })
   for (const call of Array.isArray(message?.tool_calls) ? message.tool_calls : []) {
     const name = call?.function?.name
     if (typeof name !== 'string' || !name) continue
@@ -1706,8 +1719,8 @@ function fromOpenAiMessage(message) {
   return parts
 }
 
-// Free-only: the model id must end in ":free" AND every price must be exactly zero,
-// so a paid model can never be picked, even by a pinned setting.
+// Free models: the model id must end in ":free" AND every price must be exactly zero.
+// A paid model is only ever used when the admin pins it (see selectChatModels).
 const FREE_MODEL_PREFERENCE = [
   'openai/gpt-oss', 'qwen/qwen3', 'google/gemma', 'meta-llama/llama-3.3', 'deepseek/', 'mistralai/', 'nvidia/', 'z-ai/',
 ]
@@ -1733,6 +1746,19 @@ function selectFreeChatModels(models, { pinned } = {}) {
     rank(a.id) - rank(b.id) || Number(b.context_length) - Number(a.context_length) || a.id.localeCompare(b.id))
   const ids = ordered.map(model => model.id)
   return pinned && ids.includes(pinned) ? [pinned, ...ids.filter(id => id !== pinned)] : ids
+}
+
+// The model the admin pinned in settings (openrouterModel) answers first, free or paid, as long
+// as OpenRouter lists it with tool support; free models follow as a backup when it fails.
+// Without a pin, only free models are used.
+function selectChatModels(models, { pinned } = {}) {
+  const free = selectFreeChatModels(models)
+  const pin = typeof pinned === 'string' ? pinned.trim() : ''
+  if (!pin) return free
+  const listed = (Array.isArray(models) ? models : []).find(model => model?.id === pin)
+  const usable = listed && listed.supported_parameters?.includes('tools')
+    && listed.architecture?.output_modalities?.includes('text')
+  return usable ? [pin, ...free.filter(id => id !== pin)] : free
 }
 
 // generate(contents) must resolve to the model's content parts for one turn.
@@ -1834,6 +1860,7 @@ module.exports = {
   toOpenAiMessages,
   fromOpenAiMessage,
   selectFreeChatModels,
+  selectChatModels,
   shouldReply,
   replyDelayMs,
   DEFAULT_REPLY_DELAY_SECONDS,

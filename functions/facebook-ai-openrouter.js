@@ -4,12 +4,13 @@ const {
   toOpenAiTools,
   toOpenAiMessages,
   fromOpenAiMessage,
-  selectFreeChatModels,
+  selectChatModels,
 } = require('./facebook-ai-core.cjs')
 
-// Chat via OpenRouter, using free models only. Which model answers is chosen from
-// OpenRouter's live list (free, supports tools, long enough context); the first
-// few candidates are tried in turn when one is busy, rate limited or fails.
+// Chat via OpenRouter. The model pinned in settings (openrouterModel, e.g.
+// "minimax/minimax-m3.1-flash", which is paid) answers first; free models from
+// OpenRouter's live list (supports tools, long enough context) are the backup and
+// are tried in turn when one is busy, rate limited or fails.
 const MODELS_URL = 'https://openrouter.ai/api/v1/models'
 const CHAT_URL = 'https://openrouter.ai/api/v1/chat/completions'
 const MODELS_TTL_MS = 60 * 60 * 1000
@@ -36,8 +37,8 @@ function createOpenRouterGenerate({ settings, systemInstruction, withTools = tru
   if (!apiKey) throw new Error('OPENROUTER_API_KEY is not set')
 
   return async contents => {
-    const candidates = selectFreeChatModels(await loadModels(), { pinned: settings.openrouterModel }).slice(0, MAX_CANDIDATES)
-    if (!candidates.length) throw new Error('No free OpenRouter model with tool support is available right now')
+    const candidates = selectChatModels(await loadModels(), { pinned: settings.openrouterModel }).slice(0, MAX_CANDIDATES)
+    if (!candidates.length) throw new Error('No OpenRouter model with tool support is available right now')
 
     let lastError = new Error('OpenRouter did not answer')
     for (const model of candidates) {
@@ -54,7 +55,9 @@ function createOpenRouterGenerate({ settings, systemInstruction, withTools = tru
             model,
             messages: toOpenAiMessages(contents, systemInstruction),
             temperature: 0.6,
-            max_tokens: 1024,
+            // Thinking counts towards max_tokens: too small a budget leaves no room for the answer.
+            max_tokens: 4096,
+            reasoning: { effort: 'low', exclude: true },
             ...(withTools ? { tools: toOpenAiTools(TOOL_DECLARATIONS), tool_choice: 'auto' } : {}),
             ...(settings.openrouterDataCollection === 'deny' ? { provider: { data_collection: 'deny' } } : {}),
           }),
