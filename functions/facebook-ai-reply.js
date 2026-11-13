@@ -69,7 +69,7 @@ const {
 //     model: '...',              // Gemini model id
 //     provider: 'vertex' | 'openrouter',   // who answers (default vertex)
 //     location: 'global',        // Vertex AI region (vertex only)
-//     openrouterModel: '...',    // pin a free OpenRouter model (optional; otherwise picked automatically)
+//     openrouterModel: '...',    // OpenRouter model that answers first, free or paid (e.g. 'minimax/minimax-m3.1-flash'); free models are the backup
 //     openrouterDataCollection: 'deny', // only use providers that don't keep prompts (may leave no free model)
 //     particle: 'ครับ' | 'ค่ะ',   // how the bot ends sentences
 //     extraInstructions: '...',  // tone / brand notes added to the prompt
