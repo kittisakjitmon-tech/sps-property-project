@@ -2029,6 +2029,16 @@ test('configured guide is refused for a focused property or a team-attached list
   assert.equal(guideImages().length, 0);
 });
 
+test('a customer from an ad who asks for house options gets the guide, even in a burst of messages', async () => {
+  configureGuide();
+  store.set(`messenger_conversations/${CID}`, { pageId: 'P1', participantId: 'U1', currentPropertyCode: 'SPS-TH-1', currentPropertySetBy: 'facebook-referral' });
+  store.set(`messenger_conversations/${CID}/messages/b1`, { direction: 'incoming', text: 'มีแบบบ้านให้เลือกหรือไม่', timestamp: new Ts(NOW - 2000) });
+  store.set(`messenger_conversations/${CID}/messages/b2`, { direction: 'incoming', text: 'ราคาเริ่มต้นที่เท่าไร', timestamp: new Ts(NOW - 1000) });
+  model([{ text: 'ส่งภาพตัวอย่างแบบบ้านให้เลือกค่ะ สนใจทำเลไหนคะ' }]);
+  await receive('บ้านเดี่ยวชั้นเดียวค่ะ');
+  assert.equal(guideImages().length, 1);
+});
+
 test('the guide is refused without a configured HTTPS image URL', async () => {
   for (const houseGuideImageUrl of [undefined, 'http://example.test/guide.png', 'https://untrusted.test/guide.png']) {
     store.set('messenger_settings/ai', { enabled: true, ...(houseGuideImageUrl ? { houseGuideImageUrl } : {}) });

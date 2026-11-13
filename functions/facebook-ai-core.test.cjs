@@ -565,7 +565,9 @@ test('the loan tool is declared and the prompt tells the bot not to promise appr
   assert.ok(TOOL_DECLARATIONS.some(tool => tool.name === 'estimate_loan'))
   const prompt = buildSystemPrompt({ isFirstReply: false })
   assert.match(prompt, /estimate_loan/)
-  assert.match(prompt, /ทีมงานกำลังดำเนินการให้ รบกวนฝากเบอร์ติดต่อ/)
+  assert.match(prompt, /ให้ทำตาม hint ในผลลัพธ์ ไม่ต้องขอเบอร์ติดต่อ/)
+  assert.match(prompt, /ขอเบอร์เฉพาะตอนลูกค้าต้องการนัดหมาย/)
+  assert.doesNotMatch(prompt, /ฝากเบอร์ติดต่อ|ขอเบอร์โทรอย่างสุภาพ/)
 })
 
 // ─── Which property is the customer talking about? ───────────────────────────
@@ -1097,6 +1099,15 @@ test('explicit indecision about choosing a house is distinct from questions abou
   const { asksForHouseGuide } = require('./facebook-ai-core.cjs');
   for (const text of ['คือผมยังไม่รู้ว่าจะเลือกบ้านแบบไหน', 'ยังไม่รู้จะเลือกบ้านแบบไหนดี', 'ยังเลือกบ้านไม่ถูก', 'เลือกแบบบ้านไม่ได้เลย', 'ยังไม่ได้เลือกบ้าน', 'ยังตัดสินใจไม่ได้ว่าจะเลือกบ้านแบบไหน']) {
     assert.equal(asksForHouseGuide(text), true, text);
+  }
+  for (const text of ['มีแบบบ้านให้เลือกหรือไม่', 'มีแบบบ้านให้เลือกไหมคะ', 'มีแบบให้เลือกไหม', 'แบบบ้านมีกี่แบบ', 'มีบ้านแบบไหนบ้าง', 'แบบบ้านมีอะไรบ้างคะ', 'ขอดูแบบบ้านทั้งหมด',
+    'มีแบบบ้านไหมคะ', 'มี แบบบ้าน มั้ย', 'มีแบบไหนบ้างคะ', 'มีกี่แบบคะ', 'มีให้เลือกกี่แบบ', 'มีบ้านอะไรบ้าง', 'ขอดูแบบบ้านหน่อยค่ะ',
+    'ส่งแบบบ้านให้ดูหน่อย', 'มีแคตตาล็อกไหม', 'ขอ Catalog หน่อย', 'มีโบรชัวร์ไหมคะ', 'แนะนำแบบบ้านหน่อย']) {
+    assert.equal(asksForHouseGuide(text), true, text);
+  }
+  for (const text of ['ขอดูแบบบ้าน', 'ขอดูแบบบ้านก่อน', 'ในบ้านมีอะไรบ้าง', 'สินเชื่อมีกี่แบบ', 'มีแบบผ่อนให้เลือกไหม', 'มีธนาคารให้เลือกกี่ที่', 'บ้านหลังนี้มีแบบแปลนไหม',
+    'ผ่อนมีแบบไหนบ้าง', 'โปรมีอะไรบ้าง', 'บ้านหลังนี้มีกี่แบบ', 'ห้องนอนมีกี่แบบ', 'ราคาเริ่มต้นที่เท่าไร', 'บ้านเดี่ยวชั้นเดียวค่ะ']) {
+    assert.equal(asksForHouseGuide(text), false, text);
   }
   for (const text of ['สวัสดีครับ', 'ไม่รู้ว่าบ้านหลังนี้กี่ห้อง', 'บ้านหลังนี้อยู่ที่ไหน', 'ขอข้อมูล SPS-TH-1', 'ไม่รู้จะเลือกธนาคารไหนดี', 'ผมรู้แล้วว่าจะเลือกบ้านแบบไหน', 'ขอดูรูปบ้านหลังนี้']) {
     assert.equal(asksForHouseGuide(text), false, text);

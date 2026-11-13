@@ -477,8 +477,16 @@ async function answerCustomer({ conversationId, message, messageRef, retry = fal
     const today = bangkokToday()
     const latestCustomerText = [...recent].filter(item => item.direction === 'incoming').sort((a, b) => b.timestamp - a.timestamp)[0]?.text || ''
     const guideImageUrl = houseGuideImageUrl(settings.houseGuideImageUrl)
-    const explicitGuideRequest = Boolean(guideImageUrl && !followingUp && asksForHouseGuide(latestCustomerText)
-      && extractPropertyMentions(latestCustomerText, catalog).length === 0)
+    // Any message in the burst counts: customers often ask "มีแบบบ้านให้เลือกไหม" and then add
+    // more lines ("ราคาเริ่มต้นเท่าไร", "บ้านเดี่ยวชั้นเดียวค่ะ") before the AI answers.
+    const burstTexts = (waiting.length ? waiting : [message]).map(item => item.text || '')
+    if (!burstTexts.includes(latestCustomerText)) burstTexts.push(latestCustomerText)
+    // ...unless a later line in the burst moves on to a specific house ("บ้านหลังนี้กี่ห้อง").
+    const guideAskIndex = burstTexts.findLastIndex(asksForHouseGuide)
+    const movedOnToThisHouse = guideAskIndex >= 0
+      && burstTexts.slice(guideAskIndex + 1).some(text => /(?:หลัง|บ้าน)\s*นี้/.test(text))
+    const explicitGuideRequest = Boolean(guideImageUrl && !followingUp && guideAskIndex >= 0 && !movedOnToThisHouse
+      && burstTexts.every(text => extractPropertyMentions(text, catalog).length === 0))
 
     // Everything the model may reference in this reply.
     const seen = new Map() // code -> indexed property (from search results)
@@ -829,7 +837,7 @@ async function answerCustomer({ conversationId, message, messageRef, retry = fal
             return {
               ok: false,
               needsTeam: true,
-              error: 'ทรัพย์นี้ไม่เปิดเผยราคา ห้ามใช้ราคาจริงคำนวณ ให้ถามลูกค้าว่างบหรือราคาที่ต้องการประมาณเท่าไหร่ หรือบอกว่าทีมงานกำลังดำเนินการให้ และขอเบอร์ติดต่อ',
+              error: 'ทรัพย์นี้ไม่เปิดเผยราคา ห้ามใช้ราคาจริงคำนวณ ให้ถามลูกค้าว่างบหรือราคาที่ต้องการประมาณเท่าไหร่ ไม่ต้องขอเบอร์ติดต่อ',
             }
           }
           price = listing._numericPrice
@@ -881,7 +889,7 @@ async function answerCustomer({ conversationId, message, messageRef, retry = fal
         }
         pictures = pictures.filter(image => typeof image?.url === 'string')
         if (!pictures.length) {
-          return { ok: false, error: 'ทีมงานยังไม่ได้แนบรูปแบบบ้านนี้ ให้บอกลูกค้าว่าทีมงานจะส่งให้ และขอเบอร์ติดต่อ' }
+          return { ok: false, error: 'ทีมงานยังไม่ได้แนบรูปแบบบ้านนี้ ให้บอกลูกค้าว่าทีมงานจะส่งรูปให้ในแชทนี้ ไม่ต้องขอเบอร์ติดต่อ' }
         }
         houseImagesToSend = pictures.slice(0, MAX_HOUSE_IMAGES)
         return { ok: true, queued: houseImagesToSend.length }
